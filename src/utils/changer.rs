@@ -1,4 +1,4 @@
-use std::{borrow::Borrow, fmt::Debug};
+use std::fmt::Debug;
 
 use sqlx::sqlite::SqliteQueryResult;
 use tokio::sync::{mpsc, watch};
@@ -136,7 +136,7 @@ where
     Key: Clone + Send + Sync,
     Value: GetKey<Key> + Clone + Send + Sync,
 {
-    pub fn update(&mut self) {
+    pub fn update_sender(&mut self) {
         self.response_recivers.retain(|reciver| {
             match reciver.has_changed() {
                 Ok(_) => {
@@ -152,6 +152,14 @@ where
     pub fn new(sender: mpsc::Sender<Action<Key, Value>>) -> Self {
         Self { sender, response_recivers: vec![] }
     }
+
+    pub fn set(&mut self, value: Value) -> watch::Receiver<Response<Key, Value>>  {
+        let (sender, reciver) = self.new_responder();
+        tokio::task::block_in_place(|| {
+            let _ = self.sender.blocking_send(Action::set(value, sender));
+        });
+        reciver
+    }
     pub fn set_action(&mut self) -> impl FnMut(Value) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone();
         move |value: Value| {
@@ -162,11 +170,12 @@ where
             reciver
         }
     }
-    pub fn set_many(&mut self, values: Vec<Value>) {
-        let (sender, _) = self.new_responder();
+    pub fn set_many(&mut self, values: Vec<Value>) -> watch::Receiver<Response<Key, Value>>  {
+        let (sender, reciver) = self.new_responder();
         tokio::task::block_in_place(|| {
             let _ = self.sender.blocking_send(Action::set_many(values, sender));
         });
+        reciver
     }
     pub fn set_many_action(&mut self) -> impl FnMut(Vec<Value>) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone();
@@ -179,7 +188,13 @@ where
         }
     }
     
-
+    pub fn update(&mut self, value: Value) -> watch::Receiver<Response<Key, Value>>  {
+        let (sender, reciver) = self.new_responder();
+        tokio::task::block_in_place(|| {
+            let _ = self.sender.blocking_send(Action::update(value, sender));
+        });
+        reciver
+    }
     pub fn update_action(&mut self) -> impl FnMut(Value) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone();
         move |value: Value| {
@@ -189,6 +204,13 @@ where
             });
             reciver
         }
+    }
+    pub fn update_many(&mut self, values: Vec<Value>) -> watch::Receiver<Response<Key, Value>>  {
+        let (sender, reciver) = self.new_responder();
+        tokio::task::block_in_place(|| {
+            let _ = self.sender.blocking_send(Action::update_many(values, sender));
+        });
+        reciver
     }
     pub fn update_many_action(&mut self) -> impl FnMut(Vec<Value>) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone();
@@ -201,6 +223,13 @@ where
         }
     }
 
+    pub fn delete(&mut self, key: Key) -> watch::Receiver<Response<Key, Value>>  {
+        let (sender, reciver) = self.new_responder();
+        tokio::task::block_in_place(|| {
+            let _ = self.sender.blocking_send(Action::delete(key, sender));
+        });
+        reciver
+    }
     pub fn delete_action(&mut self) -> impl FnMut(Key) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone(); 
         move |key: Key| {
@@ -211,11 +240,12 @@ where
             reciver
         }
     }
-    pub fn delete_many(&mut self, keys: Vec<Key>) {
-        let (sender, _) = self.new_responder();
+    pub fn delete_many(&mut self, keys: Vec<Key>) -> watch::Receiver<Response<Key, Value>> {
+        let (sender, reciver) = self.new_responder();
         tokio::task::block_in_place(|| {
             let _ = self.sender.blocking_send(Action::delete_many(keys, sender));
         });
+        reciver
     }
     pub fn delete_many_action(&mut self) -> impl FnMut(Vec<Key>) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone(); 
@@ -227,6 +257,7 @@ where
             reciver
         }
     }
+
     pub fn getall(&mut self) -> watch::Receiver<Response<Key, Value>> {
         let (sender, reciver) = self.new_responder();
         self.send(Action::getall(sender));

@@ -1,5 +1,3 @@
-use std::{borrow::Borrow, ops::Deref};
-
 use uuid::Uuid;
 
 use crate::{model::records::ExpenseRecord, utils::communicator::Communicator};
@@ -46,7 +44,7 @@ impl TableView {
 
     pub fn delete_all(&mut self) {
         let keys = self.records_communicator.view()
-            .borrow().iter()
+            .iter()
             .map(|(uuid, _)| *uuid)
             .collect::<Vec<_>>();
         self.records_communicator.delete_many(keys);
