@@ -185,7 +185,7 @@ where
         self.viewer.borrow()
     }
     pub fn update(&mut self) {
-        self.changer.update_sender();
+        self.changer.update();
     }
 }
 
