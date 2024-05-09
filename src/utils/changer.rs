@@ -163,12 +163,10 @@ where
         }
     }
     pub fn set_many(&mut self, values: Vec<Value>) {
-        let (sender, reciver) = watch::channel(Response::Loading);
+        let (sender, _) = self.new_responder();
         tokio::task::block_in_place(|| {
             let _ = self.sender.blocking_send(Action::set_many(values, sender));
-            println!("finished doing the blocking send");
         });
-        self.response_recivers.push(reciver);
     }
     pub fn set_many_action(&mut self) -> impl FnMut(Vec<Value>) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone();
@@ -213,6 +211,12 @@ where
             reciver
         }
     }
+    pub fn delete_many(&mut self, keys: Vec<Key>) {
+        let (sender, _) = self.new_responder();
+        tokio::task::block_in_place(|| {
+            let _ = self.sender.blocking_send(Action::delete_many(keys, sender));
+        });
+    }
     pub fn delete_many_action(&mut self) -> impl FnMut(Vec<Key>) -> watch::Receiver<Response<Key, Value>> {
         let action_sender = self.sender.clone(); 
         move |keys: Vec<Key>| {
@@ -238,10 +242,7 @@ where
         watch::Receiver<Response<Key, Value>>
     ) {
         let (sender, reciver) = watch::channel(Response::Loading);
-        //TODO: understand if this is needed. My Idea was that there would be 
-        // the full list of all recivers on this struct and then optionally each
-        // callsite would look at its reciver but this is technically not needed
-        //self.response_recivers.push(reciver.clone());
+        self.response_recivers.push(reciver.clone());
         (sender, reciver)
     }
 
