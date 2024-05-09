@@ -1,0 +1,16 @@
+/target
+.data/*.log
+**/.DS_Store
+**/.vscode
+**/node_modules
+**/Cargo.lock
+**/target
+frontend/dist
+**/.env
+
+**/assets
+
+# Added by cargo
+
+/target
+/db/
