@@ -94,33 +94,27 @@ enum UiStateType {
         timer_started: Option<DateTime<Local>>,
         timer_duration: Duration,
         state: Box<dyn InternalState>,
-        timer_done_ui: Option<Box<dyn FnOnce(
-            &mut Ui,
-            &mut Box<dyn InternalState>,
-            &mut dyn FnMut<(), Output = ()>
-        )>>,
-        timer_timing_ui: Option<Box<dyn FnOnce(
-            &mut Ui,
-            &mut Box<dyn InternalState>,
-            f32
-        )>>,
+        timer_done_ui: Option<TimerDoneUi>,
+        timer_timing_ui: Option<TimerTimingUi>,
     }
 }
+type TimerDoneUi = Box<dyn FnOnce(
+    &mut Ui,
+    &mut Box<dyn InternalState>,
+    &mut dyn FnMut<(), Output = ()>,
+)>;
+type TimerTimingUi = Box<dyn FnOnce(
+    &mut Ui,
+    &mut Box<dyn InternalState>,
+    f32
+)>;
 
 impl UiStateType{
     pub fn timer<State>(
         seconds: i64,
         state: State,
-        timer_done_ui: Box<dyn FnOnce(
-            &mut Ui,
-            &mut Box<dyn InternalState>,
-            &mut dyn FnMut<(), Output = ()>,
-        )>,
-        timer_timing_ui: Box<dyn FnOnce(
-            &mut Ui,
-            &mut Box<dyn InternalState>,
-            f32
-        )>,
+        timer_done_ui: TimerDoneUi,
+        timer_timing_ui: TimerTimingUi,
     ) -> Self 
     where
         State: InternalState + 'static,

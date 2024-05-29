@@ -38,9 +38,7 @@ impl TableView {
     ) -> Self {
         Self { records_communicator }
     }
-    pub fn show_file_viewer() -> bool {
-        return false;
-    }
+    pub fn show_file_viewer() -> bool { false }
 
     pub fn delete_all(&mut self) {
         let keys = self.records_communicator.view()

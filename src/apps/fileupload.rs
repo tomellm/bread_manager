@@ -135,9 +135,7 @@ impl FileUpload {
         self.records_communicator.set_many(records);
     }
 
-    pub fn show_file_viewer() -> bool {
-        return true;
-    }
+    pub fn show_file_viewer() -> bool { true }
 }
 
 #[derive(Clone, Debug)]

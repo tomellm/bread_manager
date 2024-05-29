@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bincode as bc;
 use chrono::{DateTime, Local};
 use futures::future::BoxFuture;
-use sqlx::{Execute, Pool, Sqlite};
+use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
 const TAG_SEP: &str = ";";
@@ -40,7 +40,7 @@ impl DbRecord {
     pub fn from_record(record: &ExpenseRecord) -> Self {
         Self {
             uuid: *record.uuid().clone(),
-            amount: record.amount().clone() as i64,
+            amount: *record.amount() as i64,
             datetime: record.datetime().clone().timestamp(),
             description: record.description().clone(),
             tags: record.tags().clone().join(TAG_SEP),

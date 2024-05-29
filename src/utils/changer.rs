@@ -131,6 +131,11 @@ where
     response_recivers: Vec<watch::Receiver<Response<Key, Value>>>,
 }
 
+type Responder<Key, Value> = (
+    watch::Sender<Response<Key, Value>>,
+    watch::Receiver<Response<Key, Value>>
+);
+
 impl<Key, Value> Sender<Key, Value>
 where 
     Key: Clone + Send + Sync,
@@ -139,12 +144,7 @@ where
     pub fn update_sender(&mut self) {
         self.response_recivers.retain(|reciver| {
             match reciver.has_changed() {
-                Ok(_) => {
-                    match *reciver.borrow() {
-                        Response::Loading => true,
-                        _ => false
-                    }
-                },
+                Ok(_) => matches!(*reciver.borrow(), Response::Loading),
                 Err(_) => false
             }
         });
@@ -268,10 +268,7 @@ where
         let _ = self.sender.blocking_send(action);
     }
 
-    fn new_responder(&mut self) -> (
-        watch::Sender<Response<Key, Value>>,
-        watch::Receiver<Response<Key, Value>>
-    ) {
+    fn new_responder(&mut self) -> Responder<Key, Value> {
         let (sender, reciver) = watch::channel(Response::Loading);
         self.response_recivers.push(reciver.clone());
         (sender, reciver)
@@ -329,11 +326,11 @@ where
     ) -> Option<Vec<Action<Key, Value>>> {
         match reciver.try_recv() {
             Ok(val) => {
-                let mut actions = actions.unwrap_or(vec![]);
+                let mut actions = actions.unwrap_or_default();
                 actions.push(val);
                 Self::recive_vals(reciver, Some(actions))
             },
-            Err(err) if err.eq(&mpsc::error::TryRecvError::Empty) => return actions,
+            Err(err) if err.eq(&mpsc::error::TryRecvError::Empty) => actions,
             Err(err) => panic!(r#"
 
             Reciving change actions led to an error:
