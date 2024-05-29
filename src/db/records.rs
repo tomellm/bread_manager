@@ -3,7 +3,7 @@ use std::sync::Arc;
 use bincode as bc;
 use chrono::{DateTime, Local};
 use futures::future::BoxFuture;
-use sqlx::{Pool, Sqlite};
+use sqlx::{Execute, Pool, Sqlite};
 use uuid::Uuid;
 
 const TAG_SEP: &str = ";";
@@ -209,15 +209,13 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
     fn delete_many(&self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-
             let query_result = utils::add_in_items(
-                "delete from profiles where uuid in (",
-                keys.iter(),
-                ")"
+                "delete from expense_records where uuid in (", keys.iter(), ")"
             )
                 .build()
                 .execute(&*pool)
                 .await;
+
             Response::from_result(query_result, ActionType::DeleteMany(keys))
         })
     }
