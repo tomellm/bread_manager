@@ -17,7 +17,7 @@ impl Income {
         if str.is_empty() {
             return Ok(0)
         }
-        let str = str.replace(",", ".");
+        let str = str.replace(',', ".");
         Ok((str.parse::<f64>().or(
             Err(ProfileError::number(str, String::from("f64")))
         )? * 100.0) as usize)
@@ -30,7 +30,7 @@ impl Expense {
         if str.is_empty() {
             return Ok(0)
         }
-        let str = str.replace(",", ".");
+        let str = str.replace(',', ".");
         Ok((str.parse::<f64>().or(
             Err(ProfileError::number(str, String::from("f64")))
         )? * -100.0) as usize)
@@ -43,7 +43,7 @@ impl PosExpense {
         if str.is_empty() {
             return Ok(0)
         }
-        let str = str.replace(",", ".");
+        let str = str.replace(',', ".");
         Ok((str.parse::<f64>().or(
             Err(ProfileError::number(str, String::from("f64")))
         )? * 100.0) as usize)
@@ -56,7 +56,7 @@ impl Movement {
         if str.is_empty() {
             return Ok(0)
         }
-        let str = str.replace(",", ".");
+        let str = str.replace(',', ".");
         Ok((str.parse::<f64>().or(
             Err(ProfileError::number(str, String::from("f64")))
         )? * 100.0) as isize)
@@ -505,16 +505,16 @@ pub enum ParsableWrapper {
 
 impl ParsableWrapper {
     pub fn income() -> Self {
-        Self::Income(Income::default())
+        Self::Income(Income)
     }
     pub fn expense() -> Self {
-        Self::Expense(Expense::default())
+        Self::Expense(Expense)
     }
     pub fn posexpense() -> Self {
-        Self::PosExpense(PosExpense::default())
+        Self::PosExpense(PosExpense)
     }
     pub fn movement() -> Self {
-        Self::Movement(Movement::default())
+        Self::Movement(Movement)
     }
     pub fn expensedatetime() -> Self {
         Self::ExpenseDateTime(ExpenseDateTime::default())

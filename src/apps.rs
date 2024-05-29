@@ -40,8 +40,8 @@ impl BreadApp {
         Self { ..Default::default() }
     }
 
-    pub fn apps_iter_mut<'a>(
-        &'a mut self
+    pub fn apps_iter_mut(
+        &mut self
     ) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
         
         let vec = vec![
@@ -96,7 +96,7 @@ impl BreadApp {
         use egui::*;
         use std::fmt::Write as _;
 
-        if !vec![Anchor::FileUpload, Anchor::Profiles]
+        if ![Anchor::FileUpload, Anchor::Profiles]
             .contains(&self.state.selected_anchor) {
             return;
         }

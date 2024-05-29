@@ -330,7 +330,7 @@ start the timer. Check that the reciver is beeing set correctly.
             let to_delete = Rc::new(RefCell::new(vec![] as Vec<usize>));
             ui.horizontal_wrapped(|ui| {
                 for (index, (ref mut col_pos, ref mut col_type)) in
-                    other_cols.into_iter().enumerate()
+                    other_cols.iter_mut().enumerate()
                 {
                     ui.add_sized([175., 175.], |ui: &mut Ui| {
                         other_column_editor(ui, index, col_pos, col_type, to_delete.clone())

@@ -28,14 +28,14 @@ impl DbProfile {
     pub fn from_profile(profile: &Profile) -> Self {
         let (uuid, name, data) = profile.to_db();
         Self {
-            uuid: uuid.into(),
+            uuid,
             name,
             data,
         }
     }
 
     pub fn to_profile(self) -> Profile {
-        Profile::from_db(self.uuid.into(), self.name, self.data)
+        Profile::from_db(self.uuid, self.name, self.data)
     }
 }
 
