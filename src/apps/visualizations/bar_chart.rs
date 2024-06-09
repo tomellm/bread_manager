@@ -33,7 +33,6 @@ impl BarChartVis {
     }
 
     fn update_graphs(records: &HashMap<Uuid, ExpenseRecord>) -> (Vec<Bar>, Vec<Bar>) {
-        println!("{}", records.len());
         if records.is_empty() {
             return (vec![], vec![]);
         }

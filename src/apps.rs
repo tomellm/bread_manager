@@ -45,7 +45,7 @@ impl BreadApp {
         }
     }
 
-    pub fn apps_iter_mut(&mut self) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
+    fn apps_iter_mut(&mut self) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
         let vec = vec![
             (
                 "Visualizations",
