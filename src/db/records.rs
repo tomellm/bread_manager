@@ -23,10 +23,12 @@ pub struct RecordsDB {
 }
 
 struct DbRecord {
+    datetime_created: i64,
     uuid: Uuid,
     amount: i64,
     datetime: i64,
     description: Option<String>,
+    description_container: Vec<u8>,
     tags: String,
     data: Vec<u8>,
 }
@@ -39,10 +41,12 @@ impl GetKey<Uuid> for ExpenseRecord {
 impl DbRecord {
     pub fn from_record(record: &ExpenseRecord) -> Self {
         Self {
+            datetime_created: record.created().clone().timestamp(),
             uuid: *record.uuid().clone(),
             amount: *record.amount() as i64,
             datetime: record.datetime().clone().timestamp(),
-            description: record.description().clone(),
+            description: record.description().cloned(),
+            description_container: bc::serialize(record.description_container()).unwrap(),
             tags: record.tags().clone().join(TAG_SEP),
             data: bc::serialize(record.data()).unwrap(),
         }
@@ -50,12 +54,15 @@ impl DbRecord {
 
     pub fn to_record(self) -> ExpenseRecord {
         ExpenseRecord::new_all(
+            DateTime::from_timestamp(self.datetime_created, 0)
+                .map(|d| d.with_timezone(&Local::now().timezone()))
+                .unwrap(),
             self.uuid,
             self.amount as isize,
             DateTime::from_timestamp(self.datetime, 0)
                 .map(|d| d.with_timezone(&Local::now().timezone()))
                 .unwrap(),
-            self.description,
+            bc::deserialize(&self.description_container).unwrap(),
             bc::deserialize(&self.data).unwrap(),
             self.tags
                 .split(TAG_SEP)
@@ -73,10 +80,12 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
                 DbRecord,
                 r#"
                 select 
+                    datetime_created,
                     uuid as "uuid: uuid::Uuid",
                     amount,
                     datetime,
                     description,
+                    description_container,
                     tags,
                     data
                 from
@@ -102,11 +111,13 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
         Box::pin(async move {
             let record = DbRecord::from_record(&value);
             let query_result = sqlx::query!(
-                "insert into expense_records values(?, ?, ?, ?, ?, ?)",
+                "insert into expense_records values(?, ?, ?, ?, ?, ?, ?, ?)",
+                record.datetime_created,
                 record.uuid,
                 record.amount,
                 record.datetime,
                 record.description,
+                record.description_container,
                 record.tags,
                 record.data
             )
@@ -129,14 +140,19 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
 
             let query_result = utils::insert_values(
                 pool,
-                "insert into expense_records(uuid, amount, datetime, description, tags, data)",
+                r#"insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description, 
+                    description_container, tags, data
+                )"#,
                 records,
                 |mut builder, value| {
                     builder
+                        .push_bind(value.datetime_created)
                         .push_bind(value.uuid)
                         .push_bind(value.amount)
                         .push_bind(value.datetime)
                         .push_bind(value.description)
+                        .push_bind(value.description_container)
                         .push_bind(value.tags)
                         .push_bind(value.data);
                 },
@@ -154,11 +170,13 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
         Box::pin(async move {
             let record = DbRecord::from_record(&value);
             let query_result = sqlx::query!(
-                "insert into expense_records values(?, ?, ?, ?, ?, ?)",
+                "insert into expense_records values(?, ?, ?, ?, ?, ?, ?, ?)",
+                record.datetime_created,
                 record.uuid,
                 record.amount,
                 record.datetime,
                 record.description,
+                record.description_container,
                 record.tags,
                 record.data
             )
@@ -180,14 +198,19 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
 
             let query_result = utils::insert_values(
                 pool,
-                "insert into expense_records(uuid, amount, datetime, description, tags, data)",
+                r#"insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description, 
+                    description_container, tags, data
+                )"#,
                 records,
                 |mut builder, value| {
                     builder
+                        .push_bind(value.datetime_created)
                         .push_bind(value.uuid)
                         .push_bind(value.amount)
                         .push_bind(value.datetime)
                         .push_bind(value.description)
+                        .push_bind(value.description_container)
                         .push_bind(value.tags)
                         .push_bind(value.data);
                 },
@@ -232,10 +255,12 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             let _ = sqlx::query!(
                 r#"
                 create table if not exists expense_records (
+                    datetime_created integer not null,
                     uuid blob primary key not null,
                     amount integer not null,
                     datetime integer not null,
                     description text,
+                    description_container blob not null,
                     tags text not null,
                     data blob not null
                 );
@@ -248,11 +273,13 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             Ok(sqlx::query_as!(
                 DbRecord,
                 r#"
-                select 
+                select
+                    datetime_created,
                     uuid as "uuid: uuid::Uuid",
                     amount,
                     datetime,
                     description,
+                    description_container,
                     tags,
                     data
                 from

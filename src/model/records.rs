@@ -1,4 +1,6 @@
 
+use std::ops::Deref;
+
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use serde::{Serialize, Deserialize};
 use uuid::Uuid;
@@ -23,10 +25,11 @@ impl std::ops::Deref for ExpenseRecordUuid {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpenseRecord {
+    datetime_created: DateTime<Local>,
     uuid: ExpenseRecordUuid,
     amount: isize,
     datetime: DateTime<Local>,
-    description: Option<String>,
+    description: Option<DescriptionContainer>,
     data: Vec<ExpenseData>,
     tags: Vec<String>
 }
@@ -38,6 +41,7 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
     ) -> Self {
         Self { 
+            datetime_created: Local::now(),
             uuid: ExpenseRecordUuid::new(),
             amount, datetime,
             description: None,
@@ -46,18 +50,23 @@ impl ExpenseRecord {
     }
 
     pub fn new_all(
-        uuid: Uuid, amount: isize, datetime: DateTime<Local>,
-        description: Option<String>, data: Vec<ExpenseData>, tags: Vec<String>
+        datetime_created: DateTime<Local>, uuid: Uuid, amount: isize,
+        datetime: DateTime<Local>, description: Option<DescriptionContainer>,
+        data: Vec<ExpenseData>, tags: Vec<String>
     ) -> Self {
-        Self { 
-            uuid: ExpenseRecordUuid(uuid), amount, datetime, description, 
-            data, tags
+        Self {
+            datetime_created, uuid: ExpenseRecordUuid(uuid), amount, datetime,
+            description, data, tags
         }
     }
+    pub fn created(&self) -> &DateTime<Local> { &self.datetime_created }
     pub fn uuid(&self) -> &ExpenseRecordUuid { &self.uuid }
     pub fn amount(&self) -> &isize { &self.amount }
     pub fn datetime(&self) -> &DateTime<Local> { &self.datetime }
-    pub fn description(&self) -> &Option<String> { &self.description }
+    pub fn description(&self) -> Option<&String> { self.description.as_ref().map(Deref::deref) }
+    pub fn description_container(&self) -> &Option<DescriptionContainer> {
+        &self.description
+    }
     pub fn data(&self) -> &Vec<ExpenseData> { &self.data }
     pub fn tags(&self) -> &Vec<String> { &self.tags }
 }
@@ -112,5 +121,36 @@ impl ExpenseRecordBuilder {
             ),
             _ => Err(ProfileError::build(self.amount, self.datetime))
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Description {
+    desc: String,
+    datetime_created: DateTime<Local>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DescriptionContainer {
+    current: Description,
+    history: Vec<Description>
+}
+
+impl Description {
+    pub fn new(desc: String) -> Self {
+        Self { desc , datetime_created: Local::now() }
+    }
+}
+
+impl DescriptionContainer {
+    pub fn new(desc: String) -> Self {
+        Self { current: Description::new(desc), history: vec![] }
+    }
+}
+
+impl Deref for DescriptionContainer {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        &self.current.desc
     }
 }
