@@ -52,7 +52,7 @@ impl DbRecord {
         ExpenseRecord::new_all(
             self.uuid,
             self.amount as isize,
-            DateTime::from_timestamp_millis(self.datetime)
+            DateTime::from_timestamp(self.datetime, 0)
                 .map(|d| d.with_timezone(&Local::now().timezone()))
                 .unwrap(),
             self.description,

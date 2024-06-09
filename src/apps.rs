@@ -31,7 +31,7 @@ pub struct BreadApp {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum Anchor {
+enum Anchor {
     Visualizations,
     FileUpload,
     TableView,

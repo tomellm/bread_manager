@@ -187,6 +187,9 @@ where
     pub fn update(&mut self) {
         self.changer.update_sender();
     }
+    pub fn viewer(&self) -> watch::Receiver<HashMap<Key, Value>> {
+        self.viewer.clone()
+    }
 }
 
 impl<Key, Value> Deref for Communicator<Key, Value>
