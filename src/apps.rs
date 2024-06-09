@@ -1,23 +1,25 @@
 mod fileupload;
-mod tableview;
 mod profiles;
+mod tableview;
 mod utils;
-
+mod visualizations;
 
 use eframe::egui;
 use tokio::sync::mpsc;
 
 use crate::db::DB;
 
-use self::{fileupload::FileUpload, profiles::Profiles, tableview::TableView};
-
-
+use self::{
+    fileupload::FileUpload, profiles::Profiles, tableview::TableView,
+    visualizations::Visualizations,
+};
 
 pub struct State {
     db: DB,
     file_upload: FileUpload,
     table_view: TableView,
     profiles: Profiles,
+    visualizations: Visualizations,
     selected_anchor: Anchor,
 }
 
@@ -29,7 +31,8 @@ pub struct BreadApp {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum Anchor {
+enum Anchor {
+    Visualizations,
     FileUpload,
     TableView,
     Profiles,
@@ -37,14 +40,18 @@ pub enum Anchor {
 
 impl BreadApp {
     pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        Self { ..Default::default() }
+        Self {
+            ..Default::default()
+        }
     }
 
-    pub fn apps_iter_mut(
-        &mut self
-    ) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
-        
+    pub fn apps_iter_mut(&mut self) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
         let vec = vec![
+            (
+                "Visualizations",
+                Anchor::Visualizations,
+                &mut self.state.visualizations as &mut dyn eframe::App,
+            ),
             (
                 "Table View",
                 Anchor::TableView,
@@ -59,7 +66,7 @@ impl BreadApp {
                 "Profiles",
                 Anchor::Profiles,
                 &mut self.state.profiles as &mut dyn eframe::App,
-            )
+            ),
         ];
 
         vec.into_iter()
@@ -80,7 +87,6 @@ impl BreadApp {
             }
         }
         self.state.selected_anchor = selected_anchor;
-
     }
 
     fn show_selected_app(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
@@ -96,8 +102,7 @@ impl BreadApp {
         use egui::*;
         use std::fmt::Write as _;
 
-        if ![Anchor::FileUpload, Anchor::Profiles]
-            .contains(&self.state.selected_anchor) {
+        if ![Anchor::FileUpload, Anchor::Profiles].contains(&self.state.selected_anchor) {
             return;
         }
 
@@ -136,7 +141,7 @@ impl BreadApp {
             if !i.raw.dropped_files.is_empty() {
                 let callback = self.update_callback();
                 let files = i.raw.dropped_files.clone();
-                println!("{:?}",self.state.selected_anchor);
+                println!("{:?}", self.state.selected_anchor);
                 if let Some(sender) = self.get_current_sender() {
                     println!("{:?}", sender);
                     tokio::spawn(async move {
@@ -159,7 +164,7 @@ impl BreadApp {
         match self.state.selected_anchor {
             Anchor::FileUpload => Some(self.send_dropped_file_upload.clone()),
             Anchor::Profiles => Some(self.send_dropped_profiles.clone()),
-            _ => None
+            _ => None,
         }
     }
 }
@@ -169,11 +174,11 @@ impl Default for BreadApp {
         let (tx_f, rx_f) = mpsc::channel::<egui::DroppedFile>(5);
         let (tx_p, rx_p) = mpsc::channel::<egui::DroppedFile>(5);
 
-        Self { 
+        Self {
             state: State::new(rx_f, rx_p),
             send_dropped_file_upload: tx_f,
             send_dropped_profiles: tx_p,
-            update_callback_ctx: None
+            update_callback_ctx: None,
         }
     }
 }
@@ -197,20 +202,17 @@ impl eframe::App for BreadApp {
 impl State {
     fn new(
         rx_f: mpsc::Receiver<egui::DroppedFile>,
-        rx_p: mpsc::Receiver<egui::DroppedFile>
+        rx_p: mpsc::Receiver<egui::DroppedFile>,
     ) -> Self {
         let mut db = DB::get_db(false).unwrap();
 
-        let file_upload = FileUpload::new(
-            rx_f,
-            db.profiles_signal(),
-            db.records_signal()
-        );
-        Self { 
+        let file_upload = FileUpload::new(rx_f, db.profiles_signal(), db.records_signal());
+        Self {
             file_upload,
             profiles: Profiles::new(rx_p, db.profiles_signal()),
             table_view: TableView::new(db.records_signal()),
-            selected_anchor: Anchor::TableView,
+            visualizations: Visualizations::new(db.records_signal()),
+            selected_anchor: Anchor::Visualizations,
             db,
         }
     }
