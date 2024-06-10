@@ -8,6 +8,14 @@ use sqlx::types::Uuid;
 
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
+//IDEA: change to this if nessesary https://docs.rs/lexical/latest/lexical/
+fn to_num(str: &str) -> Result<f64, ProfileError> {
+    str.replace('.', "")
+        .replace(',', ".")
+        .parse::<f64>()
+        .or(Err(ProfileError::number(&str, "f64")))
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Income;
 impl Income {
@@ -15,11 +23,7 @@ impl Income {
         if str.is_empty() {
             return Ok(0);
         }
-        let str = str.replace(',', ".");
-        Ok((str
-            .parse::<f64>()
-            .or(Err(ProfileError::number(&str, "f64")))?
-            * 100.0) as usize)
+        Ok((to_num(str)? * 100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -29,11 +33,7 @@ impl Expense {
         if str.is_empty() {
             return Ok(0);
         }
-        let str = str.replace(',', ".");
-        Ok((str
-            .parse::<f64>()
-            .or(Err(ProfileError::number(&str, "f64")))?
-            * -100.0) as usize)
+        Ok((to_num(str)? * -100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -43,11 +43,7 @@ impl PosExpense {
         if str.is_empty() {
             return Ok(0);
         }
-        let str = str.replace(',', ".");
-        Ok((str
-            .parse::<f64>()
-            .or(Err(ProfileError::number(&str, "f64")))?
-            * 100.0) as usize)
+        Ok((to_num(str)? * 100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -57,11 +53,7 @@ impl Movement {
         if str.is_empty() {
             return Ok(0);
         }
-        let str = str.replace(',', ".");
-        Ok((str
-            .parse::<f64>()
-            .or(Err(ProfileError::number(&str, "f64")))?
-            * 100.0) as isize)
+        Ok((to_num(str)? * 100.0) as isize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
