@@ -45,13 +45,12 @@ impl eframe::App for FileUpload {
                     } else {
                         ui.label("..no path..");
                     }
-                    ComboBox::new(format!("select_profile_{}", index), "select profile")
+                    ComboBox::new(format!("select_profile_{index}"), "select profile")
                         .selected_text({
                             file_to_parse
                                 .profile
                                 .clone()
-                                .map(|p| p.name)
-                                .unwrap_or(String::from("none selected"))
+                                .map_or(String::from("none selected"), |p| p.name)
                         })
                         .show_ui(ui, |ui| {
                             for (_, profile) in self.profiles_communicator.view().iter() {
@@ -83,7 +82,7 @@ impl eframe::App for FileUpload {
                 ui.label("time");
                 ui.label("tags");
                 ui.end_row();
-                for record in self.parsed_records.parsed_records.iter() {
+                for record in &self.parsed_records.parsed_records {
                     ui.label(format!("{}", record.amount()));
                     ui.label(format!("{}", record.datetime()));
                     ui.label(format!("{:?}", record.tags()));
@@ -179,7 +178,7 @@ impl ParsedRecords {
 
             let file = file.clone().path.unwrap();
             let str_file = fs::read_to_string(file).unwrap();
-            let parsed_file = profile.parse_file(str_file).unwrap();
+            let parsed_file = profile.parse_file(&str_file).unwrap();
 
             Ok(parsed_file)
         })

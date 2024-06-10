@@ -2,9 +2,8 @@ use uuid::Uuid;
 
 use crate::{model::records::ExpenseRecord, utils::communicator::Communicator};
 
-
 pub struct TableView {
-    records_communicator: Communicator<Uuid, ExpenseRecord>
+    records_communicator: Communicator<Uuid, ExpenseRecord>,
 }
 
 impl eframe::App for TableView {
@@ -35,15 +34,19 @@ impl eframe::App for TableView {
 }
 
 impl TableView {
-    pub fn new(
-        records_communicator: Communicator<Uuid, ExpenseRecord>
-    ) -> Self {
-        Self { records_communicator }
+    pub fn new(records_communicator: Communicator<Uuid, ExpenseRecord>) -> Self {
+        Self {
+            records_communicator,
+        }
     }
-    pub fn show_file_viewer() -> bool { false }
+    pub fn show_file_viewer() -> bool {
+        false
+    }
 
     pub fn delete_all(&mut self) {
-        let keys = self.records_communicator.view()
+        let keys = self
+            .records_communicator
+            .view()
             .iter()
             .map(|(uuid, _)| *uuid)
             .collect::<Vec<_>>();

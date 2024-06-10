@@ -14,7 +14,7 @@ use crate::{
 
 use super::error_to_response;
 
-pub struct ProfilesDB {
+pub struct DbProfiles {
     pub(super) pool: Arc<Pool<Sqlite>>,
 }
 
@@ -27,15 +27,11 @@ struct DbProfile {
 impl DbProfile {
     pub fn from_profile(profile: &Profile) -> Self {
         let (uuid, name, data) = profile.to_db();
-        Self {
-            uuid,
-            name,
-            data,
-        }
+        Self { uuid, name, data }
     }
 
-    pub fn to_profile(self) -> Profile {
-        Profile::from_db(self.uuid, self.name, self.data)
+    pub fn into_profile(self) -> Profile {
+        Profile::from_db(self.uuid, self.name, &self.data)
     }
 }
 
@@ -45,7 +41,7 @@ impl GetKey<Uuid> for Profile {
     }
 }
 
-impl Storage<Uuid, Profile> for ProfilesDB {
+impl Storage<Uuid, Profile> for DbProfiles {
     fn get_all(&self) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
@@ -57,7 +53,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             .await
             .unwrap()
             .into_iter()
-            .map(DbProfile::to_profile)
+            .map(DbProfile::into_profile)
             .collect();
 
             let action = ActionType::GetAll(profiles);
@@ -76,7 +72,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             )
             .execute(&*pool)
             .await;
-            error_to_response(query_result, ActionType::Set(value))
+            error_to_response(query_result, &ActionType::Set(value))
         })
     }
     fn set_many(&self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
@@ -100,7 +96,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             )
             .await;
 
-            Response::from_result(query_result, ActionType::SetMany(values))
+            Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
     fn update(&self, value: Profile) -> BoxFuture<'static, Response<Uuid, Profile>> {
@@ -115,7 +111,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             )
             .execute(&*pool)
             .await;
-            Response::from_result(query_result, ActionType::Update(value))
+            Response::from_result(query_result, &ActionType::Update(value))
         })
     }
     fn update_many(&self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
@@ -139,7 +135,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             )
             .await;
 
-            Response::from_result(query_result, ActionType::SetMany(values))
+            Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
     fn delete(&self, key: Uuid) -> BoxFuture<'static, Response<Uuid, Profile>> {
@@ -148,7 +144,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             let query_result = sqlx::query!("delete from profiles where uuid = ?", key)
                 .execute(&*pool)
                 .await;
-            Response::from_result(query_result, ActionType::Delete(key))
+            Response::from_result(query_result, &ActionType::Delete(key))
         })
     }
     fn delete_many(&self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, Profile>> {
@@ -159,7 +155,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
                     .build()
                     .execute(&*pool)
                     .await;
-            Response::from_result(query_result, ActionType::DeleteMany(keys))
+            Response::from_result(query_result, &ActionType::DeleteMany(keys))
         })
     }
     fn setup(&self, drop: bool) -> BoxFuture<'static, Result<Vec<Profile>, ()>> {
@@ -193,7 +189,7 @@ impl Storage<Uuid, Profile> for ProfilesDB {
             .await
             .unwrap()
             .into_iter()
-            .map(DbProfile::to_profile)
+            .map(DbProfile::into_profile)
             .collect())
         })
     }

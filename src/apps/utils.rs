@@ -1,11 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use egui::{Response, Layout, Ui};
-use crate::model::profiles::{ParsableWrapper, ExpenseDateTime, ExpenseDate, ExpenseTime};
-
+use crate::model::profiles::{ExpenseDate, ExpenseDateTime, ExpenseTime, ParsableWrapper};
+use egui::{Layout, Response, Ui};
 
 pub enum WindowSize {
-    Small, Medium, Large
+    Small,
+    Medium,
+    Large,
 }
 
 impl WindowSize {
@@ -13,11 +14,10 @@ impl WindowSize {
         match num {
             0..=699 => Self::Small,
             700..=1199 => Self::Medium,
-            _ => Self::Large
+            _ => Self::Large,
         }
     }
 }
-
 
 pub fn drag_int(ui: &mut egui::Ui, val: &mut usize) {
     ui.add(egui::DragValue::new(val).speed(0.1).max_decimals(0));
@@ -33,7 +33,7 @@ pub fn text(ui: &mut egui::Ui, val: &mut String) {
 }
 
 pub fn option_display<T: std::fmt::Display>(val: Option<&T>) -> String {
-    val.map_or_else(|| String::from("Nothing"), |val| format!("{}", val))
+    val.map_or_else(|| String::from("Nothing"), |val| format!("{val}"))
 }
 
 pub fn window_size(ui: &egui::Ui) -> WindowSize {
@@ -45,47 +45,66 @@ pub fn other_column_editor(
     index: usize,
     col_pos: &mut usize,
     col_type: &mut ParsableWrapper,
-    to_delete: Rc<RefCell<Vec<usize>>>,
+    to_delete: &Rc<RefCell<Vec<usize>>>,
 ) -> Response {
-    let response = ui.group(|ui| {
-        ui.vertical_centered(|ui| {
-            egui::ComboBox::from_id_source(format!("other col {index}"))
-                .selected_text(format!("{col_type}"))
-                .show_ui(ui, |ui| {
-                    ui.style_mut().wrap = Some(true);
-                    ui.selectable_value(col_type, ParsableWrapper::income(), "Income");
-                    ui.selectable_value(col_type, ParsableWrapper::expense(), "Expense");
-                    ui.selectable_value(col_type, ParsableWrapper::posexpense(), "PosExpense");
-                    ui.selectable_value(col_type, ParsableWrapper::movement(), "Movement");
-                    ui.selectable_value(col_type, ParsableWrapper::expensedatetime(), "ExpenseDatetime");
-                    ui.selectable_value(col_type, ParsableWrapper::expensedate(), "ExpenseDate");
-                    ui.selectable_value(col_type, ParsableWrapper::expensetime(), "ExpenseTime");
-                    ui.selectable_value(col_type, ParsableWrapper::description(), "Description");
-                    ui.selectable_value(col_type, ParsableWrapper::other(), "Other");
-                });
-            ui.separator();
-            ui.add_sized([160., 100.], |ui: &mut Ui| {
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Pos:");
-                        drag_int(ui, col_pos);
+    let response = ui
+        .group(|ui| {
+            ui.vertical_centered(|ui| {
+                egui::ComboBox::from_id_source(format!("other col {index}"))
+                    .selected_text(format!("{col_type}"))
+                    .show_ui(ui, |ui| {
+                        ui.style_mut().wrap = Some(true);
+                        ui.selectable_value(col_type, ParsableWrapper::income(), "Income");
+                        ui.selectable_value(col_type, ParsableWrapper::expense(), "Expense");
+                        ui.selectable_value(col_type, ParsableWrapper::posexpense(), "PosExpense");
+                        ui.selectable_value(col_type, ParsableWrapper::movement(), "Movement");
+                        ui.selectable_value(
+                            col_type,
+                            ParsableWrapper::expensedatetime(),
+                            "ExpenseDatetime",
+                        );
+                        ui.selectable_value(
+                            col_type,
+                            ParsableWrapper::expensedate(),
+                            "ExpenseDate",
+                        );
+                        ui.selectable_value(
+                            col_type,
+                            ParsableWrapper::expensetime(),
+                            "ExpenseTime",
+                        );
+                        ui.selectable_value(
+                            col_type,
+                            ParsableWrapper::description(),
+                            "Description",
+                        );
+                        ui.selectable_value(col_type, ParsableWrapper::other(), "Other");
                     });
-                    match col_type {
-                        ParsableWrapper::ExpenseDateTime(ExpenseDateTime(f)) => text(ui, f),
-                        ParsableWrapper::ExpenseDate(ExpenseDate(f)) => text(ui, f),
-                        ParsableWrapper::ExpenseTime(ExpenseTime(f)) => text(ui, f),
-                        _ => (),
+                ui.separator();
+                ui.add_sized([160., 100.], |ui: &mut Ui| {
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            ui.label("Pos:");
+                            drag_int(ui, col_pos);
+                        });
+                        match col_type {
+                            ParsableWrapper::ExpenseDateTime(ExpenseDateTime(f))
+                            | ParsableWrapper::ExpenseDate(ExpenseDate(f))
+                            | ParsableWrapper::ExpenseTime(ExpenseTime(f)) => text(ui, f),
+                            _ => (),
+                        }
+                    })
+                    .response
+                });
+                ui.separator();
+                ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
+                    if ui.button("remove").clicked() {
+                        to_delete.borrow_mut().push(index);
                     }
-                }).response
+                });
             });
-            ui.separator();
-            ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
-                if ui.button("remove").clicked() {
-                    to_delete.borrow_mut().push(index);
-                }
-            });
-        });
-    }).response;
+        })
+        .response;
 
     response
 }
