@@ -39,7 +39,7 @@ impl eframe::App for Profiles {
                         ui.label(format!("{}", profile.margins.0));
                         ui.label(format!("{}", profile.margins.1));
                         ui.label(profile.delimiter.to_string());
-                        ui.label(format!("{}", profile.profile_width));
+                        ui.label(format!("{}", profile.width));
                         ui.group(|ui| {
                             if ui.button("delete").clicked() {
                                 delete_action(*key);
@@ -50,7 +50,7 @@ impl eframe::App for Profiles {
                 });
             }
             ui.separator();
-            self.create_profile.ui(ctx, ui)
+            self.create_profile.ui(ctx, ui);
         });
     }
 }

@@ -20,7 +20,7 @@ pub async fn insert_values<'args, Value>(
         let mut break_out = false;
         let to_drain = if values.len() >= MAX_PER_INSERT {
             MAX_PER_INSERT
-        } else { 
+        } else {
             break_out = true;
             values.len()
         };

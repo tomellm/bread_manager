@@ -5,19 +5,25 @@ mod utils;
 use std::sync::Arc;
 
 use pollster::FutureExt;
-use sqlx::{sqlite::{SqliteConnectOptions, SqliteQueryResult}, SqlitePool};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqliteQueryResult},
+    SqlitePool,
+};
 use uuid::Uuid;
 
 use crate::{
     model::{profiles::Profile, records::ExpenseRecord},
-    utils::{changer::{ActionType, Response}, communicator::{Communicator, DataContainer, GetKey}},
+    utils::{
+        changer::{ActionType, Response},
+        communicator::{Communicator, DataContainer, GetKey},
+    },
 };
 
-use self::{profiles::ProfilesDB, records::RecordsDB};
+use self::{profiles::DbProfiles, records::DbRecords};
 
 pub struct DB {
-    profiles_container: DataContainer<Uuid, Profile, ProfilesDB>,
-    records_container: DataContainer<Uuid, ExpenseRecord, RecordsDB>,
+    profiles_container: DataContainer<Uuid, Profile, DbProfiles>,
+    records_container: DataContainer<Uuid, ExpenseRecord, DbRecords>,
 }
 
 impl DB {
@@ -31,13 +37,16 @@ impl DB {
                 .block_on()
                 .map_err(|_| ())?,
         );
-        let profiles_writer = ProfilesDB { pool: pool.clone() };
-        let records_writer = RecordsDB { pool: pool.clone() };
+        let profiles_writer = DbProfiles { pool: pool.clone() };
+        let records_writer = DbRecords { pool: pool.clone() };
 
         let profiles_container = DataContainer::new(profiles_writer, drop);
         let records_container = DataContainer::new(records_writer, drop);
 
-        Ok(Self { profiles_container, records_container })
+        Ok(Self {
+            profiles_container,
+            records_container,
+        })
     }
 
     pub fn profiles_signal(&mut self) -> Communicator<Uuid, Profile> {
@@ -56,14 +65,14 @@ impl DB {
 
 fn error_to_response<Key, Value>(
     query_result: Result<SqliteQueryResult, sqlx::error::Error>,
-    action: ActionType<Key, Value>,
+    action: &ActionType<Key, Value>,
 ) -> Response<Key, Value>
 where
     Key: Clone + Send + Sync + 'static,
-    Value: GetKey<Key> + Clone + Send + Sync + 'static
+    Value: GetKey<Key> + Clone + Send + Sync + 'static,
 {
     match query_result {
-        Ok(_) => Response::ok(&action),
-        Err(err) => Response::err(&action, format!("{err:?}")),
+        Ok(_) => Response::ok(action),
+        Err(err) => Response::err(action, format!("{err:?}")),
     }
 }

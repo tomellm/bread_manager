@@ -9,19 +9,18 @@ pub struct Visualizations {
     update_callback_ctx: Option<egui::Context>,
     records_communicator: Communicator<Uuid, ExpenseRecord>,
     bars: BarChartVis,
-    selected_anchor: Anchor
+    selected_anchor: Anchor,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum Anchor {
-    BarChart
+    BarChart,
 }
 
 impl eframe::App for Visualizations {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_callback_ctx = Some(ctx.clone());
         self.records_communicator.update();
-        self.update_visualizations();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualizations");
@@ -40,11 +39,7 @@ impl Visualizations {
             update_callback_ctx: None,
             records_communicator,
             bars,
-            selected_anchor: Anchor::BarChart
+            selected_anchor: Anchor::BarChart,
         }
-    }
-
-    fn update_visualizations(&mut self) {
-        
     }
 }

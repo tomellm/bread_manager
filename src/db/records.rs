@@ -18,7 +18,7 @@ use crate::{
 
 use super::{error_to_response, utils};
 
-pub struct RecordsDB {
+pub struct DbRecords {
     pub(super) pool: Arc<Pool<Sqlite>>,
 }
 
@@ -52,13 +52,13 @@ impl DbRecord {
         }
     }
 
-    pub fn to_record(self) -> ExpenseRecord {
+    pub fn into_record(self) -> ExpenseRecord {
         ExpenseRecord::new_all(
             DateTime::from_timestamp(self.datetime_created, 0)
                 .map(|d| d.with_timezone(&Local::now().timezone()))
                 .unwrap(),
             self.uuid,
-            self.amount as isize,
+            isize::try_from(self.amount).unwrap(),
             DateTime::from_timestamp(self.datetime, 0)
                 .map(|d| d.with_timezone(&Local::now().timezone()))
                 .unwrap(),
@@ -72,7 +72,7 @@ impl DbRecord {
     }
 }
 
-impl Storage<Uuid, ExpenseRecord> for RecordsDB {
+impl Storage<Uuid, ExpenseRecord> for DbRecords {
     fn get_all(&self) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
         let pool = self.pool.clone();
         Box::pin(async move {
@@ -96,7 +96,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             .await
             .unwrap()
             .into_iter()
-            .map(DbRecord::to_record)
+            .map(DbRecord::into_record)
             .collect();
 
             let action = ActionType::GetAll(records);
@@ -123,7 +123,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             )
             .execute(&*pool)
             .await;
-            error_to_response(query_result, ActionType::Set(value))
+            error_to_response(query_result, &ActionType::Set(value))
         })
     }
     fn set_many(
@@ -133,17 +133,14 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
         println!("setting many right now");
         let pool = self.pool.clone();
         Box::pin(async move {
-            let records = values
-                .iter()
-                .map(DbRecord::from_record)
-                .collect::<Vec<_>>();
+            let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
 
             let query_result = utils::insert_values(
                 pool,
-                r#"insert into expense_records(
+                "insert into expense_records(
                     datetime_created, uuid, amount, datetime, description, 
                     description_container, tags, data
-                )"#,
+                )",
                 records,
                 |mut builder, value| {
                     builder
@@ -159,7 +156,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             )
             .await;
 
-            Response::from_result(query_result, ActionType::SetMany(values))
+            Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
     fn update(
@@ -182,7 +179,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             )
             .execute(&*pool)
             .await;
-            error_to_response(query_result, ActionType::Update(value))
+            error_to_response(query_result, &ActionType::Update(value))
         })
     }
     fn update_many(
@@ -191,17 +188,14 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
     ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
         let pool = self.pool.clone();
         Box::pin(async move {
-            let records = values
-                .iter()
-                .map(DbRecord::from_record)
-                .collect::<Vec<_>>();
+            let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
 
             let query_result = utils::insert_values(
                 pool,
-                r#"insert into expense_records(
+                "insert into expense_records(
                     datetime_created, uuid, amount, datetime, description, 
                     description_container, tags, data
-                )"#,
+                )",
                 records,
                 |mut builder, value| {
                     builder
@@ -217,7 +211,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             )
             .await;
 
-            Response::from_result(query_result, ActionType::SetMany(values))
+            Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
     fn delete(&self, key: Uuid) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
@@ -226,20 +220,22 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             let query_result = sqlx::query!("delete from expense_records where uuid = ?", key)
                 .execute(&*pool)
                 .await;
-            error_to_response(query_result, ActionType::Delete(key))
+            error_to_response(query_result, &ActionType::Delete(key))
         })
     }
     fn delete_many(&self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let query_result = utils::add_in_items(
-                "delete from expense_records where uuid in (", keys.iter(), ")"
+                "delete from expense_records where uuid in (",
+                keys.iter(),
+                ")",
             )
-                .build()
-                .execute(&*pool)
-                .await;
+            .build()
+            .execute(&*pool)
+            .await;
 
-            Response::from_result(query_result, ActionType::DeleteMany(keys))
+            Response::from_result(query_result, &ActionType::DeleteMany(keys))
         })
     }
     fn setup(&self, drop: bool) -> BoxFuture<'static, Result<Vec<ExpenseRecord>, ()>> {
@@ -290,7 +286,7 @@ impl Storage<Uuid, ExpenseRecord> for RecordsDB {
             .await
             .unwrap()
             .into_iter()
-            .map(DbRecord::to_record)
+            .map(DbRecord::into_record)
             .collect())
         })
     }

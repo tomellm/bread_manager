@@ -1,0 +1,63 @@
+name: Cargo Fmt, Check and Test
+
+on:
+    push:
+        branches: [ "main" ]
+    pull_request:
+        branches: [ "main" ]
+
+env: 
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt-check:
+    name: Fmt and Clippy
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y -q ; \
+          export PATH="$HOME/.cargo/bin:$PATH"
+      - run: cargo fmt --check
+      - run: cargo clippy -- -D clippy::pedantic
+
+  audit:
+    name: Audit
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y -q ; \
+          export PATH="$HOME/.cargo/bin:$PATH"
+      - run: cargo install cargo-audit
+      - run: cargo audit
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain:
+          - stable
+          - beta
+          - nightly
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y -q ;  \
+          export PATH="$HOME/.cargo/bin:$PATH"
+      - run: cargo test --verbose
+  
+

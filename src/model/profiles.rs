@@ -11,82 +11,80 @@ use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Income;
 impl Income {
-    pub fn parse_str(str: String) -> Result<usize, ProfileError> {
+    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
         if str.is_empty() {
             return Ok(0);
         }
         let str = str.replace(',', ".");
         Ok((str
             .parse::<f64>()
-            .or(Err(ProfileError::number(str, String::from("f64"))))?
+            .or(Err(ProfileError::number(&str, "f64")))?
             * 100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Expense;
 impl Expense {
-    pub fn parse_str(str: String) -> Result<usize, ProfileError> {
+    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
         if str.is_empty() {
             return Ok(0);
         }
         let str = str.replace(',', ".");
         Ok((str
             .parse::<f64>()
-            .or(Err(ProfileError::number(str, String::from("f64"))))?
+            .or(Err(ProfileError::number(&str, "f64")))?
             * -100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct PosExpense;
 impl PosExpense {
-    pub fn parse_str(str: String) -> Result<usize, ProfileError> {
+    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
         if str.is_empty() {
             return Ok(0);
         }
         let str = str.replace(',', ".");
         Ok((str
             .parse::<f64>()
-            .or(Err(ProfileError::number(str, String::from("f64"))))?
+            .or(Err(ProfileError::number(&str, "f64")))?
             * 100.0) as usize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Movement;
 impl Movement {
-    pub fn parse_str(str: String) -> Result<isize, ProfileError> {
+    pub fn parse_str(str: &str) -> Result<isize, ProfileError> {
         if str.is_empty() {
             return Ok(0);
         }
         let str = str.replace(',', ".");
         Ok((str
             .parse::<f64>()
-            .or(Err(ProfileError::number(str, String::from("f64"))))?
+            .or(Err(ProfileError::number(&str, "f64")))?
             * 100.0) as isize)
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ExpenseDateTime(pub String);
 impl ExpenseDateTime {
-    pub fn parse_str(&self, str: String) -> Result<DateTime<Local>, ProfileError> {
-        NaiveDateTime::parse_from_str(str.as_str(), self.0.as_str())
+    pub fn parse_str(&self, str: &str) -> Result<DateTime<Local>, ProfileError> {
+        NaiveDateTime::parse_from_str(str, &self.0)
             .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap())
-            .or(Err(ProfileError::date(str, self.0.clone())))
+            .or(Err(ProfileError::date(str, &self.0)))
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ExpenseDate(pub String);
 impl ExpenseDate {
-    pub fn parse_str(&self, str: String) -> Result<NaiveDate, ProfileError> {
-        NaiveDate::parse_from_str(str.as_str(), self.0.as_str())
-            .or(Err(ProfileError::date(str, self.0.clone())))
+    pub fn parse_str(&self, str: &str) -> Result<NaiveDate, ProfileError> {
+        NaiveDate::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct ExpenseTime(pub String);
 impl ExpenseTime {
-    pub fn parse_str(&self, str: String) -> Result<NaiveTime, ProfileError> {
-        NaiveTime::parse_from_str(str.as_str(), self.0.as_str())
-            .or(Err(ProfileError::date(str, self.0.clone())))
+    pub fn parse_str(&self, str: &str) -> Result<NaiveTime, ProfileError> {
+        NaiveTime::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
     }
 }
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -108,9 +106,19 @@ pub struct Profile {
     amount: ExpenseColumn,
     datetime: DateTimeColumn,
     other_data: HashMap<usize, ParsableWrapper>,
-    pub profile_width: usize,
+    pub width: usize,
     pub default_tags: Vec<String>,
 }
+
+type DbProfileParts = (
+    (usize, usize),
+    char,
+    ExpenseColumn,
+    DateTimeColumn,
+    HashMap<usize, ParsableWrapper>,
+    usize,
+    Vec<String>,
+);
 
 impl Profile {
     fn new(
@@ -131,30 +139,30 @@ impl Profile {
         let other_data = other_data.into_iter().collect::<HashMap<_, _>>();
 
         let tags_set = default_tags.drain(..).collect::<HashSet<_>>();
-        default_tags.extend(tags_set.into_iter());
+        default_tags.extend(tags_set);
         Self {
             uuid,
             name,
+            margins,
+            delimiter,
             amount,
             datetime,
             other_data,
-            margins,
-            delimiter,
-            profile_width,
+            width: profile_width,
             default_tags,
         }
     }
-    pub fn parse_file(&self, file: String) -> Result<Vec<ExpenseRecord>, ProfileError> {
+    pub fn parse_file(&self, file: &str) -> Result<Vec<ExpenseRecord>, ProfileError> {
         //TODO: dont forget to check that this is correct
-        let rows = self.cut_margins(file.lines().map(str::to_owned).collect::<Vec<_>>());
+        let rows = self.cut_margins(file.lines().collect::<Vec<_>>());
         println!("about to parse recrids");
         let res_records = rows
             .into_iter()
             .map(|row| self.parse_row(row))
             .collect::<Vec<_>>();
-        println!("finished parsing records {:?}", res_records);
-        match res_records.iter().any(Result::is_err) {
-            true => Err(res_records
+        println!("finished parsing records {res_records:?}");
+        if res_records.iter().any(Result::is_err) {
+            Err(res_records
                 .iter()
                 .filter(|e| e.is_err())
                 .collect::<Vec<_>>()
@@ -162,15 +170,16 @@ impl Profile {
                 .unwrap()
                 .as_ref()
                 .unwrap_err()
-                .clone()),
-            false => Ok(res_records.into_iter().map(Result::unwrap).collect()),
+                .clone())
+        } else {
+            Ok(res_records.into_iter().map(Result::unwrap).collect())
         }
     }
 
-    fn parse_row(&self, row: String) -> Result<ExpenseRecord, ProfileError> {
+    fn parse_row(&self, row: &str) -> Result<ExpenseRecord, ProfileError> {
         let split_row = self.split_row(row);
-        if split_row.len() < self.profile_width {
-            return Err(ProfileError::width(self.profile_width, split_row.len()));
+        if split_row.len() < self.width {
+            return Err(ProfileError::width(self.width, split_row.len()));
         }
 
         let mut builder = ExpenseRecordBuilder::default();
@@ -180,25 +189,25 @@ impl Profile {
         match self.amount {
             ExpenseColumn::Split((pos1, _), (pos2, _)) => {
                 builder.amount_split(
-                    Income::parse_str(get_from_vec(pos1))?,
-                    Expense::parse_str(get_from_vec(pos2))?,
+                    Income::parse_str(&get_from_vec(pos1))?,
+                    Expense::parse_str(&get_from_vec(pos2))?,
                 );
             }
             ExpenseColumn::Combined(pos, _) => {
-                builder.amount_combined(Movement::parse_str(get_from_vec(pos))?);
+                builder.amount_combined(Movement::parse_str(&get_from_vec(pos))?);
             }
             ExpenseColumn::OnlyExpense(pos, _) => {
-                builder.amount_split(0, PosExpense::parse_str(get_from_vec(pos))?);
+                builder.amount_split(0, PosExpense::parse_str(&get_from_vec(pos))?);
             }
         };
         match &self.datetime {
             DateTimeColumn::DateTime(pos, el) => {
-                builder.datetime(el.parse_str(get_from_vec(*pos))?)
+                builder.datetime(el.parse_str(&get_from_vec(*pos))?);
             }
-            DateTimeColumn::Date(pos, el) => builder.date(el.parse_str(get_from_vec(*pos))?),
+            DateTimeColumn::Date(pos, el) => builder.date(el.parse_str(&get_from_vec(*pos))?),
             DateTimeColumn::DateAndTime((pos1, el1), (pos2, el2)) => builder.date_time(
-                el1.parse_str(get_from_vec(*pos1))?,
-                el2.parse_str(get_from_vec(*pos2))?,
+                el1.parse_str(&get_from_vec(*pos1))?,
+                el2.parse_str(&get_from_vec(*pos2))?,
             ),
         }
 
@@ -212,11 +221,11 @@ impl Profile {
         builder.build()
     }
 
-    fn split_row(&self, row: String) -> Vec<String> {
+    fn split_row(&self, row: &str) -> Vec<String> {
         row.split(self.delimiter).map(str::to_owned).collect()
     }
 
-    fn cut_margins(&self, mut rows: Vec<String>) -> Vec<String> {
+    fn cut_margins<'a>(&self, mut rows: Vec<&'a str>) -> Vec<&'a str> {
         rows.drain(0..self.margins.0);
         let lines_len = rows.len();
         rows.drain((lines_len - self.margins.1)..lines_len);
@@ -233,26 +242,17 @@ impl Profile {
                 self.amount.clone(),
                 self.datetime.clone(),
                 self.other_data.clone(),
-                self.profile_width,
+                self.width,
                 self.default_tags.clone(),
             ))
             .unwrap(),
         )
     }
 
-    pub fn from_db(uuid: Uuid, name: String, data: Vec<u8>) -> Self {
+    pub fn from_db(uuid: Uuid, name: String, data: &[u8]) -> Self {
         let (
-            margins, delimiter, amount, datetime, other_data, profile_width, 
-            default_tags
-        ): (
-            (usize, usize),
-            char,
-            ExpenseColumn,
-            DateTimeColumn,
-            HashMap<usize, ParsableWrapper>,
-            usize,
-            Vec<String>,
-        ) = bc::deserialize(&data).unwrap();
+            margins, delimiter, amount, datetime, other_data, profile_width, default_tags
+        ): DbProfileParts = bc::deserialize(data).unwrap();
 
         Self {
             uuid,
@@ -262,7 +262,7 @@ impl Profile {
             amount,
             datetime,
             other_data,
-            profile_width,
+            width: profile_width,
             default_tags,
         }
     }
@@ -291,8 +291,7 @@ impl ExpenseColumn {
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
             ExpenseColumn::Split((pos1, _), (pos2, _)) => vec![*pos1, *pos2],
-            ExpenseColumn::Combined(pos, _) => vec![*pos],
-            ExpenseColumn::OnlyExpense(pos, _) => vec![*pos],
+            ExpenseColumn::Combined(pos, _) | ExpenseColumn::OnlyExpense(pos, _) => vec![*pos],
         }
     }
     pub fn into_cols(self) -> Vec<(usize, ParsableWrapper)> {
@@ -328,8 +327,14 @@ impl DateTimeColumn {
     pub fn date(position: usize, format: String) -> Self {
         Self::Date(position, ExpenseDate(format))
     }
+    pub fn new_date() -> Self {
+        Self::Date(0, ExpenseDate(String::new()))
+    }
     pub fn datetime(position: usize, format: String) -> Self {
         Self::DateTime(position, ExpenseDateTime(format))
+    }
+    pub fn new_datetime() -> Self {
+        Self::DateTime(0, ExpenseDateTime(String::new()))
     }
     pub fn date_time(position1: usize, format1: String, position2: usize, format2: String) -> Self {
         Self::DateAndTime(
@@ -337,10 +342,15 @@ impl DateTimeColumn {
             (position2, ExpenseTime(format2)),
         )
     }
+    pub fn new_date_time() -> Self {
+        Self::DateAndTime(
+            (0, ExpenseDate(String::new())),
+            (0, ExpenseTime(String::new())),
+        )
+    }
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
-            DateTimeColumn::DateTime(pos, _) => vec![*pos],
-            DateTimeColumn::Date(pos, _) => vec![*pos],
+            DateTimeColumn::DateTime(pos, _) | DateTimeColumn::Date(pos, _) => vec![*pos],
             DateTimeColumn::DateAndTime((pos1, _), (pos2, _)) => vec![*pos1, *pos2],
         }
     }
@@ -392,20 +402,20 @@ impl ProfileBuilder {
         self.name = Some(val);
         self
     }
-    pub fn expense_col(self, val: ExpenseColumn) -> Result<Self, Self> {
-        let mut obj = self.add_many_pos(val.get_positions())?;
-        obj.expense_col = Some(val);
-        Ok(obj)
+    pub fn expense_col(&mut self, val: ExpenseColumn) -> Result<(), ()> {
+        self.add_many_pos(val.get_positions())?;
+        self.expense_col = Some(val);
+        Ok(())
     }
-    pub fn datetime_col(self, val: DateTimeColumn) -> Result<Self, Self> {
-        let mut obj = self.add_many_pos(val.get_positions())?;
-        obj.datetime_col = Some(val);
-        Ok(obj)
+    pub fn datetime_col(&mut self, val: DateTimeColumn) -> Result<(), ()> {
+        self.add_many_pos(val.get_positions())?;
+        self.datetime_col = Some(val);
+        Ok(())
     }
-    pub fn other_cols(self, vals: Vec<(usize, ParsableWrapper)>) -> Result<Self, Self> {
-        let mut obj = self.add_many_pos(vals.iter().map(|t| t.0).collect::<Vec<_>>())?;
-        obj.other_cols = vals;
-        Ok(obj)
+    pub fn other_cols(&mut self, vals: Vec<(usize, ParsableWrapper)>) -> Result<(), ()> {
+        self.add_many_pos(vals.iter().map(|t| t.0).collect::<Vec<_>>())?;
+        self.other_cols = vals;
+        Ok(())
     }
     pub fn margins(mut self, top: usize, btm: usize) -> Self {
         self.margins = Some((top, btm));
@@ -419,8 +429,7 @@ impl ProfileBuilder {
         self.default_tags = default_tags;
         self
     }
-    pub fn build(self) -> Result<Profile, Self> {
-        let err = self.clone();
+    pub fn build(self) -> Result<Profile, ()> {
         match (
             self.name,
             self.expense_col,
@@ -439,18 +448,18 @@ impl ProfileBuilder {
                     self.default_tags,
                 ))
             }
-            _ => Err(err),
+            _ => Err(()),
         }
     }
 
-    fn add_many_pos(mut self, pos: Vec<usize>) -> Result<Self, Self> {
+    fn add_many_pos(&mut self, pos: Vec<usize>) -> Result<(), ()> {
         if pos.iter().any(|pos| self.col_positions.contains(pos)) {
-            return Err(self);
+            return Err(());
         }
-        pos.into_iter().for_each(|pos| {
+        for pos in pos {
             self.col_positions.insert(pos);
-        });
-        Ok(self)
+        }
+        Ok(())
     }
     pub fn from_inter_state(state: &IntermediateProfileState) -> Self {
         let mut builder = Self::default()
@@ -462,14 +471,15 @@ impl ProfileBuilder {
         }
 
         if let Some(expense_col) = &state.expense_col {
-            builder = builder.expense_col(expense_col.clone()).unwrap();
+            builder.expense_col(expense_col.clone()).unwrap();
         }
         if let Some(datetime_col) = &state.datetime_col {
-            builder = builder.datetime_col(datetime_col.clone()).unwrap();
+            builder.datetime_col(datetime_col.clone()).unwrap();
         }
 
-        builder.other_cols(state.other_cols.clone()).unwrap()
-            .default_tags(state.default_tags.clone())
+        builder.other_cols(state.other_cols.clone()).unwrap();
+
+        builder.default_tags(state.default_tags.clone())
     }
     pub fn intermediate_parse(
         &self,
@@ -495,7 +505,7 @@ impl ProfileBuilder {
             vec.extend(datetime_col.clone().into_cols());
         }
 
-        for (pos, el) in vec.into_iter() {
+        for (pos, el) in vec {
             let Some(str) = row.get(pos) else {
                 return Err(ProfileError::ColumnWidth(format!("{pos} is not in bounds")));
             };
@@ -524,7 +534,7 @@ pub struct IntermediateProfileState {
     pub expense_col: Option<ExpenseColumn>,
     pub datetime_col: Option<DateTimeColumn>,
     pub other_cols: Vec<(usize, ParsableWrapper)>,
-    pub default_tags: Vec<String>
+    pub default_tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -604,42 +614,42 @@ impl Parsable for ParsableWrapper {
 
 impl Parsable for String {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Description(str.to_owned()))
+        Ok(ExpenseData::Description(str.clone()))
     }
 }
 impl Parsable for Income {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Income(Income::parse_str(str)?))
+        Ok(ExpenseData::Income(Income::parse_str(&str)?))
     }
 }
 impl Parsable for Expense {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Expense(Expense::parse_str(str)?))
+        Ok(ExpenseData::Expense(Expense::parse_str(&str)?))
     }
 }
 impl Parsable for PosExpense {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Expense(PosExpense::parse_str(str)?))
+        Ok(ExpenseData::Expense(PosExpense::parse_str(&str)?))
     }
 }
 impl Parsable for Movement {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Movement(Movement::parse_str(str)?))
+        Ok(ExpenseData::Movement(Movement::parse_str(&str)?))
     }
 }
 impl Parsable for ExpenseDateTime {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseDateTime(self.parse_str(str)?))
+        Ok(ExpenseData::ExpenseDateTime(self.parse_str(&str)?))
     }
 }
 impl Parsable for ExpenseTime {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseTime(self.parse_str(str)?))
+        Ok(ExpenseData::ExpenseTime(self.parse_str(&str)?))
     }
 }
 impl Parsable for ExpenseDate {
     fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseDate(self.parse_str(str)?))
+        Ok(ExpenseData::ExpenseDate(self.parse_str(&str)?))
     }
 }
 impl Parsable for Description {
@@ -662,12 +672,12 @@ pub enum ProfileError {
 }
 
 impl ProfileError {
-    pub fn number(str: String, n_type: String) -> Self {
+    pub fn number(str: &str, n_type: &str) -> Self {
         Self::NumberParsing(format!(
             "Parsing this string: {str} to this type: {n_type} failed"
         ))
     }
-    pub fn date(str: String, format: String) -> Self {
+    pub fn date(str: &str, format: &str) -> Self {
         Self::DateParsing(format!(
             "This format: {format} does not fit this date string: {str}"
         ))

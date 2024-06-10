@@ -1,8 +1,7 @@
-
 use std::ops::Deref;
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::profiles::ProfileError;
@@ -31,7 +30,7 @@ pub struct ExpenseRecord {
     datetime: DateTime<Local>,
     description: Option<DescriptionContainer>,
     data: Vec<ExpenseData>,
-    tags: Vec<String>
+    tags: Vec<String>,
 }
 
 impl ExpenseRecord {
@@ -41,35 +40,60 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         default_tags: Vec<String>,
     ) -> Self {
-        Self { 
+        Self {
             datetime_created: Local::now(),
             uuid: ExpenseRecordUuid::new(),
-            amount, datetime,
+            amount,
+            datetime,
             description: None,
-            data, tags: default_tags
+            data,
+            tags: default_tags,
         }
     }
 
     pub fn new_all(
-        datetime_created: DateTime<Local>, uuid: Uuid, amount: isize,
-        datetime: DateTime<Local>, description: Option<DescriptionContainer>,
-        data: Vec<ExpenseData>, tags: Vec<String>
+        datetime_created: DateTime<Local>,
+        uuid: Uuid,
+        amount: isize,
+        datetime: DateTime<Local>,
+        description: Option<DescriptionContainer>,
+        data: Vec<ExpenseData>,
+        tags: Vec<String>,
     ) -> Self {
         Self {
-            datetime_created, uuid: ExpenseRecordUuid(uuid), amount, datetime,
-            description, data, tags
+            datetime_created,
+            uuid: ExpenseRecordUuid(uuid),
+            amount,
+            datetime,
+            description,
+            data,
+            tags,
         }
     }
-    pub fn created(&self) -> &DateTime<Local> { &self.datetime_created }
-    pub fn uuid(&self) -> &ExpenseRecordUuid { &self.uuid }
-    pub fn amount(&self) -> &isize { &self.amount }
-    pub fn datetime(&self) -> &DateTime<Local> { &self.datetime }
-    pub fn description(&self) -> Option<&String> { self.description.as_ref().map(Deref::deref) }
+    pub fn created(&self) -> &DateTime<Local> {
+        &self.datetime_created
+    }
+    pub fn uuid(&self) -> &ExpenseRecordUuid {
+        &self.uuid
+    }
+    pub fn amount(&self) -> &isize {
+        &self.amount
+    }
+    pub fn datetime(&self) -> &DateTime<Local> {
+        &self.datetime
+    }
+    pub fn description(&self) -> Option<&String> {
+        self.description.as_deref()
+    }
     pub fn description_container(&self) -> &Option<DescriptionContainer> {
         &self.description
     }
-    pub fn data(&self) -> &Vec<ExpenseData> { &self.data }
-    pub fn tags(&self) -> &Vec<String> { &self.tags }
+    pub fn data(&self) -> &Vec<ExpenseData> {
+        &self.data
+    }
+    pub fn tags(&self) -> &Vec<String> {
+        &self.tags
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -83,8 +107,6 @@ pub enum ExpenseData {
     ExpenseTime(NaiveTime),
     Other(String),
 }
-
-
 
 #[derive(Debug, Default)]
 pub struct ExpenseRecordBuilder {
@@ -105,26 +127,30 @@ impl ExpenseRecordBuilder {
         self.datetime = Some(datetime);
     }
     pub fn date(&mut self, date: NaiveDate) {
-        self.datetime = date.and_hms_opt(0, 0, 0)
-            .map(|dt|dt.and_local_timezone(Local::now().timezone()).unwrap());
+        self.datetime = date
+            .and_hms_opt(0, 0, 0)
+            .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap());
     }
     pub fn date_time(&mut self, date: NaiveDate, time: NaiveTime) {
         self.datetime = Some(date.and_time(time))
-            .map(|dt|dt.and_local_timezone(Local::now().timezone()).unwrap());
+            .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap());
     }
     pub fn add_data(&mut self, data: ExpenseData) {
         self.data.push(data);
     }
     pub fn default_tags(&mut self, tags: Vec<String>) {
-        self.default_tags = tags
+        self.default_tags = tags;
     }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
         println!("{:?}, {:?}", self.amount, self.datetime);
         match (self.amount, self.datetime) {
-            (Some(amount), Some(datetime)) => Ok(
-                ExpenseRecord::new(amount, datetime, self.data.clone(), self.default_tags.clone())
-            ),
-            _ => Err(ProfileError::build(self.amount, self.datetime))
+            (Some(amount), Some(datetime)) => Ok(ExpenseRecord::new(
+                amount,
+                datetime,
+                self.data.clone(),
+                self.default_tags.clone(),
+            )),
+            _ => Err(ProfileError::build(self.amount, self.datetime)),
         }
     }
 }
@@ -132,24 +158,30 @@ impl ExpenseRecordBuilder {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Description {
     desc: String,
-    datetime_created: DateTime<Local>
+    datetime_created: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DescriptionContainer {
     current: Description,
-    history: Vec<Description>
+    history: Vec<Description>,
 }
 
 impl Description {
     pub fn new(desc: String) -> Self {
-        Self { desc , datetime_created: Local::now() }
+        Self {
+            desc,
+            datetime_created: Local::now(),
+        }
     }
 }
 
 impl DescriptionContainer {
     pub fn new(desc: String) -> Self {
-        Self { current: Description::new(desc), history: vec![] }
+        Self {
+            current: Description::new(desc),
+            history: vec![],
+        }
     }
 }
 

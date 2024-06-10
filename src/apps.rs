@@ -92,14 +92,14 @@ impl BreadApp {
     fn show_selected_app(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let selected_anchor = self.state.selected_anchor;
         for (_, anchor, app) in self.apps_iter_mut() {
-            if anchor == selected_anchor || ctx.memory(|mem| mem.everything_is_visible()) {
+            if anchor == selected_anchor || ctx.memory(egui::Memory::everything_is_visible) {
                 app.update(ctx, frame);
             }
         }
     }
 
     fn ui_file_drag_and_drop(&mut self, ctx: &egui::Context) {
-        use egui::*;
+        use egui::{Align2, Color32, Id, LayerId, Order, TextStyle};
         use std::fmt::Write as _;
 
         if ![Anchor::FileUpload, Anchor::Profiles].contains(&self.state.selected_anchor) {
@@ -143,7 +143,7 @@ impl BreadApp {
                 let files = i.raw.dropped_files.clone();
                 println!("{:?}", self.state.selected_anchor);
                 if let Some(sender) = self.get_current_sender() {
-                    println!("{:?}", sender);
+                    println!("{sender:?}");
                     tokio::spawn(async move {
                         for file in files {
                             let _ = sender.send(file).await;
