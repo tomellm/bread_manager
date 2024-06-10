@@ -135,7 +135,9 @@ impl FileUpload {
         self.records_communicator.set_many(records);
     }
 
-    pub fn show_file_viewer() -> bool { true }
+    pub fn show_file_viewer() -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -195,16 +197,15 @@ impl ParsedRecords {
     }
 
     pub fn update(&mut self) {
-        self.futures.retain_mut(
-            |future| match future.poll_state() {
-                ImmediateValueState::Empty => false,
-                ImmediateValueState::Error(_) => panic!("Error completing future!"),
-                ImmediateValueState::Updating => true,
-                ImmediateValueState::Success(vec) => {
-                    self.parsed_records.extend(vec.clone());
-                    false
-                }
-            });
+        self.futures.retain_mut(|future| match future.poll_state() {
+            ImmediateValueState::Empty => false,
+            ImmediateValueState::Error(_) => panic!("Error completing future!"),
+            ImmediateValueState::Updating => true,
+            ImmediateValueState::Success(vec) => {
+                self.parsed_records.extend(vec.clone());
+                false
+            }
+        });
     }
     pub fn drain_records(&mut self) -> Vec<ExpenseRecord> {
         self.parsed_records.drain(..).collect()
