@@ -73,7 +73,19 @@ impl CreateProfile {
                         }
                         DataState::Updating(_) | DataState::UpToDate => {
                             egui::Grid::new("parsed test file").show(ui, |ui| {
-                                for line in parsed_file.as_slice() {
+                                let slice = parsed_file.as_slice();
+                                if !slice.is_empty() {
+                                    if let IntermediateParse::RowsAndCols(row) = &slice[0] {
+                                        ui.label("");
+                                        row.iter().enumerate().for_each(|(i, _)| {
+                                            ui.label(format!("{i}"));
+                                        });
+                                        ui.end_row();
+                                    }
+                                }
+                                for (index, line) in slice.iter().enumerate() {
+                                    let inverse_index = slice.len() - 1 - index;
+                                    ui.label(format!("{index}\t{inverse_index}"));
                                     match line {
                                         IntermediateParse::Rows(row) => {
                                             ui.label(row);
