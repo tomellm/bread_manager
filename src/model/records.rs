@@ -39,13 +39,14 @@ impl ExpenseRecord {
         amount: isize,
         datetime: DateTime<Local>,
         data: Vec<ExpenseData>,
+        default_tags: Vec<String>,
     ) -> Self {
         Self { 
             datetime_created: Local::now(),
             uuid: ExpenseRecordUuid::new(),
             amount, datetime,
             description: None,
-            data, tags: vec![] 
+            data, tags: default_tags
         }
     }
 
@@ -90,6 +91,7 @@ pub struct ExpenseRecordBuilder {
     amount: Option<isize>,
     datetime: Option<DateTime<Local>>,
     data: Vec<ExpenseData>,
+    default_tags: Vec<String>,
 }
 
 impl ExpenseRecordBuilder {
@@ -113,11 +115,14 @@ impl ExpenseRecordBuilder {
     pub fn add_data(&mut self, data: ExpenseData) {
         self.data.push(data);
     }
+    pub fn default_tags(&mut self, tags: Vec<String>) {
+        self.default_tags = tags
+    }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
         println!("{:?}, {:?}", self.amount, self.datetime);
         match (self.amount, self.datetime) {
             (Some(amount), Some(datetime)) => Ok(
-                ExpenseRecord::new(amount, datetime, self.data.clone())
+                ExpenseRecord::new(amount, datetime, self.data.clone(), self.default_tags.clone())
             ),
             _ => Err(ProfileError::build(self.amount, self.datetime))
         }

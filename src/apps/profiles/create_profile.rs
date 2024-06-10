@@ -183,6 +183,7 @@ start the timer. Check that the reciver is beeing set correctly.
                     expense_col,
                     datetime_col,
                     other_cols,
+                    default_tags,
                 },
             ..
         } = self;
@@ -206,6 +207,37 @@ start the timer. Check that the reciver is beeing set correctly.
                     drag_int(ui, margin_btm);
                 });
             });
+        });
+        ui.vertical_centered(|ui| {
+            ui.horizontal(|ui| {
+                if ui.button("add default tag").clicked() {
+                    default_tags.push(String::new());
+                }
+            });
+            ui.add_space(10.);
+            let mut to_delete = vec![];
+            ui.horizontal_wrapped(|ui| {
+                for (index, tag) in
+                    default_tags.iter_mut().enumerate()
+                {
+                    ui.add_sized([100., 25.], |ui: &mut Ui| {
+                        let res = ui.add(egui::TextEdit::singleline(tag));
+                        if ui.button("remove").clicked() {
+                            to_delete.push(index);
+                        }
+                        res
+                    });
+                }
+            });
+            //responsive_columns(ui, items, other_column_editor);
+
+            {
+                to_delete.sort();
+                to_delete.reverse();
+                to_delete.into_iter().for_each(|index| {
+                    default_tags.remove(index);
+                });
+            }
         });
         ui.add_space(10.);
         ui.separator();
