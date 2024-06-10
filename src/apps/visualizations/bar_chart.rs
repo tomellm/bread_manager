@@ -30,7 +30,7 @@ impl BarChartVis {
             .has_changed()
             .expect("This Reciver should never return an error.")
         {
-            let (weekly, monthly) = Self::update_graphs(&self.values.borrow());
+            let (weekly, monthly) = Self::update_graphs(&self.values.borrow_and_update());
             self.weekly = weekly;
             self.monthly = monthly;
         }
