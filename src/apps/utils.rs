@@ -28,8 +28,7 @@ pub fn single_char(ui: &mut egui::Ui, val: &mut String) {
 }
 
 pub fn text(ui: &mut egui::Ui, val: &mut String) {
-    let text = egui::TextEdit::singleline(val);
-    ui.add(text);
+    ui.add(egui::TextEdit::singleline(val));
 }
 
 pub fn option_display<T: std::fmt::Display>(val: Option<&T>) -> String {
