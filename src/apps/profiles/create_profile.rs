@@ -58,9 +58,7 @@ impl CreateProfile {
         });
         self.show_editing_controls(ui);
         if ui.button("update builder").clicked() {
-            self.profile_builder = Arc::new(ProfileBuilder::from_inter_state(
-                &self.intermediate_profile_state,
-            ));
+            self.update_builder();
             self.update_parse_test();
         }
         ui.add_sized(
@@ -99,8 +97,7 @@ impl CreateProfile {
                         |ui, state, start_timer| match save_profile {
                             Ok(save_profile_action) => {
                                 if ui.button("save profile").clicked() {
-                                    let new_state = save_profile_action();
-                                    let _ = state.insert(new_state);
+                                    let _ = state.insert(save_profile_action());
                                     start_timer();
                                 };
                             }
@@ -168,6 +165,11 @@ start the timer. Check that the reciver is beeing set correctly.
             }
         }
         ui.label("\nno more lines")
+    }
+
+    pub fn edit(&mut self, profile: &Profile) {
+        self.reset();
+        self.intermediate_profile_state = IntermediateProfileState::from_profile(profile);
     }
 
     fn reset(&mut self) {
@@ -408,9 +410,16 @@ start the timer. Check that the reciver is beeing set correctly.
         self.parsed_testing_file = Some(LazyVecPromise::new(updater, 1));
     }
 
+    fn update_builder(&mut self) {
+        self.profile_builder = Arc::new(ProfileBuilder::from_inter_state(
+            &self.intermediate_profile_state,
+        ));
+    }
+
     fn save_profile(
         &mut self,
     ) -> Result<impl FnOnce() -> watch::Receiver<Response<Uuid, Profile>>, ()> {
+        self.update_builder();
         let profile = (*self.profile_builder).clone().build().map_err(|()| {})?;
         let mut setter = self.profiles_communicator.set_action();
         Ok(move || setter(profile))

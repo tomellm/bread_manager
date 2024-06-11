@@ -44,6 +44,9 @@ impl eframe::App for Profiles {
                             if ui.button("delete").clicked() {
                                 delete_action(*key);
                             }
+                            if ui.button("edit").clicked() {
+                                self.create_profile.edit(profile);
+                            }
                         });
                         ui.end_row();
                     }

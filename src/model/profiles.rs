@@ -13,7 +13,7 @@ fn to_num(str: &str) -> Result<f64, ProfileError> {
     str.replace('.', "")
         .replace(',', ".")
         .parse::<f64>()
-        .or(Err(ProfileError::number(&str, "f64")))
+        .or(Err(ProfileError::number(str, "f64")))
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -480,7 +480,7 @@ impl ProfileBuilder {
         total_len: usize,
     ) -> Result<IntermediateParse, ProfileError> {
         if let Some((top, btm)) = self.margins {
-            if index < top || index > (total_len - btm) {
+            if index < top || index >= (total_len - btm) {
                 return Ok(IntermediateParse::None);
             }
         }
@@ -527,6 +527,25 @@ pub struct IntermediateProfileState {
     pub datetime_col: Option<DateTimeColumn>,
     pub other_cols: Vec<(usize, ParsableWrapper)>,
     pub default_tags: Vec<String>,
+}
+
+impl IntermediateProfileState {
+    pub fn from_profile(profile: &Profile) -> Self {
+        Self {
+            name: profile.name.clone(),
+            margin_top: profile.margins.0,
+            margin_btm: profile.margins.1,
+            delimiter: profile.delimiter.to_string(),
+            expense_col: Some(profile.amount.clone()),
+            datetime_col: Some(profile.datetime.clone()),
+            other_cols: profile
+                .other_data
+                .iter()
+                .map(|(a, b)| (*a, b.clone()))
+                .collect(),
+            default_tags: profile.default_tags.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
