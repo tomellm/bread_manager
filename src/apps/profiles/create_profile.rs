@@ -170,6 +170,11 @@ start the timer. Check that the reciver is beeing set correctly.
         ui.label("\nno more lines")
     }
 
+    pub fn edit(&mut self, profile: &Profile) {
+        self.reset();
+        self.intermediate_profile_state = IntermediateProfileState::from_profile(profile);
+    }
+
     fn reset(&mut self) {
         let callback = self.update_callback();
         self.testing_file = Arc::new(None);
