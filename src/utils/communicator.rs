@@ -35,7 +35,7 @@ where
     Value: GetKey<Key> + Clone + Send + Sync + 'static,
 {
     fn handle_action(
-        &self,
+        &mut self,
         action: changer::Action<Key, Value>,
     ) -> ImmediateValuePromise<Response<Key, Value>> {
         println!("got a action about to handle it");
@@ -55,14 +55,14 @@ where
             Ok(response)
         })
     }
-    fn set(&self, value: Value) -> BoxFuture<'static, Response<Key, Value>>;
-    fn set_many(&self, values: Vec<Value>) -> BoxFuture<'static, Response<Key, Value>>;
-    fn update(&self, value: Value) -> BoxFuture<'static, Response<Key, Value>>;
-    fn update_many(&self, values: Vec<Value>) -> BoxFuture<'static, Response<Key, Value>>;
-    fn delete(&self, key: Key) -> BoxFuture<'static, Response<Key, Value>>;
-    fn delete_many(&self, keys: Vec<Key>) -> BoxFuture<'static, Response<Key, Value>>;
-    fn get_all(&self) -> BoxFuture<'static, Response<Key, Value>>;
-    fn setup(&self, drop: bool) -> BoxFuture<'static, Result<Vec<Value>, ()>>;
+    fn set(&mut self, value: Value) -> BoxFuture<'static, Response<Key, Value>>;
+    fn set_many(&mut self, values: Vec<Value>) -> BoxFuture<'static, Response<Key, Value>>;
+    fn update(&mut self, value: Value) -> BoxFuture<'static, Response<Key, Value>>;
+    fn update_many(&mut self, values: Vec<Value>) -> BoxFuture<'static, Response<Key, Value>>;
+    fn delete(&mut self, key: Key) -> BoxFuture<'static, Response<Key, Value>>;
+    fn delete_many(&mut self, keys: Vec<Key>) -> BoxFuture<'static, Response<Key, Value>>;
+    fn get_all(&mut self) -> BoxFuture<'static, Response<Key, Value>>;
+    fn setup(&mut self, drop: bool) -> BoxFuture<'static, Result<Vec<Value>, ()>>;
 }
 
 impl<Key, Value, Writer> DataContainer<Key, Value, Writer>
@@ -71,8 +71,8 @@ where
     Value: GetKey<Key> + Clone + Send + Sync + 'static,
     Writer: Storage<Key, Value>,
 {
-    pub fn new(writer: Writer, drop: bool) -> Self {
-        let values = Self::setup_writer(&writer, drop);
+    pub fn new(mut writer: Writer, drop: bool) -> Self {
+        let values = Self::setup_writer(&mut writer, drop);
 
         let data = values
             .into_iter()
@@ -90,7 +90,7 @@ where
         }
     }
 
-    fn setup_writer(writer: &Writer, drop: bool) -> Vec<Value> {
+    fn setup_writer(writer: &mut Writer, drop: bool) -> Vec<Value> {
         let future = writer.setup(drop);
         let mut promise = ImmediateValuePromise::new(async move { Ok(future.await.unwrap()) });
         loop {
