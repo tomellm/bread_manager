@@ -100,6 +100,7 @@ pub struct Profile {
     other_data: HashMap<usize, ParsableWrapper>,
     pub width: usize,
     pub default_tags: Vec<String>,
+    pub origin_name: String,
 }
 
 type DbProfileParts = (
@@ -121,6 +122,7 @@ impl Profile {
         margins: (usize, usize),
         delimiter: char,
         mut default_tags: Vec<String>,
+        origin_name: String,
     ) -> Self {
         let uuid = Uuid::new_v4();
         let mut positions = other_data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
@@ -142,6 +144,7 @@ impl Profile {
             other_data,
             width: profile_width,
             default_tags,
+            origin_name,
         }
     }
     pub fn parse_file(&self, file: &str) -> Result<Vec<ExpenseRecord>, ProfileError> {
@@ -210,6 +213,7 @@ impl Profile {
             }
         }
         builder.default_tags(self.default_tags.clone());
+        builder.origin(self.origin_name.clone());
         builder.build()
     }
 
@@ -224,10 +228,11 @@ impl Profile {
         rows
     }
 
-    pub fn to_db(&self) -> (Uuid, String, Vec<u8>) {
+    pub fn to_db(&self) -> (Uuid, String, String, Vec<u8>) {
         (
             self.uuid,
             self.name.clone(),
+            self.origin_name.clone(),
             bc::serialize(&(
                 self.margins,
                 self.delimiter,
@@ -241,7 +246,7 @@ impl Profile {
         )
     }
 
-    pub fn from_db(uuid: Uuid, name: String, data: &[u8]) -> Self {
+    pub fn from_db(uuid: Uuid, name: String, origin_name: String, data: &[u8]) -> Self {
         let (
             margins, delimiter, amount, datetime, other_data, profile_width, default_tags
         ): DbProfileParts = bc::deserialize(data).unwrap();
@@ -256,6 +261,7 @@ impl Profile {
             other_data,
             width: profile_width,
             default_tags,
+            origin_name,
         }
     }
 }
@@ -380,6 +386,7 @@ pub struct ProfileBuilder {
     margins: Option<(usize, usize)>,
     delimiter: Option<char>,
     default_tags: Vec<String>,
+    origin_name: Option<String>,
 }
 
 impl ProfileBuilder {
@@ -421,6 +428,9 @@ impl ProfileBuilder {
         self.default_tags = default_tags;
         self
     }
+    pub fn origin_name(&mut self, origin_name: String) {
+        self.origin_name = Some(origin_name);
+    }
     pub fn build(self) -> Result<Profile, ()> {
         match (
             self.name,
@@ -428,18 +438,25 @@ impl ProfileBuilder {
             self.datetime_col,
             self.margins,
             self.delimiter,
+            self.origin_name,
         ) {
-            (Some(name), Some(expense_col), Some(datetime_col), Some(margins), Some(delimiter)) => {
-                Ok(Profile::new(
-                    name,
-                    expense_col,
-                    datetime_col,
-                    self.other_cols,
-                    margins,
-                    delimiter,
-                    self.default_tags,
-                ))
-            }
+            (
+                Some(name),
+                Some(expense_col),
+                Some(datetime_col),
+                Some(margins),
+                Some(delimiter),
+                Some(origin_name),
+            ) => Ok(Profile::new(
+                name,
+                expense_col,
+                datetime_col,
+                self.other_cols,
+                margins,
+                delimiter,
+                self.default_tags,
+                origin_name,
+            )),
             _ => Err(()),
         }
     }
@@ -457,6 +474,10 @@ impl ProfileBuilder {
         let mut builder = Self::default()
             .name(state.name.clone())
             .margins(state.margin_top, state.margin_btm);
+
+        if !state.origin_name.is_empty() {
+            builder.origin_name(state.origin_name.clone());
+        }
 
         if let Some(delimiter) = state.delimiter.chars().collect::<Vec<_>>().first() {
             builder = builder.delimiter(*delimiter);
@@ -527,6 +548,7 @@ pub struct IntermediateProfileState {
     pub datetime_col: Option<DateTimeColumn>,
     pub other_cols: Vec<(usize, ParsableWrapper)>,
     pub default_tags: Vec<String>,
+    pub origin_name: String,
 }
 
 impl IntermediateProfileState {
@@ -544,6 +566,7 @@ impl IntermediateProfileState {
                 .map(|(a, b)| (*a, b.clone()))
                 .collect(),
             default_tags: profile.default_tags.clone(),
+            origin_name: profile.origin_name.clone(),
         }
     }
 }

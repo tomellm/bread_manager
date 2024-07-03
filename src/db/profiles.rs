@@ -21,17 +21,23 @@ pub struct DbProfiles {
 struct DbProfile {
     uuid: Uuid,
     name: String,
+    origin_name: String,
     data: Vec<u8>,
 }
 
 impl DbProfile {
     pub fn from_profile(profile: &Profile) -> Self {
-        let (uuid, name, data) = profile.to_db();
-        Self { uuid, name, data }
+        let (uuid, name, origin_name, data) = profile.to_db();
+        Self {
+            uuid,
+            name,
+            origin_name,
+            data,
+        }
     }
 
     pub fn into_profile(self) -> Profile {
-        Profile::from_db(self.uuid, self.name, &self.data)
+        Profile::from_db(self.uuid, self.name, self.origin_name, &self.data)
     }
 }
 
@@ -47,7 +53,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
         Box::pin(async move {
             let profiles = sqlx::query_as!(
                 DbProfile,
-                r#"select uuid as "uuid: uuid::Uuid", name, data from profiles"#
+                r#"select uuid as "uuid: uuid::Uuid", name, origin_name, data from profiles"#
             )
             .fetch_all(&*pool)
             .await
@@ -65,9 +71,10 @@ impl Storage<Uuid, Profile> for DbProfiles {
         Box::pin(async move {
             let profile = DbProfile::from_profile(&value);
             let query_result = sqlx::query!(
-                "insert into profiles values(?, ?, ?)",
+                "insert into profiles(uuid, name, origin_name, data) values(?, ?, ?, ?)",
                 profile.uuid,
                 profile.name,
+                profile.origin_name,
                 profile.data
             )
             .execute(&*pool)
@@ -104,9 +111,10 @@ impl Storage<Uuid, Profile> for DbProfiles {
         Box::pin(async move {
             let profile = DbProfile::from_profile(&value);
             let query_result = sqlx::query!(
-                "insert into profiles values(?, ?, ?)",
+                "insert into profiles(uuid, name, origin_name, data) values(?, ?, ?, ?)",
                 profile.uuid,
                 profile.name,
+                profile.origin_name,
                 profile.data
             )
             .execute(&*pool)
@@ -124,12 +132,13 @@ impl Storage<Uuid, Profile> for DbProfiles {
 
             let query_result = utils::insert_values(
                 pool,
-                "insert into profiles(uuid, name, data)",
+                "insert into profiles(uuid, name, origin_name, data)",
                 profiles,
                 |mut builder, value| {
                     builder
                         .push_bind(value.uuid)
                         .push_bind(value.name)
+                        .push_bind(value.origin_name)
                         .push_bind(value.data);
                 },
             )
@@ -173,6 +182,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
                 create table if not exists profiles (
                     uuid blob primary key not null,
                     name text not null,
+                    origin_name text not null,
                     data blob not null
                 );
                 "#
@@ -183,7 +193,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
 
             Ok(sqlx::query_as!(
                 DbProfile,
-                r#"select uuid as "uuid: uuid::Uuid", name, data from profiles"#
+                r#"select uuid as "uuid: uuid::Uuid", name, origin_name, data from profiles"#
             )
             .fetch_all(&*pool)
             .await

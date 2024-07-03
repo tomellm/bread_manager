@@ -30,6 +30,7 @@ struct DbRecord {
     description: Option<String>,
     description_container: Vec<u8>,
     tags: String,
+    origin: String,
     data: Vec<u8>,
 }
 
@@ -49,6 +50,7 @@ impl DbRecord {
             description_container: bc::serialize(record.description_container()).unwrap(),
             tags: record.tags().clone().join(TAG_SEP),
             data: bc::serialize(record.data()).unwrap(),
+            origin: record.origin().clone(),
         }
     }
 
@@ -68,6 +70,7 @@ impl DbRecord {
                 .split(TAG_SEP)
                 .map(str::to_string)
                 .collect::<Vec<String>>(),
+            self.origin,
         )
     }
 }
@@ -87,6 +90,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                     description,
                     description_container,
                     tags,
+                    origin,
                     data
                 from
                     expense_records
@@ -111,7 +115,9 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
         Box::pin(async move {
             let record = DbRecord::from_record(&value);
             let query_result = sqlx::query!(
-                "insert into expense_records values(?, ?, ?, ?, ?, ?, ?, ?)",
+                r#"insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description, description_container, tags, origin, data
+                ) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
                 record.datetime_created,
                 record.uuid,
                 record.amount,
@@ -119,7 +125,8 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                 record.description,
                 record.description_container,
                 record.tags,
-                record.data
+                record.origin,
+                record.data,
             )
             .execute(&*pool)
             .await;
@@ -139,7 +146,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                 pool,
                 "insert into expense_records(
                     datetime_created, uuid, amount, datetime, description, 
-                    description_container, tags, data
+                    description_container, tags, origin, data
                 )",
                 records,
                 |mut builder, value| {
@@ -151,6 +158,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                         .push_bind(value.description)
                         .push_bind(value.description_container)
                         .push_bind(value.tags)
+                        .push_bind(value.origin)
                         .push_bind(value.data);
                 },
             )
@@ -167,7 +175,9 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
         Box::pin(async move {
             let record = DbRecord::from_record(&value);
             let query_result = sqlx::query!(
-                "insert into expense_records values(?, ?, ?, ?, ?, ?, ?, ?)",
+                r#"insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description, description_container, tags, origin, data
+                ) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
                 record.datetime_created,
                 record.uuid,
                 record.amount,
@@ -175,7 +185,8 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                 record.description,
                 record.description_container,
                 record.tags,
-                record.data
+                record.origin,
+                record.data,
             )
             .execute(&*pool)
             .await;
@@ -194,7 +205,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                 pool,
                 "insert into expense_records(
                     datetime_created, uuid, amount, datetime, description, 
-                    description_container, tags, data
+                    description_container, tags, origin, data
                 )",
                 records,
                 |mut builder, value| {
@@ -206,6 +217,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                         .push_bind(value.description)
                         .push_bind(value.description_container)
                         .push_bind(value.tags)
+                        .push_bind(value.origin)
                         .push_bind(value.data);
                 },
             )
@@ -261,6 +273,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                     description text,
                     description_container blob not null,
                     tags text not null,
+                    origin text not null,
                     data blob not null
                 );
                 "#
@@ -280,6 +293,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                     description,
                     description_container,
                     tags,
+                    origin,
                     data
                 from
                     expense_records

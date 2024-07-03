@@ -20,12 +20,14 @@ impl eframe::App for TableView {
                 ui.label("time");
                 ui.label("tags");
                 ui.label("day added");
+                ui.label("origin");
                 ui.end_row();
                 for (_, record) in self.records_communicator.view().iter() {
                     ui.label(format!("{}", record.amount()));
                     ui.label(format!("{}", record.datetime()));
                     ui.label(format!("{:?}", record.tags()));
                     ui.label(format!("{}", record.created().date_naive()));
+                    ui.label(record.origin().to_string());
                     ui.end_row();
                 }
             });
