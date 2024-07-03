@@ -42,7 +42,7 @@ impl GetKey<Uuid> for Profile {
 }
 
 impl Storage<Uuid, Profile> for DbProfiles {
-    fn get_all(&self) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn get_all(&mut self) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let profiles = sqlx::query_as!(
@@ -60,7 +60,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::ok(&action)
         })
     }
-    fn set(&self, value: Profile) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn set(&mut self, value: Profile) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let profile = DbProfile::from_profile(&value);
@@ -75,7 +75,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             error_to_response(query_result, &ActionType::Set(value))
         })
     }
-    fn set_many(&self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn set_many(&mut self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let profiles = values
@@ -99,7 +99,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
-    fn update(&self, value: Profile) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn update(&mut self, value: Profile) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let profile = DbProfile::from_profile(&value);
@@ -114,7 +114,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::from_result(query_result, &ActionType::Update(value))
         })
     }
-    fn update_many(&self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn update_many(&mut self, values: Vec<Profile>) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let profiles = values
@@ -138,7 +138,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::from_result(query_result, &ActionType::SetMany(values))
         })
     }
-    fn delete(&self, key: Uuid) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn delete(&mut self, key: Uuid) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let query_result = sqlx::query!("delete from profiles where uuid = ?", key)
@@ -147,7 +147,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::from_result(query_result, &ActionType::Delete(key))
         })
     }
-    fn delete_many(&self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, Profile>> {
+    fn delete_many(&mut self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, Profile>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let query_result =
@@ -158,7 +158,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Response::from_result(query_result, &ActionType::DeleteMany(keys))
         })
     }
-    fn setup(&self, drop: bool) -> BoxFuture<'static, Result<Vec<Profile>, ()>> {
+    fn setup(&mut self, drop: bool) -> BoxFuture<'static, Result<Vec<Profile>, ()>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             if drop {
