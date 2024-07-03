@@ -6,8 +6,6 @@ use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
 
-use crate::db::profiles;
-
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
 //IDEA: change to this if nessesary https://docs.rs/lexical/latest/lexical/
@@ -124,7 +122,7 @@ impl Profile {
         margins: (usize, usize),
         delimiter: char,
         mut default_tags: Vec<String>,
-        origin_name: String
+        origin_name: String,
     ) -> Self {
         let uuid = Uuid::new_v4();
         let mut positions = other_data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
@@ -248,9 +246,7 @@ impl Profile {
         )
     }
 
-    pub fn from_db(
-        uuid: Uuid, name: String, origin_name: String, data: &[u8]
-    ) -> Self {
+    pub fn from_db(uuid: Uuid, name: String, origin_name: String, data: &[u8]) -> Self {
         let (
             margins, delimiter, amount, datetime, other_data, profile_width, default_tags
         ): DbProfileParts = bc::deserialize(data).unwrap();
@@ -265,7 +261,7 @@ impl Profile {
             other_data,
             width: profile_width,
             default_tags,
-            origin_name
+            origin_name,
         }
     }
 }
@@ -444,18 +440,23 @@ impl ProfileBuilder {
             self.delimiter,
             self.origin_name,
         ) {
-            (Some(name), Some(expense_col), Some(datetime_col), Some(margins), Some(delimiter), Some(origin_name)) => {
-                Ok(Profile::new(
-                    name,
-                    expense_col,
-                    datetime_col,
-                    self.other_cols,
-                    margins,
-                    delimiter,
-                    self.default_tags,
-                    origin_name,
-                ))
-            }
+            (
+                Some(name),
+                Some(expense_col),
+                Some(datetime_col),
+                Some(margins),
+                Some(delimiter),
+                Some(origin_name),
+            ) => Ok(Profile::new(
+                name,
+                expense_col,
+                datetime_col,
+                self.other_cols,
+                margins,
+                delimiter,
+                self.default_tags,
+                origin_name,
+            )),
             _ => Err(()),
         }
     }
@@ -565,7 +566,7 @@ impl IntermediateProfileState {
                 .map(|(a, b)| (*a, b.clone()))
                 .collect(),
             default_tags: profile.default_tags.clone(),
-            origin_name: profile.origin_name.clone()
+            origin_name: profile.origin_name.clone(),
         }
     }
 }

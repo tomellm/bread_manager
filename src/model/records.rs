@@ -50,7 +50,7 @@ impl ExpenseRecord {
             description: None,
             data,
             tags: default_tags,
-            origin
+            origin,
         }
     }
 
@@ -161,7 +161,7 @@ impl ExpenseRecordBuilder {
                 datetime,
                 self.data.clone(),
                 self.default_tags.clone(),
-                self.origin.clone()
+                self.origin.clone(),
             )),
             _ => Err(ProfileError::build(self.amount, self.datetime)),
         }

@@ -210,7 +210,7 @@ start the timer. Check that the reciver is beeing set correctly.
                     datetime_col,
                     other_cols,
                     default_tags,
-                    origin_name
+                    origin_name,
                 },
             ..
         } = self;

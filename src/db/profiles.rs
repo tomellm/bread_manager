@@ -5,10 +5,11 @@ use futures::future::BoxFuture;
 use sqlx::{types::Uuid, Pool, Sqlite};
 
 use crate::{
-    db::profiles, model::profiles::Profile, utils::{
+    model::profiles::Profile,
+    utils::{
         changer::{ActionType, Response},
         communicator::{GetKey, Storage},
-    }
+    },
 };
 
 use super::error_to_response;
@@ -27,7 +28,12 @@ struct DbProfile {
 impl DbProfile {
     pub fn from_profile(profile: &Profile) -> Self {
         let (uuid, name, origin_name, data) = profile.to_db();
-        Self { uuid, name, origin_name, data }
+        Self {
+            uuid,
+            name,
+            origin_name,
+            data,
+        }
     }
 
     pub fn into_profile(self) -> Profile {
