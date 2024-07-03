@@ -210,6 +210,7 @@ start the timer. Check that the reciver is beeing set correctly.
                     datetime_col,
                     other_cols,
                     default_tags,
+                    origin_name
                 },
             ..
         } = self;
@@ -268,6 +269,7 @@ start the timer. Check that the reciver is beeing set correctly.
                     Self::datetime_col_selection(ui, datetime_col);
                 });
             });
+            ui.add(egui::TextEdit::singleline(origin_name));
         });
         ui.add_space(10.);
         ui.separator();

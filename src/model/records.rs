@@ -31,6 +31,7 @@ pub struct ExpenseRecord {
     description: Option<DescriptionContainer>,
     data: Vec<ExpenseData>,
     tags: Vec<String>,
+    origin: String,
 }
 
 impl ExpenseRecord {
@@ -39,6 +40,7 @@ impl ExpenseRecord {
         datetime: DateTime<Local>,
         data: Vec<ExpenseData>,
         default_tags: Vec<String>,
+        origin: String,
     ) -> Self {
         Self {
             datetime_created: Local::now(),
@@ -48,6 +50,7 @@ impl ExpenseRecord {
             description: None,
             data,
             tags: default_tags,
+            origin
         }
     }
 
@@ -59,6 +62,7 @@ impl ExpenseRecord {
         description: Option<DescriptionContainer>,
         data: Vec<ExpenseData>,
         tags: Vec<String>,
+        origin: String,
     ) -> Self {
         Self {
             datetime_created,
@@ -68,6 +72,7 @@ impl ExpenseRecord {
             description,
             data,
             tags,
+            origin,
         }
     }
     pub fn created(&self) -> &DateTime<Local> {
@@ -94,6 +99,9 @@ impl ExpenseRecord {
     pub fn tags(&self) -> &Vec<String> {
         &self.tags
     }
+    pub fn origin(&self) -> &String {
+        &self.origin
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +122,7 @@ pub struct ExpenseRecordBuilder {
     datetime: Option<DateTime<Local>>,
     data: Vec<ExpenseData>,
     default_tags: Vec<String>,
+    origin: String,
 }
 
 impl ExpenseRecordBuilder {
@@ -141,6 +150,9 @@ impl ExpenseRecordBuilder {
     pub fn default_tags(&mut self, tags: Vec<String>) {
         self.default_tags = tags;
     }
+    pub fn origin(&mut self, origin: String) {
+        self.origin = origin;
+    }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
         println!("{:?}, {:?}", self.amount, self.datetime);
         match (self.amount, self.datetime) {
@@ -149,6 +161,7 @@ impl ExpenseRecordBuilder {
                 datetime,
                 self.data.clone(),
                 self.default_tags.clone(),
+                self.origin.clone()
             )),
             _ => Err(ProfileError::build(self.amount, self.datetime)),
         }
