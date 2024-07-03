@@ -223,7 +223,10 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
             error_to_response(query_result, &ActionType::Delete(key))
         })
     }
-    fn delete_many(&mut self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
+    fn delete_many(
+        &mut self,
+        keys: Vec<Uuid>,
+    ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
         let pool = self.pool.clone();
         Box::pin(async move {
             let query_result = utils::add_in_items(
