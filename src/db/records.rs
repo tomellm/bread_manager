@@ -43,7 +43,7 @@ impl DbRecord {
     pub fn from_record(record: &ExpenseRecord) -> Self {
         Self {
             datetime_created: record.created().clone().timestamp(),
-            uuid: *record.uuid().clone(),
+            uuid: **record.uuid(),
             amount: *record.amount() as i64,
             datetime: record.datetime().clone().timestamp(),
             description: record.description().cloned(),
@@ -137,7 +137,6 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
         &mut self,
         values: Vec<ExpenseRecord>,
     ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
-        println!("setting many right now");
         let pool = self.pool.clone();
         Box::pin(async move {
             let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();

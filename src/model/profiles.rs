@@ -114,6 +114,7 @@ type DbProfileParts = (
 );
 
 impl Profile {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         name: String,
         amount: ExpenseColumn,

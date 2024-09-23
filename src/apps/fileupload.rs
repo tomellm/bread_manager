@@ -1,8 +1,9 @@
 use std::fs;
 
 use egui::ComboBox;
-use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
+use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tokio::sync::mpsc;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
@@ -131,6 +132,7 @@ impl FileUpload {
 
     pub fn save_parsed_data(&mut self) {
         let records = self.parsed_records.drain_records();
+        let links = Linker::find_links(&records, self.records_communicator.view());
         self.records_communicator.set_many(records);
     }
 
@@ -173,12 +175,16 @@ impl ParsedRecords {
                 profile: Some(profile),
             } = file
             else {
-                panic!("hello???");
+                panic!(
+                    "Please select a profile for the file [{}] since no profile was selected.",
+                    file.file.name
+                );
             };
 
             let file = file.clone().path.unwrap();
             let str_file = fs::read_to_string(file).unwrap();
             let parsed_file = profile.parse_file(&str_file).unwrap();
+
 
             Ok(parsed_file)
         })
@@ -195,16 +201,35 @@ impl ParsedRecords {
         self.futures.extend(futures);
     }
 
+    pub fn handle_parsed_records(&mut self, new_records: Vec<ExpenseRecord>) {
+        self.parsed_records.extend(new_records);
+    }
+
     pub fn update(&mut self) {
-        self.futures.retain_mut(|future| match future.poll_state() {
-            ImmediateValueState::Empty => false,
-            ImmediateValueState::Error(_) => panic!("Error completing future!"),
-            ImmediateValueState::Updating => true,
-            ImmediateValueState::Success(vec) => {
-                self.parsed_records.extend(vec.clone());
-                false
-            }
-        });
+        let resulting_expenses = self
+            .futures
+            .extract_if(|working_future| {
+                !matches!(working_future.poll_state(), ImmediateValueState::Updating)
+            })
+            .filter_map(|mut finished_future| {
+                if let Some(result) = finished_future.take_result() {
+                    match result {
+                        Ok(expenses) => Some(expenses),
+                        Err(err) => {
+                            warn!(
+                                "The parsing future did not succee. Failed with error [{:?}]",
+                                *err
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        self.parsed_records.extend(resulting_expenses);
     }
     pub fn drain_records(&mut self) -> Vec<ExpenseRecord> {
         self.parsed_records.drain(..).collect()

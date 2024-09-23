@@ -6,12 +6,18 @@ use uuid::Uuid;
 
 use super::profiles::ProfileError;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ExpenseRecordUuid(pub Uuid);
 
 impl ExpenseRecordUuid {
     fn new() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+impl From<Uuid> for ExpenseRecordUuid {
+    fn from(value: Uuid) -> Self {
+        Self(value)
     }
 }
 
@@ -54,6 +60,7 @@ impl ExpenseRecord {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_all(
         datetime_created: DateTime<Local>,
         uuid: Uuid,
