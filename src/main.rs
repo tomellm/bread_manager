@@ -15,8 +15,11 @@ mod db;
 mod model;
 mod utils;
 
+use apps::BreadApp;
 use eframe::NativeOptions;
 use egui::ViewportBuilder;
+use lazy_async_promise::ImmediateValuePromise;
+use utils::LoadingScreen;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
@@ -27,7 +30,11 @@ async fn main() -> eframe::Result<()> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|_cc| Box::<apps::BreadApp>::default()),
-
+        Box::new(|_cc| {
+            let promise = ImmediateValuePromise::new(async move {
+                Ok(BreadApp::init().await)
+            });
+            Ok(Box::new(LoadingScreen::from(promise)))
+        }),
     )
 }

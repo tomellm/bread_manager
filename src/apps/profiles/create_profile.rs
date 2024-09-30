@@ -1,19 +1,18 @@
-use std::{cell::RefCell, ops::Deref, rc::Rc, sync::Arc};
+use std::{ops::Deref, sync::Arc};
 
-use egui::{ProgressBar, Ui};
+use data_communicator::buffered::{change::ChangeResult, communicator::Communicator};
+use egui::Ui;
+use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
 use lazy_async_promise::{
     api_macros::{send_data, set_error, set_finished, unpack_result},
-    DataState, LazyVecPromise, Message, Promise,
+    DataState, ImmediateValuePromise, LazyVecPromise, Message, Promise,
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::{
-    model::profiles::{
-        DateTimeColumn, ExpenseColumn, ExpenseDate, ExpenseDateTime, ExpenseTime,
-        IntermediateParse, IntermediateProfileState, ParsableWrapper, Profile, ProfileBuilder,
-    },
-    utils::{changer::Response, communicator::Communicator, misc::clear_vec, ui_state::UiStates},
+use crate::model::profiles::{
+    DateTimeColumn, ExpenseColumn, ExpenseDate, ExpenseDateTime, ExpenseTime, IntermediateParse,
+    IntermediateProfileState, ParsableWrapper, Profile, ProfileBuilder,
 };
 
 use super::super::utils::{drag_int, option_display, other_column_editor, single_char, text};
@@ -89,43 +88,18 @@ impl CreateProfile {
             ui.centered_and_justified(|ui| {
                 let save_profile = self.save_profile();
                 self.ui_states
-                    .timer::<_, _, Option<watch::Receiver<Response<Uuid, Profile>>>>(
-                        "save_ui",
-                        ui,
-                        5,
-                        None,
-                        |ui, state, start_timer| match save_profile {
-                            Ok(save_profile_action) => {
-                                if ui.button("save profile").clicked() {
-                                    let _ = state.insert(save_profile_action());
-                                    start_timer();
-                                };
-                            }
-                            Err(()) => {
-                                ui.label("profile is incorrect and cannot be saved");
-                            }
-                        },
-                        |ui, state, percentage_passed| {
-                            let Some(reciver) = state else {
-                                panic!(
-                                    r#"
-
-This state shouldn't happen. Maybe you forgot to set the reciver but decided to
-start the timer. Check that the reciver is beeing set correctly.
-
-                            "#
-                                );
+                    .default_promise_await("save profile".into())
+                    .init_ui(|ui, set_promise| match save_profile {
+                        Ok(save_profile_action) => {
+                            if ui.button("save profile").clicked() {
+                                set_promise(save_profile_action());
                             };
-                            match &*reciver.borrow() {
-                                Response::Loading => ui.label("setting of profile is loading"),
-                                Response::Worked(_) => ui.label("setting profile worked"),
-                                Response::Error(_, err) => {
-                                    ui.label(format!("setting profile failed: {err}"))
-                                }
-                            };
-                            ui.add(ProgressBar::new(percentage_passed).animate(true));
-                        },
-                    );
+                        }
+                        Err(()) => {
+                            ui.label("profile is incorrect and cannot be saved");
+                        }
+                    })
+                    .show(ui);
             })
             .response
         });
@@ -242,20 +216,19 @@ start the timer. Check that the reciver is beeing set correctly.
                 }
             });
             ui.add_space(10.);
-            let mut to_delete = vec![];
             ui.horizontal_wrapped(|ui| {
-                for (index, tag) in default_tags.iter_mut().enumerate() {
+                let _ = default_tags.extract_if(|tag| {
+                    let mut delete: bool = false;
                     ui.add_sized([100., 25.], |ui: &mut Ui| {
                         let res = ui.add(egui::TextEdit::singleline(tag));
                         if ui.button("remove").clicked() {
-                            to_delete.push(index);
+                            delete = true;
                         }
                         res
                     });
-                }
+                    delete
+                });
             });
-            //responsive_columns(ui, items, other_column_editor);
-            clear_vec(to_delete, default_tags);
         });
         ui.add_space(10.);
         ui.separator();
@@ -281,18 +254,18 @@ start the timer. Check that the reciver is beeing set correctly.
                 }
             });
             ui.add_space(10.);
-            let to_delete = Rc::new(RefCell::new(vec![] as Vec<usize>));
             ui.horizontal_wrapped(|ui| {
-                for (index, (ref mut col_pos, ref mut col_type)) in
-                    other_cols.iter_mut().enumerate()
-                {
+                let _ = other_cols.extract_if(|(ref mut col_pos, ref mut col_type)| {
+                    let mut delete: bool = false;
                     ui.add_sized([175., 175.], |ui: &mut Ui| {
-                        other_column_editor(ui, index, col_pos, col_type, &to_delete)
+                        ui.group(|ui| {
+                            delete = other_column_editor(ui, col_pos, col_type)
+                        }).response
                     });
-                }
+                    delete
+                });
             });
             //responsive_columns(ui, items, other_column_editor);
-            clear_vec(to_delete.take(), other_cols);
         });
         ui.add_space(10.);
     }
@@ -319,7 +292,7 @@ start the timer. Check that the reciver is beeing set correctly.
                     .map_or_else(|| String::from("Nothing"), |v| format!("{v}")),
             )
             .show_ui(ui, |ui| {
-                ui.style_mut().wrap = Some(false);
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
                 ui.set_min_width(60.0);
                 ui.selectable_value(expense_col, None, "not yet");
                 ui.selectable_value(expense_col, Some(ExpenseColumn::split(0, 0)), "Split");
@@ -360,7 +333,7 @@ start the timer. Check that the reciver is beeing set correctly.
         egui::ComboBox::from_label("datetime")
             .selected_text(option_display(datetime_col.as_ref()))
             .show_ui(ui, |ui| {
-                ui.style_mut().wrap = Some(false);
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
                 ui.set_min_width(60.0);
                 ui.selectable_value(datetime_col, None, "not yet");
                 ui.selectable_value(datetime_col, Some(DateTimeColumn::new_date()), "Date");
@@ -418,12 +391,10 @@ start the timer. Check that the reciver is beeing set correctly.
         ));
     }
 
-    fn save_profile(
-        &mut self,
-    ) -> Result<impl FnOnce() -> watch::Receiver<Response<Uuid, Profile>>, ()> {
+    fn save_profile(&mut self) -> Result<impl FnOnce() -> ImmediateValuePromise<ChangeResult>, ()> {
         self.update_builder();
         let profile = (*self.profile_builder).clone().build().map_err(|()| {})?;
-        let mut setter = self.profiles_communicator.set_action();
-        Ok(move || setter(profile))
+        let mut setter = self.profiles_communicator.update_action();
+        Ok(move || ImmediateValuePromise::new(setter(profile)))
     }
 }

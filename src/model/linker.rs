@@ -30,7 +30,7 @@ pub struct Linker;
 impl Linker {
     pub fn find_links(
         new_records: &Vec<ExpenseRecord>,
-        all_records: &Vec<ExpenseRecord>,
+        all_records: Vec<&ExpenseRecord>,
     ) -> Vec<PossibleLink> {
         let mut possible_links = vec![];
         for existing_record in all_records {

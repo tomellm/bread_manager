@@ -4,6 +4,8 @@ mod tableview;
 mod utils;
 mod visualizations;
 
+use std::time::{Duration, Instant};
+
 use eframe::egui;
 use tokio::sync::mpsc;
 
@@ -28,6 +30,9 @@ pub struct BreadApp {
     send_dropped_file_upload: mpsc::Sender<egui::DroppedFile>,
     send_dropped_profiles: mpsc::Sender<egui::DroppedFile>,
     update_callback_ctx: Option<egui::Context>,
+    render_start: Instant,
+    frames_passed: usize,
+    fps: f32,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -39,9 +44,20 @@ enum Anchor {
 }
 
 impl BreadApp {
-    pub fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        Self {
-            ..Default::default()
+    pub fn init() -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let (tx_f, rx_f) = mpsc::channel::<egui::DroppedFile>(20);
+            let (tx_p, rx_p) = mpsc::channel::<egui::DroppedFile>(20);
+
+            Self {
+                state: State::init(rx_f, rx_p).await,
+                send_dropped_file_upload: tx_f,
+                send_dropped_profiles: tx_p,
+                update_callback_ctx: None,
+                render_start: Instant::now(),
+                frames_passed: 0,
+                fps: 0f32
+            }
         }
     }
 
@@ -74,6 +90,19 @@ impl BreadApp {
 
     fn bar_contents(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         egui::widgets::global_dark_light_mode_switch(ui);
+
+        ui.separator();
+
+        self.frames_passed += 1;
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.render_start);
+        if elapsed.as_secs() >= 1 {
+            self.render_start = now;
+            self.fps = self.frames_passed as f32 / elapsed.as_secs_f32();
+            self.frames_passed = 0;
+        }
+
+        ui.label(format!("{:.0}", self.fps));
 
         ui.separator();
 
@@ -169,23 +198,9 @@ impl BreadApp {
     }
 }
 
-impl Default for BreadApp {
-    fn default() -> Self {
-        let (tx_f, rx_f) = mpsc::channel::<egui::DroppedFile>(5);
-        let (tx_p, rx_p) = mpsc::channel::<egui::DroppedFile>(5);
-
-        Self {
-            state: State::new(rx_f, rx_p),
-            send_dropped_file_upload: tx_f,
-            send_dropped_profiles: tx_p,
-            update_callback_ctx: None,
-        }
-    }
-}
-
 impl eframe::App for BreadApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.state.db.update();
+        self.state.db.state_update();
         self.update_callback_ctx = Some(ctx.clone());
 
         egui::TopBottomPanel::top("wrap_app_top_bar").show(ctx, |ui| {
@@ -200,20 +215,22 @@ impl eframe::App for BreadApp {
 }
 
 impl State {
-    fn new(
+    fn init(
         rx_f: mpsc::Receiver<egui::DroppedFile>,
         rx_p: mpsc::Receiver<egui::DroppedFile>,
-    ) -> Self {
-        let mut db = DB::get_db(false).unwrap();
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let mut db = DB::get_db(false).await.unwrap();
 
-        let file_upload = FileUpload::new(rx_f, db.profiles_signal(), db.records_signal());
-        Self {
-            file_upload,
-            profiles: Profiles::new(rx_p, db.profiles_signal()),
-            table_view: TableView::new(db.records_signal()),
-            visualizations: Visualizations::new(db.records_signal()),
-            selected_anchor: Anchor::Visualizations,
-            db,
+            let file_upload = FileUpload::new(rx_f, db.profiles_signal(), db.records_signal());
+            Self {
+                file_upload,
+                profiles: Profiles::new(rx_p, [db.profiles_signal(), db.profiles_signal()]),
+                table_view: TableView::new(db.records_signal()),
+                visualizations: Visualizations::new(db.records_signal()),
+                selected_anchor: Anchor::Visualizations,
+                db,
+            }
         }
     }
 }

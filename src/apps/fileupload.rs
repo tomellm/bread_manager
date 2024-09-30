@@ -1,32 +1,31 @@
 use std::fs;
 
+use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use eframe::App;
 use egui::ComboBox;
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tokio::sync::mpsc;
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::{
-    model::{profiles::Profile, records::ExpenseRecord},
-    utils::{communicator::Communicator, misc},
-};
+use crate::model::{linker::Linker, profiles::Profile, records::ExpenseRecord};
 
 pub struct FileUpload {
     reciver: mpsc::Receiver<egui::DroppedFile>,
     update_callback_ctx: Option<egui::Context>,
-    profiles_communicator: Communicator<Uuid, Profile>,
-    records_communicator: Communicator<Uuid, ExpenseRecord>,
+    profiles: Communicator<Uuid, Profile>,
+    records: Communicator<Uuid, ExpenseRecord>,
     dropped_files: Vec<FileToParse>,
     parsed_records: ParsedRecords,
 }
 
-impl eframe::App for FileUpload {
+impl App for FileUpload {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_callback_ctx = Some(ctx.clone());
         self.recive_files();
         self.parsed_records.update();
-        self.profiles_communicator.update();
-        self.records_communicator.update();
+        self.profiles.state_update();
+        self.records.state_update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Files:");
@@ -37,8 +36,7 @@ impl eframe::App for FileUpload {
                 ui.label("profile");
                 ui.label("remove");
                 ui.end_row();
-                let mut to_delete = vec![];
-                for (index, file_to_parse) in self.dropped_files.iter_mut().enumerate() {
+                let _ = self.dropped_files.iter_mut().enumerate().collect::<Vec<_>>().extract_if(|(index, file_to_parse)| {
                     ui.label(format!("{index}"));
                     ui.label(file_to_parse.file.name.clone());
                     if let Some(path) = file_to_parse.file.path.as_ref() {
@@ -53,21 +51,23 @@ impl eframe::App for FileUpload {
                                 .clone()
                                 .map_or(String::from("none selected"), |p| p.name)
                         })
-                        .show_ui(ui, |ui| {
-                            for (_, profile) in self.profiles_communicator.view().iter() {
-                                ui.selectable_value(
-                                    &mut file_to_parse.profile,
-                                    Some(profile.clone()),
-                                    profile.name.clone(),
-                                );
-                            }
-                        });
+                    .show_ui(ui, |ui| {
+                        for profile in self.profiles.data_iter() {
+                            ui.selectable_value(
+                                &mut file_to_parse.profile,
+                                Some(profile.clone()),
+                                profile.name.clone(),
+                            );
+                        }
+                    });
                     if ui.button("remove").clicked() {
-                        to_delete.push(index);
+                        ui.end_row();
+                        true
+                    } else {
+                        ui.end_row();
+                        false
                     }
-                    ui.end_row();
-                }
-                misc::clear_vec(to_delete, &mut self.dropped_files);
+                });
             });
             ui.horizontal(|ui| {
                 ui.heading("what to do now?");
@@ -100,13 +100,14 @@ impl FileUpload {
         profiles_communicator: Communicator<Uuid, Profile>,
         records_communicator: Communicator<Uuid, ExpenseRecord>,
     ) -> Self {
+        profiles_communicator.query(QueryType::All);
         Self {
             reciver,
             dropped_files: vec![],
             update_callback_ctx: None,
             parsed_records: ParsedRecords::new(),
-            profiles_communicator,
-            records_communicator,
+            profiles: profiles_communicator,
+            records: records_communicator,
         }
     }
 
@@ -132,8 +133,8 @@ impl FileUpload {
 
     pub fn save_parsed_data(&mut self) {
         let records = self.parsed_records.drain_records();
-        let links = Linker::find_links(&records, self.records_communicator.view());
-        self.records_communicator.set_many(records);
+        let _links = Linker::find_links(&records, self.records.data());
+        self.records.update_many(records);
     }
 
     pub fn show_file_viewer() -> bool {

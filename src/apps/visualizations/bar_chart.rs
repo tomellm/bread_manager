@@ -1,36 +1,33 @@
 use std::{cmp::Ordering, collections::HashMap, ops::Sub};
 
 use chrono::{DateTime, Days, Local};
+use data_communicator::buffered::communicator::Communicator;
 use egui::Ui;
 use egui_plot::{Bar, BarChart, Plot};
-use tokio::sync::watch;
 use uuid::Uuid;
 
 use crate::model::records::ExpenseRecord;
 
 pub(super) struct BarChartVis {
-    values: watch::Receiver<HashMap<Uuid, ExpenseRecord>>,
+    records: Communicator<Uuid, ExpenseRecord>,
     weekly: Vec<Bar>,
     monthly: Vec<Bar>,
 }
 
 impl BarChartVis {
-    pub fn new(values: watch::Receiver<HashMap<Uuid, ExpenseRecord>>) -> Self {
-        let (weekly, monthly) = Self::update_graphs(&values.borrow());
+    pub fn new(records: Communicator<Uuid, ExpenseRecord>) -> Self {
+        let (weekly, monthly) = Self::update_graphs(records.data_map());
         Self {
-            values,
+            records,
             weekly,
             monthly,
         }
     }
 
     pub fn update(&mut self) {
-        if self
-            .values
-            .has_changed()
-            .expect("This Reciver should never return an error.")
-        {
-            let (weekly, monthly) = Self::update_graphs(&self.values.borrow_and_update());
+        self.records.state_update();
+        if self.records.has_changed() {
+            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data_map());
             self.weekly = weekly;
             self.monthly = monthly;
         }

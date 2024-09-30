@@ -1,24 +1,19 @@
 use std::sync::Arc;
 
-use futures::future::BoxFuture;
+use data_communicator::buffered::{
+    change::ChangeResult,
+    query::{self, QueryResponse},
+    storage::{self, Storage},
+    GetKey,
+};
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
-use crate::{
-    model::linker::PossibleLink,
-    utils::{
-        changer::{ActionType, Response},
-        communicator::{GetKey, Storage},
-    },
-};
+use crate::model::linker::PossibleLink;
 
-use super::{error_to_response, utils};
+use super::{utils, IntoChangeResult, MapToQueryError};
 
-pub struct DbPossibleLinks {
-    pub(super) pool: Arc<Pool<Sqlite>>,
-}
-
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, sqlx::FromRow)]
 struct DbPossibleLink {
     uuid: Uuid,
     negative: Uuid,
@@ -27,8 +22,8 @@ struct DbPossibleLink {
 }
 
 impl GetKey<Uuid> for PossibleLink {
-    fn get_key(&self) -> Uuid {
-        self.uuid
+    fn key(&self) -> &Uuid {
+        &self.uuid
     }
 }
 
@@ -54,158 +49,41 @@ impl From<DbPossibleLink> for PossibleLink {
     }
 }
 
+pub struct DbPossibleLinks {
+    pool: Arc<Pool<Sqlite>>,
+}
+
+impl DbPossibleLinks {
+    pub fn pool(&self) -> Arc<Pool<Sqlite>> {
+        self.pool.clone()
+    }
+}
+
+pub struct DbPossibleLinkInitArgs {
+    pub pool: Arc<Pool<Sqlite>>,
+    pub drop: bool,
+}
+
+impl From<(&Arc<Pool<Sqlite>>, bool)> for DbPossibleLinkInitArgs {
+    fn from(value: (&Arc<Pool<Sqlite>>, bool)) -> Self {
+        Self { pool: value.0.clone(), drop: value.1 }
+    }
+}
+
 impl Storage<Uuid, PossibleLink> for DbPossibleLinks {
-    fn get_all(&mut self) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let links = sqlx::query_as!(
-                DbPossibleLink,
-                r#"
-                select
-                    uuid as "uuid: uuid::Uuid",
-                    negative as "negative: uuid::Uuid",
-                    positive as "positive: uuid::Uuid",
-                    probability
-                from
-                    possible_links
-                "#
-            )
-            .fetch_all(&*pool)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(Into::<PossibleLink>::into)
-            .collect();
-            let action = ActionType::GetAll(links);
-            Response::ok(&action)
-        })
-    }
-    fn set(&mut self, value: PossibleLink) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let link = DbPossibleLink::from(&value);
-            let query_result = sqlx::query!(
-                r#"insert into possible_links(
-                    uuid, negative, positive, probability
-                ) values(?, ?, ?, ?)"#,
-                link.uuid,
-                link.negative,
-                link.positive,
-                link.probability
-            )
-            .execute(&*pool)
-            .await;
-            error_to_response(query_result, &ActionType::Set(value))
-        })
-    }
-    fn set_many(
-        &mut self,
-        values: Vec<PossibleLink>,
-    ) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let links = values.iter().map(DbPossibleLink::from).collect::<Vec<_>>();
-
-            let query_result = utils::insert_values(
-                pool,
-                "insert into possible_links(
-                    uuid, negative, positive, probability
-                )",
-                links,
-                |mut builder, value| {
-                    builder
-                        .push_bind(value.uuid)
-                        .push_bind(value.negative)
-                        .push_bind(value.positive)
-                        .push_bind(value.probability);
-                },
-            )
-            .await;
-
-            Response::from_result(query_result, &ActionType::SetMany(values))
-        })
-    }
-    fn update(&mut self, value: PossibleLink) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let link = DbPossibleLink::from(&value);
-            let query_result = sqlx::query!(
-                r#"insert into possible_links(
-                    uuid, negative, positive, probability
-                ) values(?, ?, ?, ?)"#,
-                link.uuid,
-                link.negative,
-                link.positive,
-                link.probability,
-            )
-            .execute(&*pool)
-            .await;
-            error_to_response(query_result, &ActionType::Update(value))
-        })
-    }
-    fn update_many(
-        &mut self,
-        values: Vec<PossibleLink>,
-    ) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let links = values.iter().map(DbPossibleLink::from).collect::<Vec<_>>();
-
-            let query_result = utils::insert_values(
-                pool,
-                "insert into possible_links(
-                    uuid, negative, positive, probability
-                )",
-                links,
-                |mut builder, value| {
-                    builder
-                        .push_bind(value.uuid)
-                        .push_bind(value.negative)
-                        .push_bind(value.positive)
-                        .push_bind(value.probability);
-                },
-            )
-            .await;
-
-            Response::from_result(query_result, &ActionType::SetMany(values))
-        })
-    }
-    fn delete(&mut self, key: Uuid) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let query_result = sqlx::query!("delete from possible_links where uuid = ?", key)
-                .execute(&*pool)
-                .await;
-            error_to_response(query_result, &ActionType::Delete(key))
-        })
-    }
-    fn delete_many(&mut self, keys: Vec<Uuid>) -> BoxFuture<'static, Response<Uuid, PossibleLink>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let query_result = utils::add_in_items(
-                "delete from possible_links where uuid in (",
-                keys.iter(),
-                ")",
-            )
-            .build()
-            .execute(&*pool)
-            .await;
-
-            Response::from_result(query_result, &ActionType::DeleteMany(keys))
-        })
-    }
-    fn setup(&mut self, drop: bool) -> BoxFuture<'static, Result<Vec<PossibleLink>, ()>> {
-        //
-        let pool = self.pool.clone();
-        Box::pin(async move {
+    type InitArgs = DbPossibleLinkInitArgs;
+    fn init(
+        DbPossibleLinkInitArgs { pool, drop }: Self::InitArgs,
+    ) -> impl storage::InitFuture<Self> {
+        async move {
             if drop {
                 let _ = sqlx::query!("drop table if exists possible_links;")
                     .execute(&*pool)
                     .await
-                    .map_err(|_| ())?;
+                    .unwrap();
             }
 
-            let _ = sqlx::query!(
+            sqlx::query!(
                 r#"
                 create table if not exists possible_links (
                     uuid blob primary key not null,
@@ -217,9 +95,81 @@ impl Storage<Uuid, PossibleLink> for DbPossibleLinks {
             )
             .execute(&*pool)
             .await
-            .map_err(|_| ())?;
+            .unwrap();
 
-            Ok(sqlx::query_as!(
+            Self { pool }
+        }
+    }
+    fn update(&mut self, value: &PossibleLink) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let link = DbPossibleLink::from(value);
+        async move {
+            sqlx::query!(
+                r#"insert into possible_links(
+                    uuid, negative, positive, probability
+                ) values(?, ?, ?, ?)"#,
+                link.uuid,
+                link.negative,
+                link.positive,
+                link.probability
+            )
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn update_many(&mut self, values: &[PossibleLink]) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let links = values.iter().map(DbPossibleLink::from).collect::<Vec<_>>();
+        async move {
+            utils::insert_values(
+                pool,
+                "insert into possible_links(
+                    uuid, negative, positive, probability
+                )",
+                links,
+                |mut builder, value| {
+                    builder
+                        .push_bind(value.uuid)
+                        .push_bind(value.negative)
+                        .push_bind(value.positive)
+                        .push_bind(value.probability);
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
+    fn delete(&mut self, key: &Uuid) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let key = *key;
+        async move {
+            sqlx::query!("delete from possible_links where uuid = ?", key)
+                .execute(&*pool)
+                .await
+                .into_change_result()
+        }
+    }
+    fn delete_many(&mut self, keys: &[Uuid]) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let keys = keys.to_vec();
+        async move {
+            utils::add_in_items(
+                "delete from possible_links where uuid in (",
+                keys.iter(),
+                ")",
+            )
+            .build()
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+
+    fn get_all(&mut self) -> impl storage::Future<QueryResponse<Uuid, PossibleLink>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
                 DbPossibleLink,
                 r#"
                 select
@@ -233,10 +183,107 @@ impl Storage<Uuid, PossibleLink> for DbPossibleLinks {
             )
             .fetch_all(&*pool)
             .await
-            .unwrap()
-            .into_iter()
-            .map(DbPossibleLink::into)
-            .collect())
-        })
+            .map(|vals| {
+                vals.into_iter()
+                    .map(Into::<PossibleLink>::into)
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_id(&mut self, key: Uuid) -> impl storage::Future<QueryResponse<Uuid, PossibleLink>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
+                DbPossibleLink,
+                r#"
+                select
+                    uuid as "uuid: uuid::Uuid",
+                    negative as "negative: uuid::Uuid",
+                    positive as "positive: uuid::Uuid",
+                    probability
+                from
+                    possible_links
+                where
+                    uuid = ?
+                "#,
+                key
+            )
+            .fetch_one(&*pool)
+            .await
+            .map(Into::<PossibleLink>::into)
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_ids(
+        &mut self,
+        keys: Vec<Uuid>,
+    ) -> impl storage::Future<QueryResponse<Uuid, PossibleLink>> {
+        let pool = self.pool();
+        async move {
+            utils::add_in_items(
+                r#"
+                select
+                    uuid as "uuid: uuid::Uuid",
+                    negative as "negative: uuid::Uuid",
+                    positive as "positive: uuid::Uuid",
+                    probability
+                from
+                    possible_links
+                where
+                    uuid in (
+                "#,
+                keys.iter(),
+                ")",
+            )
+            .build_query_as::<DbPossibleLink>()
+            .fetch_all(&*pool)
+            .await
+            .map(|vals| {
+                vals.into_iter()
+                    .map(Into::<PossibleLink>::into)
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_predicate(
+        &mut self,
+        predicate: query::Predicate<PossibleLink>,
+    ) -> impl storage::Future<QueryResponse<Uuid, PossibleLink>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
+                DbPossibleLink,
+                r#"
+                select
+                    uuid as "uuid: uuid::Uuid",
+                    negative as "negative: uuid::Uuid",
+                    positive as "positive: uuid::Uuid",
+                    probability
+                from
+                    possible_links
+                "#
+            )
+            .fetch_all(&*pool)
+            .await
+            .map(|vals| {
+                vals.into_iter()
+                    .filter_map(|val| {
+                        let possible_link = val.into();
+                        if predicate(&possible_link) {
+                            Some(possible_link)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
     }
 }

@@ -1,8 +1,12 @@
+use data_communicator::buffered::communicator::Communicator;
+use eframe::App;
 use egui::Grid;
+use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
+use lazy_async_promise::ImmediateValuePromise;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::{model::profiles::Profile, utils::communicator::Communicator};
+use crate::model::profiles::Profile;
 
 use self::create_profile::CreateProfile;
 
@@ -10,16 +14,17 @@ mod create_profile;
 
 pub struct Profiles {
     create_profile: CreateProfile,
-    profiles_communicator: Communicator<Uuid, Profile>,
+    profiles: Communicator<Uuid, Profile>,
+    ui_states: UiStates,
 }
 
-impl eframe::App for Profiles {
+impl App for Profiles {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Profiles");
 
-            let mut delete_action = self.profiles_communicator.delete_action();
-            let profiles = self.profiles_communicator.view();
+            let mut delete_action = self.profiles.delete_action();
+            let profiles = self.profiles.data_map();
 
             if profiles.is_empty() {
                 ui.label("there are currently no profiles to be shown");
@@ -41,9 +46,17 @@ impl eframe::App for Profiles {
                         ui.label(profile.delimiter.to_string());
                         ui.label(format!("{}", profile.width));
                         ui.group(|ui| {
-                            if ui.button("delete").clicked() {
-                                delete_action(*key);
-                            }
+                            self.ui_states
+                                .default_promise_await(format!(
+                                    "delete action for {}",
+                                    key.as_u128()
+                                ))
+                                .init_ui(|ui, set_promise| {
+                                    if ui.button("delete").clicked() {
+                                        let future = delete_action(*key);
+                                        set_promise(ImmediateValuePromise::new(future));
+                                    }
+                                });
                             if ui.button("edit").clicked() {
                                 self.create_profile.edit(profile);
                             }
@@ -61,11 +74,12 @@ impl eframe::App for Profiles {
 impl Profiles {
     pub fn new(
         reciver: mpsc::Receiver<egui::DroppedFile>,
-        profiles_communicator: Communicator<Uuid, Profile>,
+        [profile_one, profile_two]: [Communicator<Uuid, Profile>; 2],
     ) -> Self {
         Self {
-            create_profile: CreateProfile::new(reciver, profiles_communicator.clone()),
-            profiles_communicator,
+            create_profile: CreateProfile::new(reciver, profile_one),
+            profiles: profile_two,
+            ui_states: UiStates::default()
         }
     }
 }
