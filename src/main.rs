@@ -9,6 +9,7 @@
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::manual_async_fn)]
 
 mod apps;
 mod db;
@@ -18,11 +19,13 @@ mod utils;
 use apps::BreadApp;
 use eframe::NativeOptions;
 use egui::ViewportBuilder;
-use lazy_async_promise::ImmediateValuePromise;
 use utils::LoadingScreen;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter("info,data_communicator=info")
+        .init();
     let options = NativeOptions {
         viewport: ViewportBuilder::default().with_drag_and_drop(true),
         ..Default::default()
@@ -31,10 +34,7 @@ async fn main() -> eframe::Result<()> {
         "My egui App",
         options,
         Box::new(|_cc| {
-            let promise = ImmediateValuePromise::new(async move {
-                Ok(BreadApp::init().await)
-            });
-            Ok(Box::new(LoadingScreen::from(promise)))
+            Ok(Box::new(LoadingScreen::from(BreadApp::init())))
         }),
     )
 }

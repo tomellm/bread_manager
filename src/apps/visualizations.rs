@@ -1,7 +1,7 @@
 mod bar_chart;
 
 use bar_chart::BarChartVis;
-use data_communicator::buffered::communicator::Communicator;
+use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
 use uuid::Uuid;
 
@@ -22,7 +22,6 @@ impl App for Visualizations {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_callback_ctx = Some(ctx.clone());
 
-
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualizations");
             match self.selected_anchor {
@@ -33,13 +32,18 @@ impl App for Visualizations {
 }
 
 impl Visualizations {
-    pub fn new(records: Communicator<Uuid, ExpenseRecord>) -> Self {
-        let bars = BarChartVis::new(records);
+    pub fn init(
+        records: Communicator<Uuid, ExpenseRecord>,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let _ = records.query_future(QueryType::All).await;
+            let bars = BarChartVis::new(records);
 
-        Self {
-            update_callback_ctx: None,
-            bars,
-            selected_anchor: Anchor::BarChart,
+            Self {
+                update_callback_ctx: None,
+                bars,
+                selected_anchor: Anchor::BarChart,
+            }
         }
     }
 }

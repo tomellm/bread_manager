@@ -4,12 +4,12 @@ mod tableview;
 mod utils;
 mod visualizations;
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use eframe::egui;
 use tokio::sync::mpsc;
 
-use crate::db::DB;
+use crate::{db::DB, utils::LoadingScreen};
 
 use self::{
     fileupload::FileUpload, profiles::Profiles, tableview::TableView,
@@ -18,10 +18,10 @@ use self::{
 
 pub struct State {
     db: DB,
-    file_upload: FileUpload,
-    table_view: TableView,
-    profiles: Profiles,
-    visualizations: Visualizations,
+    file_upload: LoadingScreen<FileUpload>,
+    table_view: LoadingScreen<TableView>,
+    profiles: LoadingScreen<Profiles>,
+    visualizations: LoadingScreen<Visualizations>,
     selected_anchor: Anchor,
 }
 
@@ -222,12 +222,12 @@ impl State {
         async move {
             let mut db = DB::get_db(false).await.unwrap();
 
-            let file_upload = FileUpload::new(rx_f, db.profiles_signal(), db.records_signal());
+            let file_upload = FileUpload::init(rx_f, db.profiles_signal(), db.records_signal()).into();
             Self {
                 file_upload,
-                profiles: Profiles::new(rx_p, [db.profiles_signal(), db.profiles_signal()]),
-                table_view: TableView::new(db.records_signal()),
-                visualizations: Visualizations::new(db.records_signal()),
+                profiles: Profiles::init(rx_p, [db.profiles_signal(), db.profiles_signal()]).into(),
+                table_view: TableView::init(db.records_signal()).into(),
+                visualizations: Visualizations::init(db.records_signal()).into(),
                 selected_anchor: Anchor::Visualizations,
                 db,
             }

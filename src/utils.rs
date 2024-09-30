@@ -1,4 +1,4 @@
-use std::mem;
+use std::{future::Future, mem};
 
 use eframe::App;
 use egui::Spinner;
@@ -27,14 +27,19 @@ where
     }
 }
 
-impl<T> From<ImmediateValuePromise<T>> for LoadingScreen<T>
+impl<F, T> From<F> for LoadingScreen<T>
 where
+    F: Future<Output = T> + Send + 'static,
     T: App + Send + 'static,
 {
-    fn from(value: ImmediateValuePromise<T>) -> Self {
+    fn from(value: F) -> Self {
+        let promise = ImmediateValuePromise::new(async move {
+            Ok(value.await)
+        });
         Self {
-            state: value.into(),
+            state: promise.into()
         }
+        
     }
 }
 

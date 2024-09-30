@@ -95,19 +95,21 @@ impl App for FileUpload {
 }
 
 impl FileUpload {
-    pub fn new(
+    pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
         profiles_communicator: Communicator<Uuid, Profile>,
         records_communicator: Communicator<Uuid, ExpenseRecord>,
-    ) -> Self {
-        profiles_communicator.query(QueryType::All);
-        Self {
-            reciver,
-            dropped_files: vec![],
-            update_callback_ctx: None,
-            parsed_records: ParsedRecords::new(),
-            profiles: profiles_communicator,
-            records: records_communicator,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let _ = profiles_communicator.query_future(QueryType::All).await;
+            Self {
+                reciver,
+                dropped_files: vec![],
+                update_callback_ctx: None,
+                parsed_records: ParsedRecords::new(),
+                profiles: profiles_communicator,
+                records: records_communicator,
+            }
         }
     }
 

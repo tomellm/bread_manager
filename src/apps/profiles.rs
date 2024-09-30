@@ -1,4 +1,4 @@
-use data_communicator::buffered::communicator::Communicator;
+use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
 use egui::Grid;
 use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
@@ -72,14 +72,18 @@ impl App for Profiles {
 }
 
 impl Profiles {
-    pub fn new(
+    pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
         [profile_one, profile_two]: [Communicator<Uuid, Profile>; 2],
-    ) -> Self {
-        Self {
-            create_profile: CreateProfile::new(reciver, profile_one),
-            profiles: profile_two,
-            ui_states: UiStates::default()
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let _ = profile_one.query_future(QueryType::All).await;
+            let _ = profile_two.query_future(QueryType::All).await;
+            Self {
+                create_profile: CreateProfile::new(reciver, profile_one),
+                profiles: profile_two,
+                ui_states: UiStates::default()
+            }
         }
     }
 }
