@@ -33,57 +33,10 @@ pub fn option_display<T: std::fmt::Display>(val: Option<&T>) -> String {
     val.map_or_else(|| String::from("Nothing"), |val| format!("{val}"))
 }
 
-pub fn window_size(ui: &egui::Ui) -> WindowSize {
-    WindowSize::from_num(ui.available_width().floor() as usize)
+pub fn blank_option_display<T: std::fmt::Display>(val: Option<&T>) -> String {
+    val.map_or_else(|| String::from(""), |val| format!("{val}"))
 }
 
-pub fn other_column_editor(
-    ui: &mut egui::Ui,
-    col_pos: &mut usize,
-    col_type: &mut ParsableWrapper,
-) -> bool {
-    let mut delete_item: bool = false;
-    ui.vertical_centered(|ui| {
-        egui::ComboBox::from_id_source(format!("other col {col_pos}"))
-            .selected_text(format!("{col_type}"))
-            .show_ui(ui, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                ui.selectable_value(col_type, ParsableWrapper::income(), "Income");
-                ui.selectable_value(col_type, ParsableWrapper::expense(), "Expense");
-                ui.selectable_value(col_type, ParsableWrapper::posexpense(), "PosExpense");
-                ui.selectable_value(col_type, ParsableWrapper::movement(), "Movement");
-                ui.selectable_value(
-                    col_type,
-                    ParsableWrapper::expensedatetime(),
-                    "ExpenseDatetime",
-                );
-                ui.selectable_value(col_type, ParsableWrapper::expensedate(), "ExpenseDate");
-                ui.selectable_value(col_type, ParsableWrapper::expensetime(), "ExpenseTime");
-                ui.selectable_value(col_type, ParsableWrapper::description(), "Description");
-                ui.selectable_value(col_type, ParsableWrapper::other(), "Other");
-            });
-        ui.separator();
-        ui.add_sized([160., 100.], |ui: &mut Ui| {
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Pos:");
-                    drag_int(ui, col_pos);
-                });
-                match col_type {
-                    ParsableWrapper::ExpenseDateTime(ExpenseDateTime(f))
-                    | ParsableWrapper::ExpenseDate(ExpenseDate(f))
-                    | ParsableWrapper::ExpenseTime(ExpenseTime(f)) => text(ui, f),
-                    _ => (),
-                }
-            })
-            .response
-        });
-        ui.separator();
-        ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
-            if ui.button("remove").clicked() {
-                delete_item = true;
-            }
-        });
-    });
-    delete_item
+pub fn window_size(ui: &egui::Ui) -> WindowSize {
+    WindowSize::from_num(ui.available_width().floor() as usize)
 }

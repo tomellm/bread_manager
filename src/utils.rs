@@ -1,4 +1,4 @@
-use std::{future::Future, mem};
+use std::{fmt::Display, future::Future, mem};
 
 use eframe::App;
 use egui::Spinner;
@@ -90,5 +90,38 @@ where
 {
     fn from(value: ImmediateValuePromise<T>) -> Self {
         Self::Loading(value)
+    }
+}
+
+pub trait CompressResult<T> {
+    fn compress(&self) -> T;
+}
+
+impl<T> CompressResult<T> for Result<T, T> 
+where 
+    T: Clone
+{
+    fn compress(&self) -> T {
+        match self.clone() {
+            Ok(val) => val,
+            Err(err) => err
+        }
+    }
+}
+
+pub trait CompressDisplayResult {
+    fn compless_display(&self) -> String;
+}
+
+impl<V, E> CompressDisplayResult for Result<V, E> 
+where 
+    V: Display,
+    E: Display,
+{
+    fn compless_display(&self) -> String {
+        match self.clone() {
+            Ok(val) => val.to_string(),
+            Err(err) => err.to_string()
+        }
     }
 }

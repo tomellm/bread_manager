@@ -3,20 +3,27 @@ use std::fs;
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
 use egui::ComboBox;
+use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tokio::sync::mpsc;
-use tracing::warn;
+use tracing::{warn, info};
 use uuid::Uuid;
 
-use crate::model::{linker::Linker, profiles::Profile, records::ExpenseRecord};
+use crate::model::{
+    linker::{Linker, PossibleLink},
+    profiles::Profile,
+    records::ExpenseRecord,
+};
 
 pub struct FileUpload {
     reciver: mpsc::Receiver<egui::DroppedFile>,
     update_callback_ctx: Option<egui::Context>,
     profiles: Communicator<Uuid, Profile>,
     records: Communicator<Uuid, ExpenseRecord>,
+    possible_links: Communicator<Uuid, PossibleLink>,
     dropped_files: Vec<FileToParse>,
     parsed_records: ParsedRecords,
+    ui: UiStates,
 }
 
 impl App for FileUpload {
@@ -26,57 +33,68 @@ impl App for FileUpload {
         self.parsed_records.update();
         self.profiles.state_update();
         self.records.state_update();
+        self.possible_links.state_update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Files:");
             egui::Grid::new("uploaded files table").show(ui, |ui| {
-                ui.label("number");
                 ui.label("name");
                 ui.label("path");
                 ui.label("profile");
                 ui.label("remove");
                 ui.end_row();
-                let _ = self.dropped_files.iter_mut().enumerate().collect::<Vec<_>>().extract_if(|(index, file_to_parse)| {
-                    ui.label(format!("{index}"));
-                    ui.label(file_to_parse.file.name.clone());
-                    if let Some(path) = file_to_parse.file.path.as_ref() {
-                        ui.label(path.to_str().unwrap());
-                    } else {
-                        ui.label("..no path..");
-                    }
-                    ComboBox::new(format!("select_profile_{index}"), "select profile")
-                        .selected_text({
-                            file_to_parse
-                                .profile
-                                .clone()
-                                .map_or(String::from("none selected"), |p| p.name)
-                        })
-                    .show_ui(ui, |ui| {
-                        for profile in self.profiles.data_iter() {
-                            ui.selectable_value(
-                                &mut file_to_parse.profile,
-                                Some(profile.clone()),
-                                profile.name.clone(),
-                            );
+                self
+                    .dropped_files
+                    .retain_mut(|file_to_parse| {
+                        ui.label(file_to_parse.file.name.clone());
+                        if let Some(path) = file_to_parse.file.path.as_ref() {
+                            ui.label(path.to_str().unwrap());
+                        } else {
+                            ui.label("..no path..");
+                        }
+                        ComboBox::new(format!("select_profile_{:?}", file_to_parse.file.path), "select profile")
+                            .selected_text({
+                                file_to_parse
+                                    .profile
+                                    .clone()
+                                    .map_or(String::from("none selected"), |p| p.name)
+                            })
+                            .show_ui(ui, |ui| {
+                                for profile in self.profiles.data_iter() {
+                                    ui.selectable_value(
+                                        &mut file_to_parse.profile,
+                                        Some(profile.clone()),
+                                        profile.name.clone(),
+                                    );
+                                }
+                            });
+                        if ui.button("remove").clicked() {
+                            ui.end_row();
+                            false 
+                        } else {
+                            ui.end_row();
+                            true
                         }
                     });
-                    if ui.button("remove").clicked() {
-                        ui.end_row();
-                        true
-                    } else {
-                        ui.end_row();
-                        false
-                    }
-                });
             });
             ui.horizontal(|ui| {
                 ui.heading("what to do now?");
                 if ui.button("parse files").clicked() {
                     self.parse_files();
                 }
-                if ui.button("save parsed records").clicked() {
-                    self.save_parsed_data();
-                }
+                let promise = if ui.button("save parsed records").clicked() {
+                    Some(self.save_parsed_data_action())
+                } else {
+                    None
+                };
+                self.ui
+                    .default_promise_await("save_parsed_records".into())
+                    .init_ui(|_, set_promise| {
+                        if let Some(promise) = promise {
+                            set_promise(promise);
+                        }
+                    })
+                    .show(ui);
             });
             egui::Grid::new("expense records table").show(ui, |ui| {
                 ui.label("amount");
@@ -97,18 +115,21 @@ impl App for FileUpload {
 impl FileUpload {
     pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
-        profiles_communicator: Communicator<Uuid, Profile>,
-        records_communicator: Communicator<Uuid, ExpenseRecord>,
+        profiles: Communicator<Uuid, Profile>,
+        records: Communicator<Uuid, ExpenseRecord>,
+        possible_links: Communicator<Uuid, PossibleLink>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = profiles_communicator.query_future(QueryType::All).await;
+            let _ = profiles.query_future(QueryType::All).await;
             Self {
                 reciver,
                 dropped_files: vec![],
                 update_callback_ctx: None,
                 parsed_records: ParsedRecords::new(),
-                profiles: profiles_communicator,
-                records: records_communicator,
+                profiles,
+                records,
+                possible_links,
+                ui: UiStates::default(),
             }
         }
     }
@@ -120,8 +141,8 @@ impl FileUpload {
 
     pub fn recive_files(&mut self) {
         while let Ok(file) = self.reciver.try_recv() {
+            info!(msg = "Recived dropped file, adding to list", file = format!("{file:?}"));
             self.dropped_files.push(FileToParse::new(file));
-            self.update_callback()();
         }
     }
 
@@ -133,10 +154,17 @@ impl FileUpload {
         );
     }
 
-    pub fn save_parsed_data(&mut self) {
+    pub fn save_parsed_data_action(&mut self) -> ImmediateValuePromise<()> {
         let records = self.parsed_records.drain_records();
-        let _links = Linker::find_links(&records, self.records.data());
-        self.records.update_many(records);
+        let links = Linker::find_links(records.iter().collect::<Vec<_>>(), self.records.data());
+
+        let records_future = self.records.update_many_future(records);
+        let links_future = self.possible_links.update_many_future(links);
+        async move {
+            let _ = records_future.await;
+            let _ = links_future.await;
+        }
+        .into()
     }
 
     pub fn show_file_viewer() -> bool {
@@ -187,7 +215,6 @@ impl ParsedRecords {
             let file = file.clone().path.unwrap();
             let str_file = fs::read_to_string(file).unwrap();
             let parsed_file = profile.parse_file(&str_file).unwrap();
-
 
             Ok(parsed_file)
         })

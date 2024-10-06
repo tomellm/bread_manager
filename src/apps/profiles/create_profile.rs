@@ -1,27 +1,25 @@
-use std::{ops::Deref, sync::Arc};
+mod basics;
+mod main_columns;
+mod other_columns;
 
+use std::sync::Arc;
+
+use basics::{default_tags, delimiter, margin_btm, margin_top, name};
 use data_communicator::buffered::{change::ChangeResult, communicator::Communicator};
 use egui::Ui;
 use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
-use lazy_async_promise::{
-    api_macros::{send_data, set_error, set_finished, unpack_result},
-    DataState, ImmediateValuePromise, LazyVecPromise, Message, Promise,
-};
+use lazy_async_promise::ImmediateValuePromise;
+use main_columns::{datetime_col, expense_col};
+use other_columns::other_cols;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::model::profiles::{
-    DateTimeColumn, ExpenseColumn, ExpenseDate, ExpenseDateTime, ExpenseTime, IntermediateParse,
-    IntermediateProfileState, ParsableWrapper, Profile, ProfileBuilder,
-};
+use crate::model::profiles::{IntermediateProfileState, Profile, ProfileBuilder};
 
-use super::super::utils::{drag_int, option_display, other_column_editor, single_char, text};
+use super::parser::ProfilePreview;
 
 pub struct CreateProfile {
-    reciver: mpsc::Receiver<egui::DroppedFile>,
-    update_callback_ctx: Option<egui::Context>,
-    testing_file: Arc<Option<egui::DroppedFile>>,
-    parsed_testing_file: Option<LazyVecPromise<IntermediateParse>>,
+    preview: ProfilePreview,
     profile_builder: Arc<ProfileBuilder>,
     intermediate_profile_state: IntermediateProfileState,
     profiles_communicator: Communicator<Uuid, Profile>,
@@ -34,10 +32,7 @@ impl CreateProfile {
         profiles_communicator: Communicator<Uuid, Profile>,
     ) -> Self {
         Self {
-            reciver,
-            update_callback_ctx: None,
-            testing_file: Arc::new(None),
-            parsed_testing_file: None,
+            preview: ProfilePreview::new(reciver),
             profile_builder: Arc::new(ProfileBuilder::default()),
             intermediate_profile_state: IntermediateProfileState::default(),
             profiles_communicator,
@@ -45,10 +40,7 @@ impl CreateProfile {
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::Context, ui: &mut Ui) {
-        self.update_callback_ctx = Some(ctx.clone());
-        self.recive_files();
-
+    pub fn ui(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.heading("Create Profiles:");
             if ui.button("reset").clicked() {
@@ -58,30 +50,11 @@ impl CreateProfile {
         self.show_editing_controls(ui);
         if ui.button("update builder").clicked() {
             self.update_builder();
-            self.update_parse_test();
+            self.preview.update_parse_test(&self.profile_builder);
         }
         ui.add_sized(
             [ui.available_width(), ui.available_height() - 50.],
-            |ui: &mut Ui| {
-                if let Some(ref mut parsed_file) = &mut self.parsed_testing_file {
-                    egui::ScrollArea::both()
-                        .max_height(ui.available_height())
-                        .show(ui, |ui| match parsed_file.poll_state() {
-                            DataState::Uninitialized => ui.label("Updating post list"),
-                            DataState::Error(msg) => {
-                                ui.label(format!("Error occurred while fetching post-list: {msg}"))
-                            }
-                            DataState::Updating(_) | DataState::UpToDate => {
-                                egui::Grid::new("parsed test file")
-                                    .show(ui, |ui| Self::parsed_example_view(ui, parsed_file))
-                                    .inner
-                            }
-                        })
-                        .inner
-                } else {
-                    ui.label("Drop a testing file here to test your profile on!")
-                }
-            },
+            |ui: &mut Ui| self.preview.profile_preview(ui, &self.profile_builder),
         );
 
         ui.add_sized([ui.available_width(), 50.], |ui: &mut Ui| {
@@ -105,284 +78,46 @@ impl CreateProfile {
         });
     }
 
-    fn parsed_example_view(
-        ui: &mut Ui,
-        parsed_file: &mut LazyVecPromise<IntermediateParse>,
-    ) -> egui::Response {
-        let slice = parsed_file.as_slice();
-        if !slice.is_empty() {
-            if let IntermediateParse::RowsAndCols(row) = &slice[0] {
-                ui.label("");
-                row.iter().enumerate().for_each(|(i, _)| {
-                    ui.label(format!("{i}"));
-                });
-                ui.end_row();
-            }
-        }
-        for (index, line) in slice.iter().enumerate() {
-            let inverse_index = slice.len() - 1 - index;
-            ui.label(format!("{index}\t{inverse_index}"));
-            match line {
-                IntermediateParse::Rows(row) => {
-                    ui.label(row);
-                    ui.end_row();
-                }
-                IntermediateParse::RowsAndCols(row) => {
-                    for col in row {
-                        ui.label(col);
-                    }
-                    ui.end_row();
-                }
-                IntermediateParse::None => {
-                    ui.label("Could not parse the testfile with the current profile");
-                }
-            }
-        }
-        ui.label("\nno more lines")
-    }
-
     pub fn edit(&mut self, profile: &Profile) {
         self.reset();
         self.intermediate_profile_state = IntermediateProfileState::from_profile(profile);
     }
 
     fn reset(&mut self) {
-        let callback = self.update_callback();
-        self.testing_file = Arc::new(None);
-        self.parsed_testing_file = None;
+        self.preview.reset();
         self.profile_builder = Arc::new(ProfileBuilder::default());
         self.intermediate_profile_state = IntermediateProfileState::default();
-        callback();
-    }
-
-    fn update_callback(&self) -> impl Fn() {
-        let ctx = self.update_callback_ctx.clone().unwrap();
-        move || ctx.request_repaint()
-    }
-
-    fn recive_files(&mut self) {
-        while let Ok(file) = self.reciver.try_recv() {
-            self.testing_file = Arc::new(Some(file));
-            self.update_parse_test();
-            self.update_callback()();
-        }
-    }
-
-    pub fn show_file_viewer() -> bool {
-        true
     }
 
     fn show_editing_controls(&mut self, ui: &mut egui::Ui) {
         let CreateProfile {
-            intermediate_profile_state:
-                IntermediateProfileState {
-                    name,
-                    margin_top,
-                    margin_btm,
-                    delimiter,
-                    expense_col,
-                    datetime_col,
-                    other_cols,
-                    default_tags,
-                    origin_name,
-                },
+            intermediate_profile_state: state,
             ..
         } = self;
-        text(ui, name);
+        name(ui, state);
         ui.horizontal(|ui| {
-            ui.group(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Delimiter");
-                    single_char(ui, delimiter);
-                });
-            });
-            ui.group(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Margin Top");
-                    drag_int(ui, margin_top);
-                });
-            });
-            ui.group(|ui| {
-                ui.vertical(|ui| {
-                    ui.label("Margin Bottom");
-                    drag_int(ui, margin_btm);
-                });
-            });
+            delimiter(ui, state);
+            margin_top(ui, state);
+            margin_btm(ui, state);
         });
         ui.vertical_centered(|ui| {
-            ui.horizontal(|ui| {
-                if ui.button("add default tag").clicked() {
-                    default_tags.push(String::new());
-                }
-            });
-            ui.add_space(10.);
-            ui.horizontal_wrapped(|ui| {
-                let _ = default_tags.extract_if(|tag| {
-                    let mut delete: bool = false;
-                    ui.add_sized([100., 25.], |ui: &mut Ui| {
-                        let res = ui.add(egui::TextEdit::singleline(tag));
-                        if ui.button("remove").clicked() {
-                            delete = true;
-                        }
-                        res
-                    });
-                    delete
-                });
-            });
+            default_tags(ui, state);
         });
         ui.add_space(10.);
         ui.separator();
         ui.add_space(10.);
         ui.horizontal(|ui| {
-            ui.group(|ui| {
-                ui.vertical(|ui| Self::expense_col_selection(ui, expense_col));
-            });
-            ui.group(|ui| {
-                ui.vertical(|ui| {
-                    Self::datetime_col_selection(ui, datetime_col);
-                });
-            });
-            ui.add(egui::TextEdit::singleline(origin_name));
+            expense_col(ui, state);
+            datetime_col(ui, state);
+            ui.add(egui::TextEdit::singleline(&mut state.origin_name));
         });
         ui.add_space(10.);
         ui.separator();
         ui.add_space(10.);
         ui.vertical_centered(|ui| {
-            ui.horizontal(|ui| {
-                if ui.button("other").clicked() {
-                    other_cols.push((0, ParsableWrapper::income()));
-                }
-            });
-            ui.add_space(10.);
-            ui.horizontal_wrapped(|ui| {
-                let _ = other_cols.extract_if(|(ref mut col_pos, ref mut col_type)| {
-                    let mut delete: bool = false;
-                    ui.add_sized([175., 175.], |ui: &mut Ui| {
-                        ui.group(|ui| {
-                            delete = other_column_editor(ui, col_pos, col_type)
-                        }).response
-                    });
-                    delete
-                });
-            });
-            //responsive_columns(ui, items, other_column_editor);
+            other_cols(ui, state);
         });
         ui.add_space(10.);
-    }
-
-    fn expense_col_selection(ui: &mut Ui, expense_col: &mut Option<ExpenseColumn>) {
-        ui.label("Select the main expense column/s");
-        ui.horizontal(|ui| {
-            if let Some(expense) = expense_col {
-                match expense {
-                    ExpenseColumn::Split((pos1, _), (pos2, _)) => {
-                        drag_int(ui, pos1);
-                        drag_int(ui, pos2);
-                    }
-                    ExpenseColumn::Combined(pos, _) | ExpenseColumn::OnlyExpense(pos, _) => {
-                        drag_int(ui, pos);
-                    }
-                }
-            }
-        });
-        egui::ComboBox::from_label("expense")
-            .selected_text(
-                expense_col
-                    .as_ref()
-                    .map_or_else(|| String::from("Nothing"), |v| format!("{v}")),
-            )
-            .show_ui(ui, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                ui.set_min_width(60.0);
-                ui.selectable_value(expense_col, None, "not yet");
-                ui.selectable_value(expense_col, Some(ExpenseColumn::split(0, 0)), "Split");
-                ui.selectable_value(expense_col, Some(ExpenseColumn::combined(0)), "Combined");
-                ui.selectable_value(
-                    expense_col,
-                    Some(ExpenseColumn::only_expense(0)),
-                    "Only Expense",
-                );
-            });
-    }
-
-    fn datetime_col_selection(ui: &mut Ui, datetime_col: &mut Option<DateTimeColumn>) {
-        ui.horizontal(|ui| {
-            if let Some(datetime) = datetime_col {
-                match datetime {
-                    DateTimeColumn::DateAndTime(
-                        (pos1, ExpenseDate(format1)),
-                        (pos2, ExpenseTime(format2)),
-                    ) => {
-                        ui.vertical(|ui| {
-                            drag_int(ui, pos1);
-                            drag_int(ui, pos2);
-                        });
-                        ui.vertical(|ui| {
-                            text(ui, format1);
-                            text(ui, format2);
-                        });
-                    }
-                    DateTimeColumn::DateTime(pos, ExpenseDateTime(format))
-                    | DateTimeColumn::Date(pos, ExpenseDate(format)) => {
-                        drag_int(ui, pos);
-                        text(ui, format);
-                    }
-                }
-            }
-        });
-        egui::ComboBox::from_label("datetime")
-            .selected_text(option_display(datetime_col.as_ref()))
-            .show_ui(ui, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
-                ui.set_min_width(60.0);
-                ui.selectable_value(datetime_col, None, "not yet");
-                ui.selectable_value(datetime_col, Some(DateTimeColumn::new_date()), "Date");
-                ui.selectable_value(
-                    datetime_col,
-                    Some(DateTimeColumn::new_datetime()),
-                    "DateTime",
-                );
-                ui.selectable_value(
-                    datetime_col,
-                    Some(DateTimeColumn::new_date_time()),
-                    "DateAndTime",
-                );
-            });
-    }
-
-    fn update_parse_test(&mut self) {
-        if self.testing_file.is_none() {
-            self.parsed_testing_file = None;
-            return;
-        };
-        let to_be_parsed = Arc::clone(&self.testing_file);
-        let builder = Arc::clone(&self.profile_builder);
-        println!("{builder:?}");
-        let updater = move |tx: mpsc::Sender<Message<IntermediateParse>>| {
-            let to_be_parsed = Arc::clone(&to_be_parsed);
-            let builder = Arc::clone(&builder);
-            async move {
-                let file = to_be_parsed.deref().clone();
-                let file = file.unwrap().path.unwrap();
-                let str_file = unpack_result!(std::fs::read_to_string(file), tx);
-                let rows: Vec<String> = str_file.lines().map(str::to_string).collect();
-                let total_len = rows.len();
-                for (index, row) in rows.into_iter().enumerate() {
-                    let parsed = unpack_result!(
-                        builder
-                            .intermediate_parse(index, row, total_len)
-                            .or(Err("")),
-                        tx
-                    );
-                    if parsed != IntermediateParse::None {
-                        send_data!(parsed, tx);
-                    }
-                }
-                set_finished!(tx);
-            }
-        };
-
-        self.parsed_testing_file = Some(LazyVecPromise::new(updater, 1));
     }
 
     fn update_builder(&mut self) {

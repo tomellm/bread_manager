@@ -1,3 +1,6 @@
+mod create_profile;
+mod parser;
+
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
 use egui::Grid;
@@ -10,8 +13,6 @@ use crate::model::profiles::Profile;
 
 use self::create_profile::CreateProfile;
 
-mod create_profile;
-
 pub struct Profiles {
     create_profile: CreateProfile,
     profiles: Communicator<Uuid, Profile>,
@@ -20,6 +21,8 @@ pub struct Profiles {
 
 impl App for Profiles {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.profiles.state_update();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Profiles");
 
@@ -66,7 +69,7 @@ impl App for Profiles {
                 });
             }
             ui.separator();
-            self.create_profile.ui(ctx, ui);
+            self.create_profile.ui(ui);
         });
     }
 }
@@ -82,7 +85,7 @@ impl Profiles {
             Self {
                 create_profile: CreateProfile::new(reciver, profile_one),
                 profiles: profile_two,
-                ui_states: UiStates::default()
+                ui_states: UiStates::default(),
             }
         }
     }

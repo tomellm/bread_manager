@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{fmt::Display, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
@@ -32,6 +32,7 @@ impl std::ops::Deref for ExpenseRecordUuid {
 pub struct ExpenseRecord {
     datetime_created: DateTime<Local>,
     uuid: ExpenseRecordUuid,
+    /// stored as integer as cents
     amount: isize,
     datetime: DateTime<Local>,
     description: Option<DescriptionContainer>,
@@ -91,6 +92,12 @@ impl ExpenseRecord {
     pub fn amount(&self) -> &isize {
         &self.amount
     }
+    pub fn amount_euro(&self) -> f32 {
+        self.amount as f32 / 100.
+    }
+    pub fn amount_euro_f64(&self) -> f64 {
+        self.amount as f64 / 100.
+    }
     pub fn formatted_amount(&self) -> String {
         format!("{}", self.amount as f32 / 100.0)
     }
@@ -114,7 +121,7 @@ impl ExpenseRecord {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum ExpenseData {
     Expense(usize),
     Income(usize),
@@ -124,6 +131,37 @@ pub enum ExpenseData {
     ExpenseDate(NaiveDate),
     ExpenseTime(NaiveTime),
     Other(String),
+}
+
+impl ExpenseData {
+    pub fn data_type(&self) -> &str {
+        match self {
+            Self::Expense(_) => "Expense",
+            Self::Income(_) => "Income",
+            Self::Movement(_) => "Movement",
+            Self::Description(_) => "Description",
+            Self::ExpenseDateTime(_) => "ExpenseDateTime",
+            Self::ExpenseDate(_) => "ExpenseDate",
+            Self::ExpenseTime(_) => "ExpenseTime",
+            Self::Other(_) => "Other",
+        }
+    }
+}
+
+impl Display for ExpenseData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Expense(e) => write!(f, "{e}"),
+            Self::Income(e) => write!(f, "{e}"),
+            Self::Movement(e) => write!(f, "{e}"),
+            Self::Description(e) => write!(f, "{e}"),
+            Self::ExpenseDateTime(e) => write!(f, "{e}"),
+            Self::ExpenseDate(e) => write!(f, "{e}"),
+            Self::ExpenseTime(e) => write!(f, "{e}"),
+            Self::Other(e) => write!(f, "{e}"),
+        }
+        
+    }
 }
 
 #[derive(Debug, Default)]

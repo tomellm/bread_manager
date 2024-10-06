@@ -53,9 +53,14 @@ impl DB {
         self.records_container.communicator()
     }
 
+    pub fn possible_links_signal(&mut self) -> Communicator<Uuid, PossibleLink> {
+        self.possible_links_container.communicator()
+    }
+
     pub fn state_update(&mut self) {
         self.profiles_container.state_update();
         self.records_container.state_update();
+        self.possible_links_container.state_update();
     }
 }
 

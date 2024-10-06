@@ -16,16 +16,41 @@ mod db;
 mod model;
 mod utils;
 
+use std::{
+    fs::OpenOptions,
+    sync::Arc,
+};
+
 use apps::BreadApp;
 use eframe::NativeOptions;
 use egui::ViewportBuilder;
+use tracing_subscriber::{fmt::format::json, prelude::*, EnvFilter};
 use utils::LoadingScreen;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter("info,data_communicator=info")
+    let _ = dotenv::dotenv();
+
+    let log_file = OpenOptions::new()
+        .truncate(true)
+        .write(true)
+        .create(true)
+        .open("logs/logs.log")
+        .unwrap();
+
+    let log = tracing_subscriber::fmt::layer()
+        .event_format(json())
+        .with_writer(Arc::new(log_file));
+
+    let stdout_log = tracing_subscriber::fmt::layer();
+    tracing_subscriber::registry()
+        .with(
+            stdout_log
+                .with_filter(EnvFilter::from_env("LOG_FILTER"))
+                .and_then(log),
+        )
         .init();
+
     let options = NativeOptions {
         viewport: ViewportBuilder::default().with_drag_and_drop(true),
         ..Default::default()
@@ -33,8 +58,6 @@ async fn main() -> eframe::Result<()> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|_cc| {
-            Ok(Box::new(LoadingScreen::from(BreadApp::init())))
-        }),
+        Box::new(|_cc| Ok(Box::new(LoadingScreen::from(BreadApp::init())))),
     )
 }

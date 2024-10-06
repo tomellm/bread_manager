@@ -12,12 +12,15 @@ pub struct TableView {
 
 impl App for TableView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.records.state_update();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("table view");
                 if ui.button("delete all").clicked() {
                     self.delete_all();
                 }
+                ui.label(format!("Curretly {} records.", self.records.data().len()));
             });
 
             self.column_toggles(ui);
@@ -78,12 +81,12 @@ impl App for TableView {
 
 impl TableView {
     pub fn init(
-        records_communicator: Communicator<Uuid, ExpenseRecord>,
+        records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records_communicator.query_future(QueryType::All).await;
+            let _ = records.query_future(QueryType::All).await;
             Self {
-                records: records_communicator,
+                records,
                 column_toggles: ColumnToggles::default(),
             }
         }
