@@ -9,17 +9,42 @@
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::manual_async_fn)]
 
 mod apps;
+mod components;
 mod db;
 mod model;
 mod utils;
 
+use apps::BreadApp;
 use eframe::NativeOptions;
 use egui::ViewportBuilder;
+use tracing_subscriber::{prelude::*, EnvFilter};
+use utils::LoadingScreen;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
+    let _ = dotenv::dotenv();
+
+    //let log_file = OpenOptions::new()
+    //    .truncate(true)
+    //    .write(true)
+    //    .create(true)
+    //    .open("logs/logs.log")
+    //    .unwrap();
+
+    //let log = tracing_subscriber::fmt::layer()
+    //    .event_format(json())
+    //    .with_writer(Arc::new(log_file));
+
+    let stdout_log = tracing_subscriber::fmt::layer();
+    tracing_subscriber::registry()
+        .with(
+            stdout_log.with_filter(EnvFilter::from_env("LOG_FILTER")), //.and_then(log),
+        )
+        .init();
+
     let options = NativeOptions {
         viewport: ViewportBuilder::default().with_drag_and_drop(true),
         ..Default::default()
@@ -27,6 +52,6 @@ async fn main() -> eframe::Result<()> {
     eframe::run_native(
         "My egui App",
         options,
-        Box::new(|_cc| Box::<apps::BreadApp>::default()),
+        Box::new(|_cc| Ok(Box::new(LoadingScreen::from(BreadApp::init())))),
     )
 }

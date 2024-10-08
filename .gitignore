@@ -15,3 +15,5 @@ frontend/dist
 
 /target
 /db/
+
+/logs

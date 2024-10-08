@@ -1,43 +1,76 @@
+use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use eframe::App;
 use egui::Ui;
 use uuid::Uuid;
 
-use crate::{model::records::ExpenseRecord, utils::communicator::Communicator};
+use crate::model::records::ExpenseRecord;
 
 pub struct TableView {
-    records_communicator: Communicator<Uuid, ExpenseRecord>,
+    records: Communicator<Uuid, ExpenseRecord>,
     column_toggles: ColumnToggles,
 }
 
-impl eframe::App for TableView {
+impl App for TableView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.records.state_update();
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("table view");
                 if ui.button("delete all").clicked() {
                     self.delete_all();
                 }
+                ui.label(format!("Curretly {} records.", self.records.data().len()));
             });
 
             self.column_toggles(ui);
 
             egui::ScrollArea::both().show(ui, |ui| {
                 egui::Grid::new("table of records").show(ui, |ui| {
-                    if self.show_datetime_created() { ui.label("datetime created"); }
-                    if self.show_datetime() { ui.label("datetime"); }
-                    if self.show_uuid() { ui.label("uuid"); }
-                    if self.show_amount() { ui.label("amount"); }
-                    if self.show_description() { ui.label("description"); }
-                    if self.show_tags() { ui.label("tags"); }
-                    if self.show_origin() { ui.label("origin"); }
+                    if self.show_datetime_created() {
+                        ui.label("datetime created");
+                    }
+                    if self.show_datetime() {
+                        ui.label("datetime");
+                    }
+                    if self.show_uuid() {
+                        ui.label("uuid");
+                    }
+                    if self.show_amount() {
+                        ui.label("amount");
+                    }
+                    if self.show_description() {
+                        ui.label("description");
+                    }
+                    if self.show_tags() {
+                        ui.label("tags");
+                    }
+                    if self.show_origin() {
+                        ui.label("origin");
+                    }
                     ui.end_row();
-                    for (_, record) in self.records_communicator.view().iter() {
-                        if self.show_datetime_created() { ui.label(format!("{}", record.created().date_naive())); } 
-                        if self.show_datetime() { ui.label(format!("{}", record.datetime().date_naive())); }
-                        if self.show_uuid() { ui.label(format!("{}", record.uuid().0)); } 
-                        if self.show_amount() { ui.label(record.formatted_amount()); }
-                        if self.show_description() { ui.label(format!("{:?}", record.description())); }
-                        if self.show_tags() { ui.label(format!("{:?}", record.tags())); }
-                        if self.show_origin() { ui.label(record.origin().to_string()); }
+                    for record in self.records.data_iter() {
+                        if self.show_datetime_created() {
+                            ui.label(format!("{}", record.created().date_naive()));
+                        }
+                        if self.show_datetime() {
+                            ui.label(format!("{}", record.datetime().date_naive()));
+                        }
+                        if self.show_uuid() {
+                            ui.label(format!("{}", record.uuid().0));
+                        }
+                        if self.show_amount() {
+                            ui.label(record.formatted_amount());
+                        }
+                        if self.show_description() {
+                            ui.label(format!("{:?}", record.description()));
+                        }
+                        if self.show_tags() {
+                            ui.label(format!("{:?}", record.tags()));
+                        }
+                        if self.show_origin() {
+                            ui.label(record.origin().to_string());
+                        }
                         ui.end_row();
                     }
                 });
@@ -47,11 +80,15 @@ impl eframe::App for TableView {
 }
 
 impl TableView {
-    pub fn new(records_communicator: Communicator<Uuid, ExpenseRecord>) -> Self {
-
-        Self {
-            records_communicator,
-            column_toggles: ColumnToggles::default()
+    pub fn init(
+        records: Communicator<Uuid, ExpenseRecord>,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let _ = records.query_future(QueryType::All).await;
+            Self {
+                records,
+                column_toggles: ColumnToggles::default(),
+            }
         }
     }
     pub fn show_file_viewer() -> bool {
@@ -59,21 +96,14 @@ impl TableView {
     }
 
     pub fn delete_all(&mut self) {
-        let keys = self
-            .records_communicator
-            .view()
-            .iter()
-            .map(|(uuid, _)| *uuid)
-            .collect::<Vec<_>>();
-        self.records_communicator.delete_many(keys);
+        let keys = self.records.data_map().keys().cloned().collect::<Vec<_>>();
+        self.records.delete_many(keys);
     }
 
     fn column_toggles(&mut self, ui: &mut Ui) {
         ui.horizontal_wrapped(|ui| {
             for (label, boolean) in self.column_toggles.toggles() {
-                ui.horizontal_wrapped(|ui| {
-                    ui.checkbox(boolean, label)
-                });
+                ui.horizontal_wrapped(|ui| ui.checkbox(boolean, label));
             }
         });
     }
@@ -113,20 +143,20 @@ struct ColumnToggles {
     amount: bool,
     description: bool,
     tags: bool,
-    datetime:  bool,
+    datetime: bool,
     origin: bool,
 }
 
 impl Default for ColumnToggles {
     fn default() -> Self {
-        Self { 
-            datetime_created: false, 
-            uuid: false, 
-            amount: true, 
-            description: true, 
-            tags: false, 
-            datetime: true, 
-            origin: false
+        Self {
+            datetime_created: false,
+            uuid: false,
+            amount: true,
+            description: true,
+            tags: false,
+            datetime: true,
+            origin: false,
         }
     }
 }

@@ -1,5 +1,6 @@
 use eframe::Result;
 use std::collections::{HashMap, HashSet};
+use tracing::trace;
 
 use bincode as bc;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
@@ -114,6 +115,7 @@ type DbProfileParts = (
 );
 
 impl Profile {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         name: String,
         amount: ExpenseColumn,
@@ -150,12 +152,11 @@ impl Profile {
     pub fn parse_file(&self, file: &str) -> Result<Vec<ExpenseRecord>, ProfileError> {
         //TODO: dont forget to check that this is correct
         let rows = self.cut_margins(file.lines().collect::<Vec<_>>());
-        println!("about to parse recrids");
         let res_records = rows
             .into_iter()
             .map(|row| self.parse_row(row))
             .collect::<Vec<_>>();
-        println!("finished parsing records {res_records:?}");
+        trace!(msg = format!("{res_records:?}"));
         if res_records.iter().any(Result::is_err) {
             Err(res_records
                 .iter()
@@ -283,9 +284,13 @@ impl ExpenseColumn {
     pub fn only_expense(expense: usize) -> Self {
         Self::OnlyExpense(expense, PosExpense)
     }
-}
 
-impl ExpenseColumn {
+    pub fn get_from_pos(self, pos: usize) -> Option<ParsableWrapper> {
+        self.into_cols()
+            .into_iter()
+            .find(|(col_pos, _)| pos.eq(col_pos))
+            .map(|(_, wrapper)| wrapper)
+    }
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
             ExpenseColumn::Split((pos1, _), (pos2, _)) => vec![*pos1, *pos2],
@@ -345,6 +350,12 @@ impl DateTimeColumn {
             (0, ExpenseDate(String::new())),
             (0, ExpenseTime(String::new())),
         )
+    }
+    pub fn get_from_pos(self, pos: usize) -> Option<ParsableWrapper> {
+        self.into_cols()
+            .into_iter()
+            .find(|(col_pos, _)| pos.eq(col_pos))
+            .map(|(_, wrapper)| wrapper)
     }
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
@@ -431,6 +442,21 @@ impl ProfileBuilder {
     pub fn origin_name(&mut self, origin_name: String) {
         self.origin_name = Some(origin_name);
     }
+    pub fn get_from_pos(&self, pos: usize) -> Option<ParsableWrapper> {
+        if !self.col_positions.contains(&pos) {
+            return None;
+        }
+
+        self.other_cols
+            .iter()
+            .find(|(col_pos, _)| pos.eq(col_pos))
+            .map(|(_, wrapper)| wrapper.clone())
+            .or(self
+                .expense_col
+                .clone()
+                .and_then(|v| v.get_from_pos(pos))
+                .or(self.datetime_col.clone().and_then(|v| v.get_from_pos(pos))))
+    }
     pub fn build(self) -> Result<Profile, ()> {
         match (
             self.name,
@@ -470,7 +496,7 @@ impl ProfileBuilder {
         }
         Ok(())
     }
-    pub fn from_inter_state(state: &IntermediateProfileState) -> Self {
+    pub fn from_inter_state(state: &IntermediateProfileState) -> Result<Self, ()> {
         let mut builder = Self::default()
             .name(state.name.clone())
             .margins(state.margin_top, state.margin_btm);
@@ -484,15 +510,15 @@ impl ProfileBuilder {
         }
 
         if let Some(expense_col) = &state.expense_col {
-            builder.expense_col(expense_col.clone()).unwrap();
+            builder.expense_col(expense_col.clone())?;
         }
         if let Some(datetime_col) = &state.datetime_col {
-            builder.datetime_col(datetime_col.clone()).unwrap();
+            builder.datetime_col(datetime_col.clone())?;
         }
 
-        builder.other_cols(state.other_cols.clone()).unwrap();
+        builder.other_cols(state.other_cols.clone())?;
 
-        builder.default_tags(state.default_tags.clone())
+        Ok(builder.default_tags(state.default_tags.clone()))
     }
     pub fn intermediate_parse(
         &self,
@@ -506,24 +532,30 @@ impl ProfileBuilder {
             }
         }
         let Some(delimiter) = self.delimiter else {
-            return Ok(IntermediateParse::Rows(row));
+            return Ok(IntermediateParse::Rows(Ok(row)));
         };
-        let mut row = row.split(delimiter).map(str::to_string).collect::<Vec<_>>();
+        let mut row = row
+            .split(delimiter)
+            .map(|val| Ok(val.to_string()))
+            .collect::<Vec<_>>();
 
-        let mut vec = self.other_cols.clone();
+        let mut other_cols = self.other_cols.clone();
         if let Some(expense_col) = &self.expense_col {
-            vec.extend(expense_col.clone().into_cols());
+            other_cols.extend(expense_col.clone().into_cols());
         }
         if let Some(datetime_col) = &self.datetime_col {
-            vec.extend(datetime_col.clone().into_cols());
+            other_cols.extend(datetime_col.clone().into_cols());
         }
 
-        for (pos, el) in vec {
-            let Some(str) = row.get(pos) else {
+        for (pos, el) in other_cols {
+            let Some(Ok(str)) = row.get(pos) else {
                 return Err(ProfileError::ColumnWidth(format!("{pos} is not in bounds")));
             };
-            let new_str = format!("{:?}", el.to_expense_data(str.clone()));
-            row.remove(pos);
+            let new_str = el
+                .to_expense_data(str.clone())
+                .map(|val| val.to_string())
+                .map_err(|err| format!("{err:?}"));
+            let _ = row.remove(pos);
             row.insert(pos, new_str);
         }
 
@@ -531,11 +563,11 @@ impl ProfileBuilder {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum IntermediateParse {
     None,
-    Rows(String),
-    RowsAndCols(Vec<String>),
+    Rows(Result<String, String>),
+    RowsAndCols(Vec<Result<String, String>>),
 }
 
 #[derive(Default, Clone)]

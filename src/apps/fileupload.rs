@@ -1,81 +1,100 @@
 use std::fs;
 
+use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use eframe::App;
 use egui::ComboBox;
-use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
+use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
+use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tokio::sync::mpsc;
+use tracing::{warn, info};
 use uuid::Uuid;
 
-use crate::{
-    model::{profiles::Profile, records::ExpenseRecord},
-    utils::{communicator::Communicator, misc},
+use crate::model::{
+    linker::{Linker, PossibleLink},
+    profiles::Profile,
+    records::ExpenseRecord,
 };
 
 pub struct FileUpload {
     reciver: mpsc::Receiver<egui::DroppedFile>,
     update_callback_ctx: Option<egui::Context>,
-    profiles_communicator: Communicator<Uuid, Profile>,
-    records_communicator: Communicator<Uuid, ExpenseRecord>,
+    profiles: Communicator<Uuid, Profile>,
+    records: Communicator<Uuid, ExpenseRecord>,
+    possible_links: Communicator<Uuid, PossibleLink>,
     dropped_files: Vec<FileToParse>,
     parsed_records: ParsedRecords,
+    ui: UiStates,
 }
 
-impl eframe::App for FileUpload {
+impl App for FileUpload {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.update_callback_ctx = Some(ctx.clone());
         self.recive_files();
         self.parsed_records.update();
-        self.profiles_communicator.update();
-        self.records_communicator.update();
+        self.profiles.state_update();
+        self.records.state_update();
+        self.possible_links.state_update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Files:");
             egui::Grid::new("uploaded files table").show(ui, |ui| {
-                ui.label("number");
                 ui.label("name");
                 ui.label("path");
                 ui.label("profile");
                 ui.label("remove");
                 ui.end_row();
-                let mut to_delete = vec![];
-                for (index, file_to_parse) in self.dropped_files.iter_mut().enumerate() {
-                    ui.label(format!("{index}"));
-                    ui.label(file_to_parse.file.name.clone());
-                    if let Some(path) = file_to_parse.file.path.as_ref() {
-                        ui.label(path.to_str().unwrap());
-                    } else {
-                        ui.label("..no path..");
-                    }
-                    ComboBox::new(format!("select_profile_{index}"), "select profile")
-                        .selected_text({
-                            file_to_parse
-                                .profile
-                                .clone()
-                                .map_or(String::from("none selected"), |p| p.name)
-                        })
-                        .show_ui(ui, |ui| {
-                            for (_, profile) in self.profiles_communicator.view().iter() {
-                                ui.selectable_value(
-                                    &mut file_to_parse.profile,
-                                    Some(profile.clone()),
-                                    profile.name.clone(),
-                                );
-                            }
-                        });
-                    if ui.button("remove").clicked() {
-                        to_delete.push(index);
-                    }
-                    ui.end_row();
-                }
-                misc::clear_vec(to_delete, &mut self.dropped_files);
+                self
+                    .dropped_files
+                    .retain_mut(|file_to_parse| {
+                        ui.label(file_to_parse.file.name.clone());
+                        if let Some(path) = file_to_parse.file.path.as_ref() {
+                            ui.label(path.to_str().unwrap());
+                        } else {
+                            ui.label("..no path..");
+                        }
+                        ComboBox::new(format!("select_profile_{:?}", file_to_parse.file.path), "select profile")
+                            .selected_text({
+                                file_to_parse
+                                    .profile
+                                    .clone()
+                                    .map_or(String::from("none selected"), |p| p.name)
+                            })
+                            .show_ui(ui, |ui| {
+                                for profile in self.profiles.data_iter() {
+                                    ui.selectable_value(
+                                        &mut file_to_parse.profile,
+                                        Some(profile.clone()),
+                                        profile.name.clone(),
+                                    );
+                                }
+                            });
+                        if ui.button("remove").clicked() {
+                            ui.end_row();
+                            false 
+                        } else {
+                            ui.end_row();
+                            true
+                        }
+                    });
             });
             ui.horizontal(|ui| {
                 ui.heading("what to do now?");
                 if ui.button("parse files").clicked() {
                     self.parse_files();
                 }
-                if ui.button("save parsed records").clicked() {
-                    self.save_parsed_data();
-                }
+                let promise = if ui.button("save parsed records").clicked() {
+                    Some(self.save_parsed_data_action())
+                } else {
+                    None
+                };
+                self.ui
+                    .default_promise_await("save_parsed_records".into())
+                    .init_ui(|_, set_promise| {
+                        if let Some(promise) = promise {
+                            set_promise(promise);
+                        }
+                    })
+                    .show(ui);
             });
             egui::Grid::new("expense records table").show(ui, |ui| {
                 ui.label("amount");
@@ -94,18 +113,26 @@ impl eframe::App for FileUpload {
 }
 
 impl FileUpload {
-    pub fn new(
+    pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
-        profiles_communicator: Communicator<Uuid, Profile>,
-        records_communicator: Communicator<Uuid, ExpenseRecord>,
-    ) -> Self {
-        Self {
-            reciver,
-            dropped_files: vec![],
-            update_callback_ctx: None,
-            parsed_records: ParsedRecords::new(),
-            profiles_communicator,
-            records_communicator,
+        profiles: Communicator<Uuid, Profile>,
+        records: Communicator<Uuid, ExpenseRecord>,
+        possible_links: Communicator<Uuid, PossibleLink>,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        async move {
+            let _ = profiles.query_future(QueryType::All).await;
+            let _ = records.query_future(QueryType::All).await;
+            // let _ = possible_links.query_future(QueryType::All).await;
+            Self {
+                reciver,
+                dropped_files: vec![],
+                update_callback_ctx: None,
+                parsed_records: ParsedRecords::new(),
+                profiles,
+                records,
+                possible_links,
+                ui: UiStates::default(),
+            }
         }
     }
 
@@ -116,8 +143,8 @@ impl FileUpload {
 
     pub fn recive_files(&mut self) {
         while let Ok(file) = self.reciver.try_recv() {
+            info!(msg = "Recived dropped file, adding to list", file = format!("{file:?}"));
             self.dropped_files.push(FileToParse::new(file));
-            self.update_callback()();
         }
     }
 
@@ -129,9 +156,17 @@ impl FileUpload {
         );
     }
 
-    pub fn save_parsed_data(&mut self) {
+    pub fn save_parsed_data_action(&mut self) -> ImmediateValuePromise<()> {
         let records = self.parsed_records.drain_records();
-        self.records_communicator.set_many(records);
+        let links = Linker::find_links(records.iter().collect::<Vec<_>>(), self.records.data());
+
+        let records_future = self.records.update_many_future(records);
+        let links_future = self.possible_links.update_many_future(links);
+        async move {
+            let _ = records_future.await;
+            let _ = links_future.await;
+        }
+        .into()
     }
 
     pub fn show_file_viewer() -> bool {
@@ -173,7 +208,10 @@ impl ParsedRecords {
                 profile: Some(profile),
             } = file
             else {
-                panic!("hello???");
+                panic!(
+                    "Please select a profile for the file [{}] since no profile was selected.",
+                    file.file.name
+                );
             };
 
             let file = file.clone().path.unwrap();
@@ -195,16 +233,35 @@ impl ParsedRecords {
         self.futures.extend(futures);
     }
 
+    pub fn handle_parsed_records(&mut self, new_records: Vec<ExpenseRecord>) {
+        self.parsed_records.extend(new_records);
+    }
+
     pub fn update(&mut self) {
-        self.futures.retain_mut(|future| match future.poll_state() {
-            ImmediateValueState::Empty => false,
-            ImmediateValueState::Error(_) => panic!("Error completing future!"),
-            ImmediateValueState::Updating => true,
-            ImmediateValueState::Success(vec) => {
-                self.parsed_records.extend(vec.clone());
-                false
-            }
-        });
+        let resulting_expenses = self
+            .futures
+            .extract_if(|working_future| {
+                !matches!(working_future.poll_state(), ImmediateValueState::Updating)
+            })
+            .filter_map(|mut finished_future| {
+                if let Some(result) = finished_future.take_result() {
+                    match result {
+                        Ok(expenses) => Some(expenses),
+                        Err(err) => {
+                            warn!(
+                                "The parsing future did not succee. Failed with error [{:?}]",
+                                *err
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        self.parsed_records.extend(resulting_expenses);
     }
     pub fn drain_records(&mut self) -> Vec<ExpenseRecord> {
         self.parsed_records.drain(..).collect()

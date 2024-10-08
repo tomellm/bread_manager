@@ -2,26 +2,21 @@ use std::sync::Arc;
 
 use bincode as bc;
 use chrono::{DateTime, Local};
-use futures::future::BoxFuture;
+use data_communicator::buffered::{
+    query::{self, QueryResponse},
+    storage::{self, Storage},
+    GetKey,
+};
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
 const TAG_SEP: &str = ";";
 
-use crate::{
-    model::records::ExpenseRecord,
-    utils::{
-        changer::{self, ActionType, Response},
-        communicator::{GetKey, Storage},
-    },
-};
+use crate::model::records::ExpenseRecord;
 
-use super::{error_to_response, utils};
+use super::{utils, IntoChangeResult, MapToQueryError};
 
-pub struct DbRecords {
-    pub(super) pool: Arc<Pool<Sqlite>>,
-}
-
+#[derive(sqlx::FromRow)]
 struct DbRecord {
     datetime_created: i64,
     uuid: Uuid,
@@ -35,15 +30,15 @@ struct DbRecord {
 }
 
 impl GetKey<Uuid> for ExpenseRecord {
-    fn get_key(&self) -> Uuid {
-        **self.uuid()
+    fn key(&self) -> &Uuid {
+        self.uuid()
     }
 }
 impl DbRecord {
     pub fn from_record(record: &ExpenseRecord) -> Self {
         Self {
             datetime_created: record.created().clone().timestamp(),
-            uuid: *record.uuid().clone(),
+            uuid: **record.uuid(),
             amount: *record.amount() as i64,
             datetime: record.datetime().clone().timestamp(),
             description: record.description().cloned(),
@@ -75,192 +70,39 @@ impl DbRecord {
     }
 }
 
+pub struct DbRecords {
+    pool: Arc<Pool<Sqlite>>,
+}
+
+impl DbRecords {
+    pub fn pool(&self) -> Arc<Pool<Sqlite>> {
+        self.pool.clone()
+    }
+}
+
+pub struct DbRecordsInitArgs {
+    pub pool: Arc<Pool<Sqlite>>,
+    pub drop: bool,
+}
+
+impl From<(&Arc<Pool<Sqlite>>, bool)> for DbRecordsInitArgs {
+    fn from(value: (&Arc<Pool<Sqlite>>, bool)) -> Self {
+        Self {
+            pool: value.0.clone(),
+            drop: value.1,
+        }
+    }
+}
+
 impl Storage<Uuid, ExpenseRecord> for DbRecords {
-    fn get_all(&mut self) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let records = sqlx::query_as!(
-                DbRecord,
-                r#"
-                select 
-                    datetime_created,
-                    uuid as "uuid: uuid::Uuid",
-                    amount,
-                    datetime,
-                    description,
-                    description_container,
-                    tags,
-                    origin,
-                    data
-                from
-                    expense_records
-                "#
-            )
-            .fetch_all(&*pool)
-            .await
-            .unwrap()
-            .into_iter()
-            .map(DbRecord::into_record)
-            .collect();
-
-            let action = ActionType::GetAll(records);
-            Response::ok(&action)
-        })
-    }
-    fn set(
-        &mut self,
-        value: ExpenseRecord,
-    ) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let record = DbRecord::from_record(&value);
-            let query_result = sqlx::query!(
-                r#"insert into expense_records(
-                    datetime_created, uuid, amount, datetime, description, description_container, tags, origin, data
-                ) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-                record.datetime_created,
-                record.uuid,
-                record.amount,
-                record.datetime,
-                record.description,
-                record.description_container,
-                record.tags,
-                record.origin,
-                record.data,
-            )
-            .execute(&*pool)
-            .await;
-            error_to_response(query_result, &ActionType::Set(value))
-        })
-    }
-    fn set_many(
-        &mut self,
-        values: Vec<ExpenseRecord>,
-    ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
-        println!("setting many right now");
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
-
-            let query_result = utils::insert_values(
-                pool,
-                "insert into expense_records(
-                    datetime_created, uuid, amount, datetime, description, 
-                    description_container, tags, origin, data
-                )",
-                records,
-                |mut builder, value| {
-                    builder
-                        .push_bind(value.datetime_created)
-                        .push_bind(value.uuid)
-                        .push_bind(value.amount)
-                        .push_bind(value.datetime)
-                        .push_bind(value.description)
-                        .push_bind(value.description_container)
-                        .push_bind(value.tags)
-                        .push_bind(value.origin)
-                        .push_bind(value.data);
-                },
-            )
-            .await;
-
-            Response::from_result(query_result, &ActionType::SetMany(values))
-        })
-    }
-    fn update(
-        &mut self,
-        value: ExpenseRecord,
-    ) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let record = DbRecord::from_record(&value);
-            let query_result = sqlx::query!(
-                r#"insert into expense_records(
-                    datetime_created, uuid, amount, datetime, description, description_container, tags, origin, data
-                ) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
-                record.datetime_created,
-                record.uuid,
-                record.amount,
-                record.datetime,
-                record.description,
-                record.description_container,
-                record.tags,
-                record.origin,
-                record.data,
-            )
-            .execute(&*pool)
-            .await;
-            error_to_response(query_result, &ActionType::Update(value))
-        })
-    }
-    fn update_many(
-        &mut self,
-        values: Vec<ExpenseRecord>,
-    ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
-
-            let query_result = utils::insert_values(
-                pool,
-                "insert into expense_records(
-                    datetime_created, uuid, amount, datetime, description, 
-                    description_container, tags, origin, data
-                )",
-                records,
-                |mut builder, value| {
-                    builder
-                        .push_bind(value.datetime_created)
-                        .push_bind(value.uuid)
-                        .push_bind(value.amount)
-                        .push_bind(value.datetime)
-                        .push_bind(value.description)
-                        .push_bind(value.description_container)
-                        .push_bind(value.tags)
-                        .push_bind(value.origin)
-                        .push_bind(value.data);
-                },
-            )
-            .await;
-
-            Response::from_result(query_result, &ActionType::SetMany(values))
-        })
-    }
-    fn delete(&mut self, key: Uuid) -> BoxFuture<'static, changer::Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let query_result = sqlx::query!("delete from expense_records where uuid = ?", key)
-                .execute(&*pool)
-                .await;
-            error_to_response(query_result, &ActionType::Delete(key))
-        })
-    }
-    fn delete_many(
-        &mut self,
-        keys: Vec<Uuid>,
-    ) -> BoxFuture<'static, Response<Uuid, ExpenseRecord>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
-            let query_result = utils::add_in_items(
-                "delete from expense_records where uuid in (",
-                keys.iter(),
-                ")",
-            )
-            .build()
-            .execute(&*pool)
-            .await;
-
-            Response::from_result(query_result, &ActionType::DeleteMany(keys))
-        })
-    }
-    fn setup(&mut self, drop: bool) -> BoxFuture<'static, Result<Vec<ExpenseRecord>, ()>> {
-        let pool = self.pool.clone();
-        Box::pin(async move {
+    type InitArgs = DbRecordsInitArgs;
+    fn init(DbRecordsInitArgs { pool, drop }: Self::InitArgs) -> impl storage::InitFuture<Self> {
+        async move {
             if drop {
                 let _ = sqlx::query!("drop table if exists expense_records;")
                     .execute(&*pool)
                     .await
-                    .map_err(|_| ())?;
+                    .unwrap();
             }
 
             let _ = sqlx::query!(
@@ -280,20 +122,186 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
             )
             .execute(&*pool)
             .await
-            .map_err(|_| ())?;
-
-            Ok(sqlx::query_as!(
+            .unwrap();
+            Self { pool }
+        }
+    }
+    fn insert(
+        &mut self,
+        value: &ExpenseRecord,
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let record = DbRecord::from_record(value);
+        async move {
+            sqlx::query!(
+                r#"insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description, description_container, tags, origin, data
+                ) values(?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+                record.datetime_created,
+                record.uuid,
+                record.amount,
+                record.datetime,
+                record.description,
+                record.description_container,
+                record.tags,
+                record.origin,
+                record.data,
+            )
+                .execute(&*pool)
+                .await
+                .into_change_result()
+        }
+    }
+    fn insert_many(
+        &mut self,
+        values: &[ExpenseRecord],
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
+        async move {
+            utils::insert_values(
+                pool,
+                "insert into expense_records(
+                    datetime_created, uuid, amount, datetime, description,
+                    description_container, tags, origin, data
+                )",
+                records,
+                |mut builder, value| {
+                    builder
+                        .push_bind(value.datetime_created)
+                        .push_bind(value.uuid)
+                        .push_bind(value.amount)
+                        .push_bind(value.datetime)
+                        .push_bind(value.description)
+                        .push_bind(value.description_container)
+                        .push_bind(value.tags)
+                        .push_bind(value.origin)
+                        .push_bind(value.data);
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
+    fn update(
+        &mut self,
+        value: &ExpenseRecord,
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let record = DbRecord::from_record(value);
+        async move {
+            sqlx::query!(
+                r#"
+                update
+                    expense_records
+                set
+                    datetime_created = ?,
+                    amount = ?,
+                    datetime = ?,
+                    description = ?,
+                    description_container = ?,
+                    tags = ?,
+                    origin = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                record.datetime_created,
+                record.amount,
+                record.datetime,
+                record.description,
+                record.description_container,
+                record.tags,
+                record.origin,
+                record.data,
+                record.uuid,
+            )
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn update_many(
+        &mut self,
+        values: &[ExpenseRecord],
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
+        async move {
+            utils::transactional_execute_queries(
+                pool,
+                r#"
+                update
+                    expense_records
+                set
+                    datetime_created = ?,
+                    amount = ?,
+                    datetime = ?,
+                    description = ?,
+                    description_container = ?,
+                    tags = ?,
+                    origin = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                records,
+                |builder, value| {
+                    builder
+                        .bind(value.datetime_created)
+                        .bind(value.amount)
+                        .bind(value.description)
+                        .bind(value.description_container)
+                        .bind(value.tags)
+                        .bind(value.origin)
+                        .bind(value.data)
+                        .bind(value.uuid)
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
+    fn delete(
+        &mut self,
+        key: &Uuid,
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let key = *key;
+        async move {
+            sqlx::query!("delete from expense_records where uuid = ?", key)
+                .execute(&*pool)
+                .await
+                .into_change_result()
+        }
+    }
+    fn delete_many(
+        &mut self,
+        keys: &[Uuid],
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let keys = keys.to_vec();
+        async move {
+            utils::add_in_items(
+                "delete from expense_records where uuid in (",
+                keys.into_iter(),
+                ")",
+            )
+            .build()
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn get_all(&mut self) -> impl storage::Future<QueryResponse<Uuid, ExpenseRecord>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
                 DbRecord,
                 r#"
-                select
-                    datetime_created,
-                    uuid as "uuid: uuid::Uuid",
-                    amount,
-                    datetime,
-                    description,
-                    description_container,
-                    tags,
-                    origin,
+                select 
+                    datetime_created, uuid as "uuid: uuid::Uuid", amount, 
+                    datetime, description, description_container, tags, origin,
                     data
                 from
                     expense_records
@@ -301,10 +309,103 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
             )
             .fetch_all(&*pool)
             .await
-            .unwrap()
-            .into_iter()
+            .map(|vals| {
+                vals.into_iter()
+                    .map(DbRecord::into_record)
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_id(&mut self, key: Uuid) -> impl storage::Future<QueryResponse<Uuid, ExpenseRecord>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
+                DbRecord,
+                r#"
+                select
+                    datetime_created, uuid as "uuid: uuid::Uuid", amount, 
+                    datetime, description, description_container, tags, origin,
+                    data
+                from
+                    expense_records
+                where
+                    uuid = ?
+                "#,
+                key
+            )
+            .fetch_one(&*pool)
+            .await
             .map(DbRecord::into_record)
-            .collect())
-        })
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_ids(
+        &mut self,
+        keys: Vec<Uuid>,
+    ) -> impl storage::Future<QueryResponse<Uuid, ExpenseRecord>> {
+        let pool = self.pool();
+        async move {
+            utils::add_in_items(
+                r#"select
+                    datetime_created, uuid as "uuid: uuid::Uuid", amount, 
+                    datetime, description, description_container, tags, origin,
+                    data
+                from
+                    expense_records
+                where
+                    uuid in ("#,
+                keys.iter(),
+                ")",
+            )
+            .build_query_as::<DbRecord>()
+            .fetch_all(&*pool)
+            .await
+            .map(|vals| {
+                vals.into_iter()
+                    .map(DbRecord::into_record)
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
+    }
+    fn get_by_predicate(
+        &mut self,
+        predicate: query::Predicate<ExpenseRecord>,
+    ) -> impl storage::Future<QueryResponse<Uuid, ExpenseRecord>> {
+        let pool = self.pool();
+        async move {
+            sqlx::query_as!(
+                DbRecord,
+                r#"
+                select 
+                    datetime_created, uuid as "uuid: uuid::Uuid", amount, 
+                    datetime, description, description_container, tags, origin,
+                    data
+                from
+                    expense_records
+                "#
+            )
+            .fetch_all(&*pool)
+            .await
+            .map(|values| {
+                values
+                    .into_iter()
+                    .filter_map(|val| {
+                        let record = val.into_record();
+                        if predicate(&record) {
+                            Some(record)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .map_query_error()
+            .into()
+        }
     }
 }
