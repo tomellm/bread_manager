@@ -99,7 +99,7 @@ impl ExpenseRecord {
         self.amount as f64 / 100.
     }
     pub fn formatted_amount(&self) -> String {
-        format!("{}", self.amount as f32 / 100.0)
+        format!("{:.2}€", self.amount as f32 / 100.0)
     }
     pub fn datetime(&self) -> &DateTime<Local> {
         &self.datetime

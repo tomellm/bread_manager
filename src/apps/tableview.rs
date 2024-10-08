@@ -1,9 +1,10 @@
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
-use egui::Ui;
+use egui::{Frame, Label, RichText, Sense, Ui, UiBuilder, Widget};
+use tracing::info;
 use uuid::Uuid;
 
-use crate::model::records::ExpenseRecord;
+use crate::{components::soft_button::soft_button, model::records::ExpenseRecord};
 
 pub struct TableView {
     records: Communicator<Uuid, ExpenseRecord>,
@@ -31,13 +32,28 @@ impl App for TableView {
                         ui.label("datetime created");
                     }
                     if self.show_datetime() {
-                        ui.label("datetime");
+                        let response = soft_button("datetime_sorting", "datetime", ui);
+                        if response.double_clicked() {
+                            self.records.sort(|a, b| b.datetime().cmp(a.datetime()));
+                        } else if response.clicked() {
+                            self.records.sort(|a, b| a.datetime().cmp(b.datetime()));
+                        } 
                     }
                     if self.show_uuid() {
-                        ui.label("uuid");
+                        let response = soft_button("uuid_sorting", "uuid", ui);
+                        if response.double_clicked() {
+                            self.records.sort(|a, b| b.uuid().cmp(a.uuid()));
+                        } else if response.clicked() {
+                            self.records.sort(|a, b| a.uuid().cmp(b.uuid()));
+                        } 
                     }
                     if self.show_amount() {
-                        ui.label("amount");
+                        let response = soft_button("amount_sorting", "amount", ui);
+                        if response.double_clicked() {
+                            self.records.sort(|a, b| b.amount().cmp(a.amount()));
+                        } else if response.clicked() {
+                            self.records.sort(|a, b| a.amount().cmp(b.amount()));
+                        } 
                     }
                     if self.show_description() {
                         ui.label("description");
@@ -46,10 +62,15 @@ impl App for TableView {
                         ui.label("tags");
                     }
                     if self.show_origin() {
-                        ui.label("origin");
+                        let response = soft_button("origin_sorting", "origin", ui);
+                        if response.double_clicked() {
+                            self.records.sort(|a, b| b.origin().cmp(a.origin()));
+                        } else if response.clicked() {
+                            self.records.sort(|a, b| a.origin().cmp(b.origin()));
+                        } 
                     }
                     ui.end_row();
-                    for record in self.records.data_iter() {
+                    for record in self.records.data_sorted() {
                         if self.show_datetime_created() {
                             ui.label(format!("{}", record.created().date_naive()));
                         }
@@ -154,9 +175,9 @@ impl Default for ColumnToggles {
             uuid: false,
             amount: true,
             description: true,
-            tags: false,
+            tags: true,
             datetime: true,
-            origin: false,
+            origin: true,
         }
     }
 }
