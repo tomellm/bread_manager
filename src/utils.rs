@@ -119,7 +119,7 @@ where
     E: Display,
 {
     fn compless_display(&self) -> String {
-        match self.clone() {
+        match self {
             Ok(val) => val.to_string(),
             Err(err) => err.to_string()
         }

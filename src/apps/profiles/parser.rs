@@ -5,6 +5,7 @@ use lazy_async_promise::{
     send_data, set_error, set_finished, unpack_result, DataState, LazyVecPromise, Message, Promise,
 };
 use tokio::sync::mpsc;
+use tracing::trace;
 
 use crate::{
     apps::utils::blank_option_display,
@@ -105,7 +106,7 @@ impl ProfilePreview {
         };
         let to_be_parsed = Arc::clone(&self.testing_file);
         let builder = Arc::clone(builder);
-        println!("{builder:?}");
+        trace!( msg = format!("{builder:?}") );
         let updater = move |tx: mpsc::Sender<Message<IntermediateParse>>| {
             let to_be_parsed = Arc::clone(&to_be_parsed);
             let builder = Arc::clone(&builder);

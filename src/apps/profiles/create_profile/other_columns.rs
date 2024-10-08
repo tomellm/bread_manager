@@ -23,7 +23,7 @@ pub(super) fn other_cols(
             ui.add_sized([175., 175.], |ui: &mut Ui| {
                 ui.group(|ui| {
                     ui.vertical_centered(|ui| {
-                        egui::ComboBox::from_id_source(format!("other col {col_pos}"))
+                        egui::ComboBox::from_id_salt(format!("other col {col_pos}"))
                             .selected_text(format!("{col_type}"))
                             .show_ui(ui, |ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);

@@ -121,6 +121,8 @@ impl FileUpload {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let _ = profiles.query_future(QueryType::All).await;
+            let _ = records.query_future(QueryType::All).await;
+            // let _ = possible_links.query_future(QueryType::All).await;
             Self {
                 reciver,
                 dropped_files: vec![],

@@ -1,9 +1,9 @@
-use std::{cmp::Ordering, collections::HashMap, default, ops::Sub};
+use std::{cmp::Ordering, collections::HashMap, ops::Sub};
 
-use chrono::{DateTime, Datelike, Days, Duration, Local, Months, Utc};
+use chrono::{DateTime, Datelike, Days, Local, Months};
 use data_communicator::buffered::communicator::Communicator;
 use egui::Ui;
-use egui_plot::{Bar, BarChart, Line, Plot};
+use egui_plot::{Bar, BarChart, Plot};
 use uuid::Uuid;
 
 use crate::model::records::ExpenseRecord;

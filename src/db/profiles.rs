@@ -58,7 +58,10 @@ pub struct DbProfilesInitArgs {
 
 impl From<(&Arc<Pool<Sqlite>>, bool)> for DbProfilesInitArgs {
     fn from(value: (&Arc<Pool<Sqlite>>, bool)) -> Self {
-        Self { pool: value.0.clone(), drop: value.1 }
+        Self {
+            pool: value.0.clone(),
+            drop: value.1,
+        }
     }
 }
 
@@ -90,7 +93,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             Self { pool }
         }
     }
-    fn update(&mut self, value: &Profile) -> impl storage::Future<ChangeResult> {
+    fn insert(&mut self, value: &Profile) -> impl storage::Future<ChangeResult> {
         let pool = self.pool();
         let profile = DbProfile::from_profile(value);
         async move {
@@ -106,7 +109,7 @@ impl Storage<Uuid, Profile> for DbProfiles {
             .into_change_result()
         }
     }
-    fn update_many(&mut self, values: &[Profile]) -> impl storage::Future<ChangeResult> {
+    fn insert_many(&mut self, values: &[Profile]) -> impl storage::Future<ChangeResult> {
         let pool = self.pool();
         let profiles = values
             .iter()
@@ -115,13 +118,71 @@ impl Storage<Uuid, Profile> for DbProfiles {
         async move {
             utils::insert_values(
                 pool,
-                "insert into profiles(uuid, name, data)",
+                "insert into profiles(uuid, name, origin_name data)",
                 profiles,
                 |mut builder, value| {
                     builder
                         .push_bind(value.uuid)
                         .push_bind(value.name)
+                        .push_bind(value.origin_name)
                         .push_bind(value.data);
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
+    fn update(&mut self, value: &Profile) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let profile = DbProfile::from_profile(value);
+        async move {
+            sqlx::query!(
+                r#"
+                update
+                    profiles
+                set
+                    name = ?,
+                    origin_name = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                profile.name,
+                profile.origin_name,
+                profile.data,
+                profile.uuid,
+            )
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn update_many(&mut self, values: &[Profile]) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let profiles = values
+            .iter()
+            .map(DbProfile::from_profile)
+            .collect::<Vec<_>>();
+        async move {
+            utils::transactional_execute_queries(
+                pool,
+                r#"
+                update
+                    profiles
+                set
+                    name = ?,
+                    origin_name = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                profiles,
+                |builder, value| {
+                    builder
+                        .bind(value.name)
+                        .bind(value.origin_name)
+                        .bind(value.data)
+                        .bind(value.uuid)
                 },
             )
             .await

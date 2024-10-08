@@ -39,6 +39,7 @@ impl App for Profiles {
                     ui.label("btm margin");
                     ui.label("delimiter");
                     ui.label("total width");
+                    ui.label("default tags");
                     ui.label("actions");
                     ui.end_row();
                     for (key, profile) in profiles.iter() {
@@ -48,6 +49,11 @@ impl App for Profiles {
                         ui.label(format!("{}", profile.margins.1));
                         ui.label(profile.delimiter.to_string());
                         ui.label(format!("{}", profile.width));
+                        ui.group(|ui| {
+                            for default_tag in &profile.default_tags {
+                                ui.label(default_tag);
+                            }
+                        });
                         ui.group(|ui| {
                             self.ui_states
                                 .default_promise_await(format!(

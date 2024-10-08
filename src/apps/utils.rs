@@ -1,6 +1,3 @@
-use crate::model::profiles::{ExpenseDate, ExpenseDateTime, ExpenseTime, ParsableWrapper};
-use egui::{Layout, Ui};
-
 pub enum WindowSize {
     Small,
     Medium,
@@ -19,6 +16,15 @@ impl WindowSize {
 
 pub fn drag_int(ui: &mut egui::Ui, val: &mut usize) {
     ui.add(egui::DragValue::new(val).speed(0.1).max_decimals(0));
+}
+
+pub fn drag_zero_to_one(ui: &mut egui::Ui, val: &mut f64) {
+    ui.add(
+        egui::DragValue::new(val)
+            .speed(0.001)
+            .max_decimals(4)
+            .range(0f64..=1f64),
+    );
 }
 
 pub fn single_char(ui: &mut egui::Ui, val: &mut String) {

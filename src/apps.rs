@@ -1,14 +1,17 @@
 mod fileupload;
+mod linking;
 mod profiles;
 mod tableview;
-mod utils;
+pub(crate) mod utils;
 mod visualizations;
 
 use std::time::Instant;
 
 use data_communicator::buffered::utils::PromiseUtilities;
 use eframe::{egui, App};
+use egui::global_theme_preference_switch;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
+use linking::Linking;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -31,6 +34,7 @@ pub struct State {
     table_view: LoadingScreen<TableView>,
     profiles: LoadingScreen<Profiles>,
     visualizations: LoadingScreen<Visualizations>,
+    linking: LoadingScreen<Linking>,
     selected_anchor: Anchor,
     fps: Fps,
 }
@@ -49,6 +53,7 @@ enum Anchor {
     FileUpload,
     TableView,
     Profiles,
+    Linking,
 }
 
 impl BreadApp {
@@ -89,13 +94,18 @@ impl BreadApp {
                 Anchor::Profiles,
                 &mut self.state.profiles as &mut dyn eframe::App,
             ),
+            (
+                "Linking",
+                Anchor::Linking,
+                &mut self.state.linking as &mut dyn eframe::App,
+            ),
         ];
 
         vec.into_iter()
     }
 
     fn bar_contents(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        egui::widgets::global_dark_light_mode_switch(ui);
+        global_theme_preference_switch(ui);
 
         ui.separator();
 
@@ -250,6 +260,7 @@ impl State {
                 profiles: Profiles::init(rx_p, [db.profiles_signal(), db.profiles_signal()]).into(),
                 table_view: TableView::init(db.records_signal()).into(),
                 visualizations: Visualizations::init(db.records_signal()).into(),
+                linking: Linking::new(db.records_signal(), db.possible_links_signal()).into(),
                 selected_anchor: Anchor::Visualizations,
                 db,
                 fps: Fps::default(),

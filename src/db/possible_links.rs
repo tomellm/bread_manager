@@ -66,7 +66,10 @@ pub struct DbPossibleLinkInitArgs {
 
 impl From<(&Arc<Pool<Sqlite>>, bool)> for DbPossibleLinkInitArgs {
     fn from(value: (&Arc<Pool<Sqlite>>, bool)) -> Self {
-        Self { pool: value.0.clone(), drop: value.1 }
+        Self {
+            pool: value.0.clone(),
+            drop: value.1,
+        }
     }
 }
 
@@ -100,6 +103,46 @@ impl Storage<Uuid, PossibleLink> for DbPossibleLinks {
             Self { pool }
         }
     }
+    fn insert(&mut self, value: &PossibleLink) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let link = DbPossibleLink::from(value);
+        async move {
+            sqlx::query!(
+                r#"insert into possible_links(
+                    uuid, negative, positive, probability
+                ) values(?, ?, ?, ?)"#,
+                link.uuid,
+                link.negative,
+                link.positive,
+                link.probability
+            )
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn insert_many(&mut self, values: &[PossibleLink]) -> impl storage::Future<ChangeResult> {
+        let pool = self.pool();
+        let links = values.iter().map(DbPossibleLink::from).collect::<Vec<_>>();
+        async move {
+            utils::insert_values(
+                pool,
+                "insert into possible_links(
+                    uuid, negative, positive, probability
+                )",
+                links,
+                |mut builder, value| {
+                    builder
+                        .push_bind(value.uuid)
+                        .push_bind(value.negative)
+                        .push_bind(value.positive)
+                        .push_bind(value.probability);
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
     fn update(&mut self, value: &PossibleLink) -> impl storage::Future<ChangeResult> {
         let pool = self.pool();
         let link = DbPossibleLink::from(value);
@@ -122,18 +165,25 @@ impl Storage<Uuid, PossibleLink> for DbPossibleLinks {
         let pool = self.pool();
         let links = values.iter().map(DbPossibleLink::from).collect::<Vec<_>>();
         async move {
-            utils::insert_values(
+            utils::transactional_execute_queries(
                 pool,
-                "insert into possible_links(
-                    uuid, negative, positive, probability
-                )",
+                r#"
+                update
+                    possible_links
+                set
+                    negative = ?,
+                    positive = ?,
+                    probability = ?
+                where
+                    uuid = ?
+                "#,
                 links,
-                |mut builder, value| {
+                |builder, value| {
                     builder
-                        .push_bind(value.uuid)
-                        .push_bind(value.negative)
-                        .push_bind(value.positive)
-                        .push_bind(value.probability);
+                        .bind(value.negative)
+                        .bind(value.positive)
+                        .bind(value.probability)
+                        .bind(value.uuid)
                 },
             )
             .await

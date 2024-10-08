@@ -72,3 +72,13 @@ pub(super) fn default_tags(
         });
     });
 }
+
+pub(super) fn origin_name(
+    ui: &mut Ui,
+    IntermediateProfileState { origin_name, .. }: &mut IntermediateProfileState,
+) {
+    ui.group(|ui| {
+        ui.label("origin name");
+        ui.add(egui::TextEdit::singleline(origin_name));
+    });
+}

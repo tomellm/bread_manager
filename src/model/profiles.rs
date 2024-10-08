@@ -1,5 +1,6 @@
 use eframe::Result;
 use std::collections::{HashMap, HashSet};
+use tracing::trace;
 
 use bincode as bc;
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
@@ -151,12 +152,11 @@ impl Profile {
     pub fn parse_file(&self, file: &str) -> Result<Vec<ExpenseRecord>, ProfileError> {
         //TODO: dont forget to check that this is correct
         let rows = self.cut_margins(file.lines().collect::<Vec<_>>());
-        println!("about to parse recrids");
         let res_records = rows
             .into_iter()
             .map(|row| self.parse_row(row))
             .collect::<Vec<_>>();
-        println!("finished parsing records {res_records:?}");
+        trace!(msg = format!("{res_records:?}"));
         if res_records.iter().any(Result::is_err) {
             Err(res_records
                 .iter()
@@ -447,15 +447,15 @@ impl ProfileBuilder {
             return None;
         }
 
-        if let Some((_, wrapper)) = self.other_cols.iter().find(|(col_pos, _)| pos.eq(col_pos)) {
-            Some(wrapper.clone())
-        } else if let Some(wrapper) = self.expense_col.clone().and_then(|v| v.get_from_pos(pos)) {
-            Some(wrapper)
-        } else if let Some(wrapper) = self.datetime_col.clone().and_then(|v| v.get_from_pos(pos)) {
-            Some(wrapper)
-        } else {
-            None
-        }
+        self.other_cols
+            .iter()
+            .find(|(col_pos, _)| pos.eq(col_pos))
+            .map(|(_, wrapper)| wrapper.clone())
+            .or(self
+                .expense_col
+                .clone()
+                .and_then(|v| v.get_from_pos(pos))
+                .or(self.datetime_col.clone().and_then(|v| v.get_from_pos(pos))))
     }
     pub fn build(self) -> Result<Profile, ()> {
         match (
@@ -496,7 +496,7 @@ impl ProfileBuilder {
         }
         Ok(())
     }
-    pub fn from_inter_state(state: &IntermediateProfileState) -> Self {
+    pub fn from_inter_state(state: &IntermediateProfileState) -> Result<Self, ()> {
         let mut builder = Self::default()
             .name(state.name.clone())
             .margins(state.margin_top, state.margin_btm);
@@ -510,15 +510,15 @@ impl ProfileBuilder {
         }
 
         if let Some(expense_col) = &state.expense_col {
-            builder.expense_col(expense_col.clone()).unwrap();
+            builder.expense_col(expense_col.clone())?;
         }
         if let Some(datetime_col) = &state.datetime_col {
-            builder.datetime_col(datetime_col.clone()).unwrap();
+            builder.datetime_col(datetime_col.clone())?;
         }
 
-        builder.other_cols(state.other_cols.clone()).unwrap();
+        builder.other_cols(state.other_cols.clone())?;
 
-        builder.default_tags(state.default_tags.clone())
+        Ok(builder.default_tags(state.default_tags.clone()))
     }
     pub fn intermediate_parse(
         &self,

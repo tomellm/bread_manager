@@ -1,4 +1,4 @@
-use tracing::warn;
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
@@ -54,7 +54,7 @@ impl Linker {
         all_records: Vec<&ExpenseRecord>,
     ) -> Vec<PossibleLink> {
         let mut possible_links = vec![];
-        for existing_record in all_records {
+        for existing_record in &all_records {
             for new_record in &new_records {
                 if *existing_record.amount() == 0 {
                     warn!(
@@ -80,6 +80,14 @@ impl Linker {
                 }
             }
         }
+        info!(
+            msg = format!(
+                "Tried to find possible links between [{}] total and [{}] new records. Found [{}]",
+                all_records.len(),
+                new_records.len(),
+                possible_links.len()
+            )
+        );
         possible_links
     }
 }

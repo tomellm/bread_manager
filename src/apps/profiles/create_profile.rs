@@ -4,7 +4,7 @@ mod other_columns;
 
 use std::sync::Arc;
 
-use basics::{default_tags, delimiter, margin_btm, margin_top, name};
+use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin_name};
 use data_communicator::buffered::{change::ChangeResult, communicator::Communicator};
 use egui::Ui;
 use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
@@ -109,7 +109,7 @@ impl CreateProfile {
         ui.horizontal(|ui| {
             expense_col(ui, state);
             datetime_col(ui, state);
-            ui.add(egui::TextEdit::singleline(&mut state.origin_name));
+            origin_name(ui, state)
         });
         ui.add_space(10.);
         ui.separator();
@@ -121,9 +121,10 @@ impl CreateProfile {
     }
 
     fn update_builder(&mut self) {
-        self.profile_builder = Arc::new(ProfileBuilder::from_inter_state(
-            &self.intermediate_profile_state,
-        ));
+        let profile = ProfileBuilder::from_inter_state(&self.intermediate_profile_state);
+        if let Ok(profile) = profile {
+            self.profile_builder = Arc::new(profile);
+        }
     }
 
     fn save_profile(&mut self) -> Result<impl FnOnce() -> ImmediateValuePromise<ChangeResult>, ()> {

@@ -68,11 +68,46 @@ pub trait IntoChangeResult {
     fn into_change_result(self) -> ChangeResult;
 }
 
-impl<R> IntoChangeResult for Result<SqliteQueryResult, R> {
+impl IntoChangeResult for Result<SqliteQueryResult, sqlx::Error> {
     fn into_change_result(self) -> ChangeResult {
         match self {
             Ok(_) => ChangeResult::Success,
-            Err(_) => ChangeResult::Error(ChangeError::DefaultError),
+            Err(err) => ChangeResult::Error(ChangeError::DatabaseError(format!("{err:?}"))),
+        }
+    }
+}
+
+impl IntoChangeResult for Result<(), sqlx::Error> {
+    fn into_change_result(self) -> ChangeResult {
+        match self {
+            Ok(()) => ChangeResult::Success,
+            Err(err) => ChangeResult::Error(ChangeError::DatabaseError(format!("{err:?}"))),
+        }
+    }
+}
+
+impl IntoChangeResult for Vec<ChangeResult> {
+    fn into_change_result(self) -> ChangeResult {
+        let (_, errors): (Vec<_>, Vec<_>) = self.into_iter().partition(|res| {
+            match res {
+                ChangeResult::Success => true,
+                ChangeResult::Error(_) => false,
+            }
+        });
+
+        if !errors.is_empty() {
+            return ChangeResult::Error(ChangeError::DatabaseError(format!("{errors:?}")));
+        }
+
+        ChangeResult::Success
+    }
+}
+
+impl IntoChangeResult for Result<SqliteQueryResult, ()> {
+    fn into_change_result(self) -> ChangeResult {
+        match self {
+            Ok(_) => ChangeResult::Success,
+            Err(()) => ChangeResult::Error(ChangeError::DefaultError),
         }
     }
 }

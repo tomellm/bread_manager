@@ -202,7 +202,6 @@ impl ExpenseRecordBuilder {
         self.origin = origin;
     }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
-        println!("{:?}, {:?}", self.amount, self.datetime);
         match (self.amount, self.datetime) {
             (Some(amount), Some(datetime)) => Ok(ExpenseRecord::new(
                 amount,

@@ -87,7 +87,10 @@ pub struct DbRecordsInitArgs {
 
 impl From<(&Arc<Pool<Sqlite>>, bool)> for DbRecordsInitArgs {
     fn from(value: (&Arc<Pool<Sqlite>>, bool)) -> Self {
-        Self { pool: value.0.clone(), drop: value.1 }
+        Self {
+            pool: value.0.clone(),
+            drop: value.1,
+        }
     }
 }
 
@@ -123,7 +126,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
             Self { pool }
         }
     }
-    fn update(
+    fn insert(
         &mut self,
         value: &ExpenseRecord,
     ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
@@ -149,7 +152,7 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                 .into_change_result()
         }
     }
-    fn update_many(
+    fn insert_many(
         &mut self,
         values: &[ExpenseRecord],
     ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
@@ -174,6 +177,85 @@ impl Storage<Uuid, ExpenseRecord> for DbRecords {
                         .push_bind(value.tags)
                         .push_bind(value.origin)
                         .push_bind(value.data);
+                },
+            )
+            .await
+            .into_change_result()
+        }
+    }
+    fn update(
+        &mut self,
+        value: &ExpenseRecord,
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let record = DbRecord::from_record(value);
+        async move {
+            sqlx::query!(
+                r#"
+                update
+                    expense_records
+                set
+                    datetime_created = ?,
+                    amount = ?,
+                    datetime = ?,
+                    description = ?,
+                    description_container = ?,
+                    tags = ?,
+                    origin = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                record.datetime_created,
+                record.amount,
+                record.datetime,
+                record.description,
+                record.description_container,
+                record.tags,
+                record.origin,
+                record.data,
+                record.uuid,
+            )
+            .execute(&*pool)
+            .await
+            .into_change_result()
+        }
+    }
+    fn update_many(
+        &mut self,
+        values: &[ExpenseRecord],
+    ) -> impl storage::Future<data_communicator::buffered::change::ChangeResult> {
+        let pool = self.pool();
+        let records = values.iter().map(DbRecord::from_record).collect::<Vec<_>>();
+        async move {
+            utils::transactional_execute_queries(
+                pool,
+                r#"
+                update
+                    expense_records
+                set
+                    datetime_created = ?,
+                    amount = ?,
+                    datetime = ?,
+                    description = ?,
+                    description_container = ?,
+                    tags = ?,
+                    origin = ?,
+                    data = ?
+                where
+                    uuid = ?
+                "#,
+                records,
+                |builder, value| {
+                    builder
+                        .bind(value.datetime_created)
+                        .bind(value.amount)
+                        .bind(value.description)
+                        .bind(value.description_container)
+                        .bind(value.tags)
+                        .bind(value.origin)
+                        .bind(value.data)
+                        .bind(value.uuid)
                 },
             )
             .await
