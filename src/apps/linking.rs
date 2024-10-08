@@ -1,27 +1,32 @@
 use core::f64;
 use std::{collections::HashMap, f64::consts::E};
 
-use chrono::Duration;
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
 use egui::{
-    CentralPanel, Color32, Context, Frame, Label, Response, RichText, ScrollArea, Sense, SidePanel,
-    Ui, UiBuilder, Widget,
+    CentralPanel, Color32, Context, Frame, Grid, Label, Response, RichText, ScrollArea, Sense,
+    SidePanel, Ui, UiBuilder, Widget,
 };
-use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
-use lazy_async_promise::ImmediateValuePromise;
+use egui_light_states::{
+    default_promise_await::DefaultCreatePromiseAwait, future_await::FutureAwait, UiStates,
+};
+use lazy_async_promise::{BoxedSendError, ImmediateValuePromise};
 use tracing::info;
 use uuid::Uuid;
 
 use crate::{
     components::{expense_record::RecordListView, option_display::OptionDisplay},
-    model::{linker::PossibleLink, records::ExpenseRecord},
+    model::{
+        linker::{Link, PossibleLink},
+        records::ExpenseRecord,
+    },
 };
 
 use super::utils::{drag_int, drag_zero_to_one};
 
 pub struct Linking {
     records: Communicator<Uuid, ExpenseRecord>,
+    links: Communicator<Uuid, Link>,
     possible_links: Communicator<Uuid, PossibleLink>,
     selected_link: Option<PossibleLink>,
     state: UiStates,
@@ -49,24 +54,20 @@ impl App for Linking {
             CentralPanel::default().show_inside(ui, |ui| {
                 ui.horizontal(|ui| {
                     drag_int(ui, &mut self.offset_days);
-                    ui.add(
-                        egui::DragValue::new(&mut self.falloff_steepness)
-                            .speed(0.001)
-                            .max_decimals(4)
-                            .range(-10f64..=1f64),
-                    );
+                    drag_zero_to_one(ui, &mut self.falloff_steepness);
                     if ui.button("recalk probability").clicked() {
                         let promise = self.calculate_probability();
                         self.state
-                            .default_promise_await("recalculate_probability".into())
-                            .init_ui(|_, set_pomise| {
-                                set_pomise(promise);
-                            })
-                            .show(ui);
+                            .set_future("recalculate_probability")
+                            .set(promise);
                     }
+                    self.state
+                        .future_status::<()>("recalculate_probability")
+                        .default()
+                        .show(ui);
                 });
                 ui.separator();
-                if let Some(link) = &self.selected_link {
+                if let Some(link) = self.selected_link.clone() {
                     self.view_selected_link(ui, link)
                 } else {
                     ui.label("No Link selected, click to select")
@@ -79,14 +80,17 @@ impl App for Linking {
 impl Linking {
     pub fn new(
         records: Communicator<Uuid, ExpenseRecord>,
+        links: Communicator<Uuid, Link>,
         mut possible_links: Communicator<Uuid, PossibleLink>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let _ = records.query_future(QueryType::All).await;
+            let _ = links.query_future(QueryType::All).await;
             let _ = possible_links.query_future(QueryType::All).await;
             possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
                 records,
+                links,
                 possible_links,
                 selected_link: None,
                 state: UiStates::default(),
@@ -148,15 +152,50 @@ impl Linking {
         }
     }
 
-    fn view_selected_link(&self, ui: &mut Ui, link: &PossibleLink) -> Response {
+    fn view_selected_link(&mut self, ui: &mut Ui, link: PossibleLink) -> Response {
         ui.group(|ui| {
-            ui.label(link.uuid.to_string());
-            ui.label(link.positive.to_string());
-            ui.label(link.negative.to_string());
-            ui.label(link.probability.to_string());
+            Grid::new("selected_link_view").show(ui, |ui| {
+                ui.label("Link Uuid:");
+                ui.label(format!("{}", link.uuid));
+                ui.end_row();
+
+                ui.label("Negative Side Uuid:");
+                ui.label(format!("{}", *link.negative));
+                ui.end_row();
+
+                ui.label("Positive Side Uuid:");
+                ui.label(format!("{}", *link.positive));
+                ui.end_row();
+
+                ui.label("Probability of beeing correct:");
+                ui.label(format!("{:.2}%", link.probability * 100.));
+                ui.end_row();
+            });
             ui.horizontal(|ui| {
-                ui.group(|ui| self.view_record(ui, &link.negative));
-                ui.group(|ui| self.view_record(ui, &link.positive));
+                ui.vertical_centered(|ui| {
+                    ui.group(|ui| {
+                        self.view_record(ui, &link.negative);
+                    });
+                });
+                ui.vertical_centered(|ui| {
+                    ui.group(|ui| {
+                        self.view_record(ui, &link.positive);
+                    });
+                });
+            });
+            ui.horizontal(|ui| {
+                if ui.button("save").clicked() {
+                    let delete_future = self.possible_links.delete_future(link.uuid);
+                    let create_future = self.links.insert_future(link.into());
+                    self.state.set_future("save_possible_link").set(async move {
+                        let _ = create_future.await;
+                        let _ = delete_future.await;
+                    });
+                }
+                self.state
+                    .future_status::<()>("save_possible_link")
+                    .default()
+                    .show(ui);
             });
         })
         .response
@@ -214,9 +253,9 @@ impl Linking {
                         return (link.uuid, f64::INFINITY);
                     };
 
-                    let time_distance =
-                        (*positive.datetime() - *negative.datetime()).num_days().abs() as f64;
-                    info!("distance {time_distance}");
+                    let time_distance = (*positive.datetime() - *negative.datetime())
+                        .num_days()
+                        .abs() as f64;
                     (link.uuid, time_distance)
                 })
                 .collect::<HashMap<_, _>>();

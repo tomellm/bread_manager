@@ -1,4 +1,5 @@
 use egui::{Grid, Widget};
+use tracing::info;
 
 use crate::model::records::ExpenseRecord;
 
@@ -53,6 +54,14 @@ impl<'a> Widget for RecordListView<'a> {
 
                 ui.label("DateTime created");
                 ui.label(r.created().to_string());
+                ui.end_row();
+
+                if ui.button("show desc").clicked() {
+                    info!("{:?}", r.description_container())
+                }
+                if ui.button("show cols").clicked() {
+                    info!("{:?}", r.data())
+                }
                 ui.end_row();
             })
             .response

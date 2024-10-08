@@ -260,7 +260,12 @@ impl State {
                 profiles: Profiles::init(rx_p, [db.profiles_signal(), db.profiles_signal()]).into(),
                 table_view: TableView::init(db.records_signal()).into(),
                 visualizations: Visualizations::init(db.records_signal()).into(),
-                linking: Linking::new(db.records_signal(), db.possible_links_signal()).into(),
+                linking: Linking::new(
+                    db.records_signal(),
+                    db.links_signal(),
+                    db.possible_links_signal(),
+                )
+                .into(),
                 selected_anchor: Anchor::Visualizations,
                 db,
                 fps: Fps::default(),

@@ -1,3 +1,4 @@
+pub mod link;
 pub mod possible_links;
 pub mod profiles;
 pub mod records;
@@ -11,6 +12,7 @@ use data_communicator::buffered::{
     container::DataContainer,
     query::QueryError,
 };
+use link::DbLinks;
 use possible_links::DbPossibleLinks;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteQueryResult},
@@ -18,13 +20,14 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-use crate::model::{linker::PossibleLink, profiles::Profile, records::ExpenseRecord};
+use crate::model::{linker::{Link, PossibleLink}, profiles::Profile, records::ExpenseRecord};
 
 use self::{profiles::DbProfiles, records::DbRecords};
 
 pub struct DB {
     profiles_container: DataContainer<Uuid, Profile, DbProfiles>,
     records_container: DataContainer<Uuid, ExpenseRecord, DbRecords>,
+    links_container: DataContainer<Uuid, Link, DbLinks>,
     possible_links_container: DataContainer<Uuid, PossibleLink, DbPossibleLinks>,
 }
 
@@ -37,10 +40,12 @@ impl DB {
         let pool = Arc::new(SqlitePool::connect_with(options).await.map_err(|_| ())?);
         let profiles_container = DataContainer::new((&pool, drop).into()).await;
         let records_container = DataContainer::new((&pool, drop).into()).await;
+        let links_container = DataContainer::new((&pool, drop).into()).await;
         let possible_links_container = DataContainer::new((&pool, drop).into()).await;
         Ok(Self {
             profiles_container,
             records_container,
+            links_container,
             possible_links_container,
         })
     }
@@ -53,6 +58,10 @@ impl DB {
         self.records_container.communicator()
     }
 
+    pub fn links_signal(&mut self) -> Communicator<Uuid, Link> {
+        self.links_container.communicator()
+    }
+
     pub fn possible_links_signal(&mut self) -> Communicator<Uuid, PossibleLink> {
         self.possible_links_container.communicator()
     }
@@ -60,6 +69,7 @@ impl DB {
     pub fn state_update(&mut self) {
         self.profiles_container.state_update();
         self.records_container.state_update();
+        self.links_container.state_update();
         self.possible_links_container.state_update();
     }
 }

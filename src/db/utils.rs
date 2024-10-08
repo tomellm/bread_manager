@@ -56,7 +56,6 @@ pub async fn transactional_execute_queries<'args, Value>(
     for value in values {
         let builder = sqlx::query(query);
         let query_result = push_fn(builder, value).execute(&mut *connection).await;
-        println!("{:?}", query_result);
         if query_result.is_err() {
             sqlx::query!("rollback").execute(&mut *connection).await?;
             return query_result.map(|_| ());
