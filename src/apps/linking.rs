@@ -8,10 +8,9 @@ use egui::{
     SidePanel, Ui, UiBuilder, Widget,
 };
 use egui_light_states::{
-    default_promise_await::DefaultCreatePromiseAwait, future_await::FutureAwait, UiStates,
+    future_await::FutureAwait, UiStates,
 };
-use lazy_async_promise::{BoxedSendError, ImmediateValuePromise};
-use tracing::info;
+use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
 
 use crate::{
