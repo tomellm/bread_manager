@@ -1,14 +1,17 @@
 use core::f64;
 use std::{collections::HashMap, f64::consts::E};
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use data_communicator::buffered::{
+    change::ChangeResult, communicator::Communicator, query::QueryType, GetKeys,
+};
 use eframe::App;
 use egui::{
     CentralPanel, Color32, Context, Frame, Grid, Label, Response, RichText, ScrollArea, Sense,
     SidePanel, Ui, UiBuilder, Widget,
 };
 use egui_light_states::{
-    future_await::FutureAwait, UiStates,
+    default_promise_await::DefaultCreatePromiseAwait, future_await::FutureAwait,
+    promise_await::CreatePromiseAwait, UiStates,
 };
 use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
@@ -37,6 +40,7 @@ impl App for Linking {
     fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
         self.possible_links.state_update();
         self.records.state_update();
+        self.links.state_update();
 
         CentralPanel::default().show(ctx, |ui| {
             SidePanel::left("possible_link_scroll_area")
@@ -51,6 +55,34 @@ impl App for Linking {
                     });
                 });
             CentralPanel::default().show_inside(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if ui.button("delete all possible links").clicked() {
+                        let delete_future = self
+                            .possible_links
+                            .delete_many(self.possible_links.data_map().keys().cloned().collect());
+                        self.state
+                            .set_future("delete_all_possible_links")
+                            .set(delete_future);
+                    }
+                    self.state
+                        .future_status::<ChangeResult>("delete_all_possible_links")
+                        .default()
+                        .show(ui);
+
+                    if ui.button("delete all links").clicked() {
+                        let delete_future = self
+                            .links
+                            .delete_many(self.links.data_map().keys().cloned().collect());
+                        self.state.set_future("delete_all_links").set(delete_future);
+                    }
+                    self.state
+                        .future_status::<ChangeResult>("delete_all_links")
+                        .default()
+                        .show(ui);
+                });
+
+                ui.separator();
+                ui.heading("Probability Recalculation");
                 ui.horizontal(|ui| {
                     drag_int(ui, &mut self.offset_days);
                     drag_zero_to_one(ui, &mut self.falloff_steepness);
