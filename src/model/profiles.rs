@@ -1,94 +1,18 @@
-use eframe::Result;
+mod error;
+mod builder;
+mod columns;
+
+use error::ProfileError;
 use std::collections::{HashMap, HashSet};
 use tracing::trace;
 
 use bincode as bc;
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
 
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
 //IDEA: change to this if nessesary https://docs.rs/lexical/latest/lexical/
-fn to_num(str: &str) -> Result<f64, ProfileError> {
-    str.replace('.', "")
-        .replace(',', ".")
-        .parse::<f64>()
-        .or(Err(ProfileError::number(str, "f64")))
-}
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Income;
-impl Income {
-    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
-        if str.is_empty() {
-            return Ok(0);
-        }
-        Ok((to_num(str)? * 100.0) as usize)
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Expense;
-impl Expense {
-    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
-        if str.is_empty() {
-            return Ok(0);
-        }
-        Ok((to_num(str)? * -100.0) as usize)
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct PosExpense;
-impl PosExpense {
-    pub fn parse_str(str: &str) -> Result<usize, ProfileError> {
-        if str.is_empty() {
-            return Ok(0);
-        }
-        Ok((to_num(str)? * 100.0) as usize)
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Movement;
-impl Movement {
-    pub fn parse_str(str: &str) -> Result<isize, ProfileError> {
-        if str.is_empty() {
-            return Ok(0);
-        }
-        Ok((to_num(str)? * 100.0) as isize)
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ExpenseDateTime(pub String);
-impl ExpenseDateTime {
-    pub fn parse_str(&self, str: &str) -> Result<DateTime<Local>, ProfileError> {
-        NaiveDateTime::parse_from_str(str, &self.0)
-            .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap())
-            .or(Err(ProfileError::date(str, &self.0)))
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ExpenseDate(pub String);
-impl ExpenseDate {
-    pub fn parse_str(&self, str: &str) -> Result<NaiveDate, ProfileError> {
-        NaiveDate::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct ExpenseTime(pub String);
-impl ExpenseTime {
-    pub fn parse_str(&self, str: &str) -> Result<NaiveTime, ProfileError> {
-        NaiveTime::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
-    }
-}
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Description(pub String);
-
-#[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
-pub struct Other(pub String);
-
-pub trait Parsable {
-    fn to_expense_data(&self, str: String) -> Result<ExpenseData, ProfileError>;
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
@@ -167,7 +91,7 @@ impl Profile {
                 .as_ref()
                 .unwrap_err()
                 .clone())
-        } else {
+ } else {
             Ok(res_records.into_iter().map(Result::unwrap).collect())
         }
     }
@@ -387,222 +311,6 @@ impl std::fmt::Display for DateTimeColumn {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ProfileBuilder {
-    name: Option<String>,
-    col_positions: HashSet<usize>,
-    expense_col: Option<ExpenseColumn>,
-    datetime_col: Option<DateTimeColumn>,
-    other_cols: Vec<(usize, ParsableWrapper)>,
-    margins: Option<(usize, usize)>,
-    delimiter: Option<char>,
-    default_tags: Vec<String>,
-    origin_name: Option<String>,
-}
-
-impl ProfileBuilder {
-    pub fn from_marg_del(top: usize, btm: usize, del: char) -> Self {
-        Self {
-            margins: Some((top, btm)),
-            delimiter: Some(del),
-            ..Default::default()
-        }
-    }
-    pub fn name(mut self, val: String) -> Self {
-        self.name = Some(val);
-        self
-    }
-    pub fn expense_col(&mut self, val: ExpenseColumn) -> Result<(), ()> {
-        self.add_many_pos(val.get_positions())?;
-        self.expense_col = Some(val);
-        Ok(())
-    }
-    pub fn datetime_col(&mut self, val: DateTimeColumn) -> Result<(), ()> {
-        self.add_many_pos(val.get_positions())?;
-        self.datetime_col = Some(val);
-        Ok(())
-    }
-    pub fn other_cols(&mut self, vals: Vec<(usize, ParsableWrapper)>) -> Result<(), ()> {
-        self.add_many_pos(vals.iter().map(|t| t.0).collect::<Vec<_>>())?;
-        self.other_cols = vals;
-        Ok(())
-    }
-    pub fn margins(mut self, top: usize, btm: usize) -> Self {
-        self.margins = Some((top, btm));
-        self
-    }
-    pub fn delimiter(mut self, delimiter: char) -> Self {
-        self.delimiter = Some(delimiter);
-        self
-    }
-    pub fn default_tags(mut self, default_tags: Vec<String>) -> Self {
-        self.default_tags = default_tags;
-        self
-    }
-    pub fn origin_name(&mut self, origin_name: String) {
-        self.origin_name = Some(origin_name);
-    }
-    pub fn get_from_pos(&self, pos: usize) -> Option<ParsableWrapper> {
-        if !self.col_positions.contains(&pos) {
-            return None;
-        }
-
-        self.other_cols
-            .iter()
-            .find(|(col_pos, _)| pos.eq(col_pos))
-            .map(|(_, wrapper)| wrapper.clone())
-            .or(self
-                .expense_col
-                .clone()
-                .and_then(|v| v.get_from_pos(pos))
-                .or(self.datetime_col.clone().and_then(|v| v.get_from_pos(pos))))
-    }
-    pub fn build(self) -> Result<Profile, ()> {
-        match (
-            self.name,
-            self.expense_col,
-            self.datetime_col,
-            self.margins,
-            self.delimiter,
-            self.origin_name,
-        ) {
-            (
-                Some(name),
-                Some(expense_col),
-                Some(datetime_col),
-                Some(margins),
-                Some(delimiter),
-                Some(origin_name),
-            ) => Ok(Profile::new(
-                name,
-                expense_col,
-                datetime_col,
-                self.other_cols,
-                margins,
-                delimiter,
-                self.default_tags,
-                origin_name,
-            )),
-            _ => Err(()),
-        }
-    }
-
-    fn add_many_pos(&mut self, pos: Vec<usize>) -> Result<(), ()> {
-        if pos.iter().any(|pos| self.col_positions.contains(pos)) {
-            return Err(());
-        }
-        for pos in pos {
-            self.col_positions.insert(pos);
-        }
-        Ok(())
-    }
-    pub fn from_inter_state(state: &IntermediateProfileState) -> Result<Self, ()> {
-        let mut builder = Self::default()
-            .name(state.name.clone())
-            .margins(state.margin_top, state.margin_btm);
-
-        if !state.origin_name.is_empty() {
-            builder.origin_name(state.origin_name.clone());
-        }
-
-        if let Some(delimiter) = state.delimiter.chars().collect::<Vec<_>>().first() {
-            builder = builder.delimiter(*delimiter);
-        }
-
-        if let Some(expense_col) = &state.expense_col {
-            builder.expense_col(expense_col.clone())?;
-        }
-        if let Some(datetime_col) = &state.datetime_col {
-            builder.datetime_col(datetime_col.clone())?;
-        }
-
-        builder.other_cols(state.other_cols.clone())?;
-
-        Ok(builder.default_tags(state.default_tags.clone()))
-    }
-    pub fn intermediate_parse(
-        &self,
-        index: usize,
-        row: String,
-        total_len: usize,
-    ) -> Result<IntermediateParse, ProfileError> {
-        if let Some((top, btm)) = self.margins {
-            if index < top || index >= (total_len - btm) {
-                return Ok(IntermediateParse::None);
-            }
-        }
-        let Some(delimiter) = self.delimiter else {
-            return Ok(IntermediateParse::Rows(Ok(row)));
-        };
-        let mut row = row
-            .split(delimiter)
-            .map(|val| Ok(val.to_string()))
-            .collect::<Vec<_>>();
-
-        let mut other_cols = self.other_cols.clone();
-        if let Some(expense_col) = &self.expense_col {
-            other_cols.extend(expense_col.clone().into_cols());
-        }
-        if let Some(datetime_col) = &self.datetime_col {
-            other_cols.extend(datetime_col.clone().into_cols());
-        }
-
-        for (pos, el) in other_cols {
-            let Some(Ok(str)) = row.get(pos) else {
-                return Err(ProfileError::ColumnWidth(format!("{pos} is not in bounds")));
-            };
-            let new_str = el
-                .to_expense_data(str.clone())
-                .map(|val| val.to_string())
-                .map_err(|err| format!("{err:?}"));
-            let _ = row.remove(pos);
-            row.insert(pos, new_str);
-        }
-
-        Ok(IntermediateParse::RowsAndCols(row))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum IntermediateParse {
-    None,
-    Rows(Result<String, String>),
-    RowsAndCols(Vec<Result<String, String>>),
-}
-
-#[derive(Default, Clone)]
-pub struct IntermediateProfileState {
-    pub name: String,
-    pub margin_top: usize,
-    pub margin_btm: usize,
-    pub delimiter: String,
-    pub expense_col: Option<ExpenseColumn>,
-    pub datetime_col: Option<DateTimeColumn>,
-    pub other_cols: Vec<(usize, ParsableWrapper)>,
-    pub default_tags: Vec<String>,
-    pub origin_name: String,
-}
-
-impl IntermediateProfileState {
-    pub fn from_profile(profile: &Profile) -> Self {
-        Self {
-            name: profile.name.clone(),
-            margin_top: profile.margins.0,
-            margin_btm: profile.margins.1,
-            delimiter: profile.delimiter.to_string(),
-            expense_col: Some(profile.amount.clone()),
-            datetime_col: Some(profile.datetime.clone()),
-            other_cols: profile
-                .other_data
-                .iter()
-                .map(|(a, b)| (*a, b.clone()))
-                .collect(),
-            default_tags: profile.default_tags.clone(),
-            origin_name: profile.origin_name.clone(),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ParsableWrapper {
     Income(Income),
@@ -729,33 +437,4 @@ impl Parsable for Other {
     }
 }
 
-#[derive(Debug, Clone)]
-pub enum ProfileError {
-    NumberParsing(String),
-    DateParsing(String),
-    ColumnWidth(String),
-    BuildRecord(String),
-}
 
-impl ProfileError {
-    pub fn number(str: &str, n_type: &str) -> Self {
-        Self::NumberParsing(format!(
-            "Parsing this string: {str} to this type: {n_type} failed"
-        ))
-    }
-    pub fn date(str: &str, format: &str) -> Self {
-        Self::DateParsing(format!(
-            "This format: {format} does not fit this date string: {str}"
-        ))
-    }
-    pub fn width(expected: usize, actual: usize) -> Self {
-        Self::ColumnWidth(format!(
-            "The profile expects a minimum width of {expected} but got a width of {actual}"
-        ))
-    }
-    pub fn build(amount: Option<isize>, date: Option<DateTime<Local>>) -> Self {
-        Self::BuildRecord(format!(
-            "One of these two is not present: {amount:?} {date:?}"
-        ))
-    }
-}
