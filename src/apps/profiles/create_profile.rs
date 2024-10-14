@@ -6,15 +6,18 @@ use std::sync::Arc;
 
 use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin_name};
 use data_communicator::buffered::{change::ChangeResult, communicator::Communicator};
-use egui::Ui;
-use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
+use egui::{Spinner, Ui};
+use egui_light_states::{promise_await::{CreatePromiseAwait, DoneResponse}, UiStates};
 use lazy_async_promise::ImmediateValuePromise;
 use main_columns::{datetime_col, expense_col};
 use other_columns::other_cols;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::model::profiles::{builder::{IntermediateProfileState, ProfileBuilder}, Profile};
+use crate::model::profiles::{
+    builder::{IntermediateProfileState, ProfileBuilder},
+    Profile,
+};
 
 use super::parser::ProfilePreview;
 
@@ -52,16 +55,22 @@ impl CreateProfile {
             self.update_builder();
             self.preview.update_parse_test(&self.profile_builder);
         }
-        ui.add_sized(
-            [ui.available_width(), ui.available_height() - 50.],
-            |ui: &mut Ui| self.preview.profile_preview(ui, &self.profile_builder),
-        );
+
+        const MIN_PREVIEW_HEIGHT: f32 = 200.;
+        let preview_height = if ui.available_height() > MIN_PREVIEW_HEIGHT {
+            ui.available_height()
+        } else {
+            MIN_PREVIEW_HEIGHT
+        };
+        ui.add_sized([ui.available_width(), preview_height], |ui: &mut Ui| {
+            self.preview.profile_preview(ui, &self.profile_builder)
+        });
 
         ui.add_sized([ui.available_width(), 50.], |ui: &mut Ui| {
-            ui.centered_and_justified(|ui| {
+            ui.vertical_centered_justified(|ui| {
                 let save_profile = self.save_profile();
                 self.ui_states
-                    .default_promise_await("save profile".into())
+                    .promise_await("save profile".into())
                     .init_ui(|ui, set_promise| match save_profile {
                         Ok(save_profile_action) => {
                             if ui.button("save profile").clicked() {
@@ -72,6 +81,10 @@ impl CreateProfile {
                             ui.label("profile is incorrect and cannot be saved");
                         }
                     })
+                .waiting_ui(|ui| {
+                    ui.add(Spinner::new());
+                })
+                .done_ui(|_, _| DoneResponse::<ChangeResult>::Clear)
                     .show(ui);
             })
             .response

@@ -10,9 +10,7 @@ use tracing::trace;
 use bincode as bc;
 use sqlx::types::Uuid;
 
-use super::records::{ExpenseRecord, ExpenseRecordBuilder};
-
-//IDEA: change to this if nessesary https://docs.rs/lexical/latest/lexical/
+use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
@@ -134,7 +132,11 @@ impl Profile {
         for (index, element) in split_row.into_iter().enumerate() {
             if let Some(parser) = self.other_data.get(&index) {
                 let data = parser.to_expense_data(&element)?;
-                builder.add_data(data);
+                if let ExpenseData::Description(title, value) = data {
+                    builder.push_desc(title, value);
+                } else {
+                    builder.add_data(data);
+                }
             }
         }
         builder.default_tags(self.default_tags.clone());

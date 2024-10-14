@@ -2,17 +2,14 @@ use core::f64;
 use std::{collections::HashMap, f64::consts::E};
 
 use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType, GetKeys,
+    change::ChangeResult, communicator::Communicator, query::QueryType,
 };
 use eframe::App;
 use egui::{
     CentralPanel, Color32, Context, Frame, Grid, Label, Response, RichText, ScrollArea, Sense,
     SidePanel, Ui, UiBuilder, Widget,
 };
-use egui_light_states::{
-    default_promise_await::DefaultCreatePromiseAwait, future_await::FutureAwait,
-    promise_await::CreatePromiseAwait, UiStates,
-};
+use egui_light_states::{future_await::FutureAwait, UiStates};
 use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
 

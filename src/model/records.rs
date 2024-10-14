@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Deref};
+use std::{fmt::Display, mem, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
@@ -48,13 +48,14 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         default_tags: Vec<String>,
         origin: String,
+        description: Option<DescriptionContainer>
     ) -> Self {
         Self {
             datetime_created: Local::now(),
             uuid: ExpenseRecordUuid::new(),
             amount,
             datetime,
-            description: None,
+            description,
             data,
             tags: default_tags,
             origin,
@@ -126,11 +127,11 @@ pub enum ExpenseData {
     Expense(usize),
     Income(usize),
     Movement(isize),
-    Description(String),
     ExpenseDateTime(DateTime<Local>),
     ExpenseDate(NaiveDate),
     ExpenseTime(NaiveTime),
-    Other(String),
+    Description(String, String),
+    Other(String, String),
 }
 
 impl ExpenseData {
@@ -139,11 +140,11 @@ impl ExpenseData {
             Self::Expense(_) => "Expense",
             Self::Income(_) => "Income",
             Self::Movement(_) => "Movement",
-            Self::Description(_) => "Description",
+            Self::Description(..) => "Description",
             Self::ExpenseDateTime(_) => "ExpenseDateTime",
             Self::ExpenseDate(_) => "ExpenseDate",
             Self::ExpenseTime(_) => "ExpenseTime",
-            Self::Other(_) => "Other",
+            Self::Other(..) => "Other",
         }
     }
 
@@ -156,8 +157,8 @@ impl ExpenseData {
     pub fn mov(val: isize) -> Self {
         Self::Movement(val)
     }
-    pub fn desc(val: String) -> Self {
-        Self::Description(val)
+    pub fn desc(title: String, val: String) -> Self {
+        Self::Description(title, val)
     }
     pub fn datetime(val: DateTime<Local>) -> Self {
         Self::ExpenseDateTime(val)
@@ -168,8 +169,8 @@ impl ExpenseData {
     pub fn time(val: NaiveTime) -> Self {
         Self::ExpenseTime(val)
     }
-    pub fn other(val: String) -> Self {
-        Self::Other(val)
+    pub fn other(title: String, val: String) -> Self {
+        Self::Other(title, val)
     }
 }
 
@@ -179,11 +180,11 @@ impl Display for ExpenseData {
             Self::Expense(e) => write!(f, "{e}"),
             Self::Income(e) => write!(f, "{e}"),
             Self::Movement(e) => write!(f, "{e}"),
-            Self::Description(e) => write!(f, "{e}"),
+            Self::Description(t, e) => write!(f, "{t}, {e}"),
             Self::ExpenseDateTime(e) => write!(f, "{e}"),
             Self::ExpenseDate(e) => write!(f, "{e}"),
             Self::ExpenseTime(e) => write!(f, "{e}"),
-            Self::Other(e) => write!(f, "{e}"),
+            Self::Other(t, e) => write!(f, "{t}, {e}"),
         }
         
     }
@@ -194,6 +195,7 @@ pub struct ExpenseRecordBuilder {
     amount: Option<isize>,
     datetime: Option<DateTime<Local>>,
     data: Vec<ExpenseData>,
+    description: Option<DescriptionContainer>,
     default_tags: Vec<String>,
     origin: String,
 }
@@ -217,6 +219,13 @@ impl ExpenseRecordBuilder {
         self.datetime = Some(date.and_time(time))
             .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap());
     }
+    pub fn push_desc(&mut self, title: String, value: String) {
+        if let Some(desc) = &mut self.description {
+            desc.push_other(title, value);
+        } else {
+            self.description = Some(DescriptionContainer::new(title, value));
+        }
+    }
     pub fn add_data(&mut self, data: ExpenseData) {
         self.data.push(data);
     }
@@ -234,6 +243,7 @@ impl ExpenseRecordBuilder {
                 self.data.clone(),
                 self.default_tags.clone(),
                 self.origin.clone(),
+                self.description.clone().clone()
             )),
             _ => Err(ProfileError::build(self.amount, self.datetime)),
         }
@@ -242,6 +252,7 @@ impl ExpenseRecordBuilder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Description {
+    title: String,
     desc: String,
     datetime_created: DateTime<Local>,
 }
@@ -253,8 +264,9 @@ pub struct DescriptionContainer {
 }
 
 impl Description {
-    pub fn new(desc: String) -> Self {
+    pub fn new(title: String, desc: String) -> Self {
         Self {
+            title,
             desc,
             datetime_created: Local::now(),
         }
@@ -262,11 +274,23 @@ impl Description {
 }
 
 impl DescriptionContainer {
-    pub fn new(desc: String) -> Self {
+    pub fn new(title: String, desc: String) -> Self {
         Self {
-            current: Description::new(desc),
+            current: Description::new(title, desc),
             history: vec![],
         }
+    }
+    pub fn push_current(&mut self, title: String, desc: String) {
+        let old_current = mem::replace(&mut self.current, Description::new(title, desc));
+        self.history.push(old_current);
+    }
+    pub fn push_other(&mut self, title: String, desc: String) {
+        self.history.push(Description::new(title, desc));
+    }
+    pub fn set_current(&mut self, index: usize) {
+        let new_current = self.history.remove(index);
+        let old_current = mem::replace(&mut self.current, new_current);
+        self.history.push(old_current);
     }
 }
 
