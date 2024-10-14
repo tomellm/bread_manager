@@ -1,10 +1,7 @@
 use egui::{Layout, Ui};
 
 use crate::{
-    apps::utils::{drag_int, text},
-    model::profiles::{
-        ExpenseDate, ExpenseDateTime, ExpenseTime, IntermediateProfileState, ParsableWrapper,
-    },
+    apps::utils::{drag_int, text}, model::profiles::{builder::IntermediateProfileState, columns::{time::{ExpenseDate, ExpenseDateTime, ExpenseTime}, ParsableWrapper}},
 };
 
 pub(super) fn other_cols(

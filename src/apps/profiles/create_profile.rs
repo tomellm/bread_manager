@@ -14,7 +14,7 @@ use other_columns::other_cols;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::model::profiles::{IntermediateProfileState, Profile, ProfileBuilder};
+use crate::model::profiles::{builder::{IntermediateProfileState, ProfileBuilder}, Profile};
 
 use super::parser::ProfilePreview;
 
@@ -130,7 +130,7 @@ impl CreateProfile {
     fn save_profile(&mut self) -> Result<impl FnOnce() -> ImmediateValuePromise<ChangeResult>, ()> {
         self.update_builder();
         let profile = (*self.profile_builder).clone().build().map_err(|()| {})?;
-        let mut setter = self.profiles_communicator.update_action();
+        let mut setter = self.profiles_communicator.insert_action();
         Ok(move || ImmediateValuePromise::new(setter(profile)))
     }
 }

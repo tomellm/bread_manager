@@ -4,13 +4,8 @@ use crate::model::records::ExpenseRecord;
 
 use super::{box_dyn, DataFilter, TableFilter};
 
+#[derive(Default)]
 pub struct AmountFilter(Option<AmountFilterType>);
-
-impl Default for AmountFilter {
-    fn default() -> Self {
-        Self(None)
-    }
-}
 
 #[derive(Clone)]
 enum AmountFilterType {

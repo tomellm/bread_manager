@@ -1,8 +1,7 @@
 use egui::Ui;
 
 use crate::{
-    apps::utils::{drag_int, single_char, text},
-    model::profiles::IntermediateProfileState,
+    apps::utils::{drag_int, single_char, text}, model::profiles::builder::IntermediateProfileState,
 };
 
 pub(super) fn name(

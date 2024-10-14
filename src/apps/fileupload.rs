@@ -160,8 +160,8 @@ impl FileUpload {
         let records = self.parsed_records.drain_records();
         let links = Linker::find_links(records.iter().collect::<Vec<_>>(), self.records.data());
 
-        let records_future = self.records.update_many_future(records);
-        let links_future = self.possible_links.update_many_future(links);
+        let records_future = self.records.insert_many_future(records);
+        let links_future = self.possible_links.insert_many_future(links);
         async move {
             let _ = records_future.await;
             let _ = links_future.await;

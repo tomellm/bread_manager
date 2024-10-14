@@ -43,7 +43,6 @@ impl TableColumns {
         self.amount.display_value(record, ui);
         self.description.display_value(record, ui);
         self.tags.display_value(record, ui);
-        self.description.display_value(record, ui);
         self.origin.display_value(record, ui);
     }
 }
