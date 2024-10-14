@@ -1,7 +1,15 @@
 use egui::{Layout, Ui};
 
 use crate::{
-    apps::utils::{drag_int, text}, model::profiles::{builder::IntermediateProfileState, columns::{time::{ExpenseDate, ExpenseDateTime, ExpenseTime}, ParsableWrapper}},
+    apps::utils::{drag_int, text},
+    model::profiles::{
+        builder::IntermediateProfileState,
+        columns::{
+            other::{Description, Other},
+            time::{ExpenseDate, ExpenseDateTime, ExpenseTime},
+            ParsableWrapper,
+        },
+    },
 };
 
 pub(super) fn other_cols(
@@ -25,17 +33,41 @@ pub(super) fn other_cols(
                             .show_ui(ui, |ui| {
                                 ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
                                 ui.selectable_value(col_type, ParsableWrapper::income(), "Income");
-                                ui.selectable_value(col_type, ParsableWrapper::expense(), "Expense");
-                                ui.selectable_value(col_type, ParsableWrapper::posexpense(), "PosExpense");
-                                ui.selectable_value(col_type, ParsableWrapper::movement(), "Movement");
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::expense(),
+                                    "Expense",
+                                );
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::posexpense(),
+                                    "PosExpense",
+                                );
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::movement(),
+                                    "Movement",
+                                );
                                 ui.selectable_value(
                                     col_type,
                                     ParsableWrapper::expensedatetime(),
                                     "ExpenseDatetime",
                                 );
-                                ui.selectable_value(col_type, ParsableWrapper::expensedate(), "ExpenseDate");
-                                ui.selectable_value(col_type, ParsableWrapper::expensetime(), "ExpenseTime");
-                                ui.selectable_value(col_type, ParsableWrapper::description(), "Description");
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::expensedate(),
+                                    "ExpenseDate",
+                                );
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::expensetime(),
+                                    "ExpenseTime",
+                                );
+                                ui.selectable_value(
+                                    col_type,
+                                    ParsableWrapper::description(),
+                                    "Description",
+                                );
                                 ui.selectable_value(col_type, ParsableWrapper::other(), "Other");
                             });
                         ui.separator();
@@ -46,9 +78,11 @@ pub(super) fn other_cols(
                                     drag_int(ui, col_pos);
                                 });
                                 match col_type {
-                                    ParsableWrapper::ExpenseDateTime(ExpenseDateTime(f))
-                                        | ParsableWrapper::ExpenseDate(ExpenseDate(f))
-                                        | ParsableWrapper::ExpenseTime(ExpenseTime(f)) => text(ui, f),
+                                    ParsableWrapper::Description(Description(s))
+                                    | ParsableWrapper::Other(Other(s))
+                                    | ParsableWrapper::ExpenseDateTime(ExpenseDateTime(s))
+                                    | ParsableWrapper::ExpenseDate(ExpenseDate(s))
+                                    | ParsableWrapper::ExpenseTime(ExpenseTime(s)) => text(ui, s),
                                     _ => (),
                                 }
                             })
@@ -62,7 +96,7 @@ pub(super) fn other_cols(
                         });
                     });
                 })
-                    .response
+                .response
             });
             retain
         });
