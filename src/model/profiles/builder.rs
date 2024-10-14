@@ -1,8 +1,6 @@
-use eframe::Result;
-use error::ProfileError;
 use std::collections::HashSet;
 
-use super::{DateTimeColumn, ExpenseColumn, Parsable, ParsableWrapper, Profile};
+use super::{error::ProfileError, DateTimeColumn, ExpenseColumn, ParsableWrapper, Profile};
 
 #[derive(Debug, Clone, Default)]
 pub struct ProfileBuilder {
@@ -169,7 +167,7 @@ impl ProfileBuilder {
                 return Err(ProfileError::ColumnWidth(format!("{pos} is not in bounds")));
             };
             let new_str = el
-                .to_expense_data(str.clone())
+                .to_expense_data(str.as_str())
                 .map(|val| val.to_string())
                 .map_err(|err| format!("{err:?}"));
             let _ = row.remove(pos);

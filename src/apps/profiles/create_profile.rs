@@ -14,7 +14,7 @@ use other_columns::other_cols;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::model::profiles::{IntermediateProfileState, Profile, ProfileBuilder};
+use crate::model::profiles::{builder::{IntermediateProfileState, ProfileBuilder}, Profile};
 
 use super::parser::ProfilePreview;
 

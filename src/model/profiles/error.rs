@@ -1,5 +1,7 @@
 use chrono::{DateTime, Local};
 
+use super::columns::money::NumberFormat;
+
 #[derive(Debug, Clone)]
 pub enum ProfileError {
     NumberParsing(String),
@@ -9,9 +11,9 @@ pub enum ProfileError {
 }
 
 impl ProfileError {
-    pub fn number(str: &str, n_type: &str) -> Self {
+    pub fn number(str: &str, format: &NumberFormat) -> Self {
         Self::NumberParsing(format!(
-            "Parsing this string: {str} to this type: {n_type} failed"
+            "Parsing this string: {str} to this format: {format} failed"
         ))
     }
     pub fn date(str: &str, format: &str) -> Self {

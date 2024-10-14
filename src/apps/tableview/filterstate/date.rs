@@ -6,13 +6,8 @@ use crate::model::records::ExpenseRecord;
 
 use super::{box_dyn, DataFilter, TableFilter};
 
+#[derive(Default)]
 pub struct DateFilter(Option<DateFilterType>);
-
-impl Default for DateFilter {
-    fn default() -> Self {
-        Self(None)
-    }
-}
 
 #[derive(Clone)]
 enum DateFilterType {

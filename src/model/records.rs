@@ -4,7 +4,7 @@ use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::profiles::ProfileError;
+use super::profiles::error::ProfileError;
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct ExpenseRecordUuid(pub Uuid);
@@ -145,6 +145,31 @@ impl ExpenseData {
             Self::ExpenseTime(_) => "ExpenseTime",
             Self::Other(_) => "Other",
         }
+    }
+
+    pub fn exp(val: usize) -> Self {
+        Self::Expense(val)
+    }
+    pub fn inc(val: usize) -> Self {
+        Self::Income(val)
+    }
+    pub fn mov(val: isize) -> Self {
+        Self::Movement(val)
+    }
+    pub fn desc(val: String) -> Self {
+        Self::Description(val)
+    }
+    pub fn datetime(val: DateTime<Local>) -> Self {
+        Self::ExpenseDateTime(val)
+    }
+    pub fn date(val: NaiveDate) -> Self {
+        Self::ExpenseDate(val)
+    }
+    pub fn time(val: NaiveTime) -> Self {
+        Self::ExpenseTime(val)
+    }
+    pub fn other(val: String) -> Self {
+        Self::Other(val)
     }
 }
 

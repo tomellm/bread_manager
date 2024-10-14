@@ -8,9 +8,7 @@ use tokio::sync::mpsc;
 use tracing::trace;
 
 use crate::{
-    apps::utils::blank_option_display,
-    model::profiles::{IntermediateParse, ProfileBuilder},
-    utils::{CompressDisplayResult, CompressResult},
+    apps::utils::blank_option_display, model::profiles::builder::{IntermediateParse, ProfileBuilder}, utils::{CompressDisplayResult, CompressResult},
 };
 
 pub(super) struct ProfilePreview {
