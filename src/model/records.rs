@@ -48,13 +48,14 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         default_tags: Vec<String>,
         origin: String,
+        description: Option<DescriptionContainer>
     ) -> Self {
         Self {
             datetime_created: Local::now(),
             uuid: ExpenseRecordUuid::new(),
             amount,
             datetime,
-            description: None,
+            description,
             data,
             tags: default_tags,
             origin,
@@ -194,6 +195,7 @@ pub struct ExpenseRecordBuilder {
     amount: Option<isize>,
     datetime: Option<DateTime<Local>>,
     data: Vec<ExpenseData>,
+    description: Option<DescriptionContainer>,
     default_tags: Vec<String>,
     origin: String,
 }
@@ -217,6 +219,13 @@ impl ExpenseRecordBuilder {
         self.datetime = Some(date.and_time(time))
             .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap());
     }
+    pub fn push_desc(&mut self, title: String, value: String) {
+        if let Some(desc) = &mut self.description {
+            desc.push_other(title, value);
+        } else {
+            self.description = Some(DescriptionContainer::new(title, value));
+        }
+    }
     pub fn add_data(&mut self, data: ExpenseData) {
         self.data.push(data);
     }
@@ -234,6 +243,7 @@ impl ExpenseRecordBuilder {
                 self.data.clone(),
                 self.default_tags.clone(),
                 self.origin.clone(),
+                self.description.clone().clone()
             )),
             _ => Err(ProfileError::build(self.amount, self.datetime)),
         }

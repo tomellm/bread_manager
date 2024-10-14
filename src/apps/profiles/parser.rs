@@ -31,7 +31,6 @@ impl ProfilePreview {
 
         if let Some(ref mut parsed_file) = &mut self.parsed_testing_file {
             egui::ScrollArea::both()
-                .max_height(ui.available_height())
                 .show(ui, |ui| match parsed_file.poll_state() {
                     DataState::Uninitialized => ui.label("Updating post list"),
                     DataState::Error(msg) => {

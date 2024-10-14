@@ -3,9 +3,8 @@ mod parser;
 
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
-use egui::Grid;
+use egui::{Grid, ScrollArea};
 use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
-use lazy_async_promise::ImmediateValuePromise;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -24,58 +23,58 @@ impl App for Profiles {
         self.profiles.state_update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Profiles");
+            ScrollArea::both()
+                .show(ui, |ui| {
+                    ui.heading("Profiles");
 
-            let mut delete_action = self.profiles.delete_action();
-            let profiles = self.profiles.data_map();
+                    let mut delete_action = self.profiles.delete_action();
+                    let profiles = self.profiles.data_map();
 
-            if profiles.is_empty() {
-                ui.label("there are currently no profiles to be shown");
-            } else {
-                Grid::new("all profiles view").show(ui, |ui| {
-                    ui.label("uuid");
-                    ui.label("name");
-                    ui.label("top margin");
-                    ui.label("btm margin");
-                    ui.label("delimiter");
-                    ui.label("total width");
-                    ui.label("default tags");
-                    ui.label("actions");
-                    ui.end_row();
-                    for (key, profile) in profiles.iter() {
-                        ui.label(profile.uuid.to_string());
-                        ui.label(profile.name.clone());
-                        ui.label(format!("{}", profile.margins.0));
-                        ui.label(format!("{}", profile.margins.1));
-                        ui.label(profile.delimiter.to_string());
-                        ui.label(format!("{}", profile.width));
-                        ui.group(|ui| {
-                            for default_tag in &profile.default_tags {
-                                ui.label(default_tag);
-                            }
-                        });
-                        ui.group(|ui| {
-                            self.ui_states
-                                .default_promise_await(format!(
-                                    "delete action for {}",
-                                    key.as_u128()
-                                ))
-                                .init_ui(|ui, set_promise| {
-                                    if ui.button("delete").clicked() {
-                                        let future = delete_action(*key);
-                                        set_promise(ImmediateValuePromise::new(future));
+                    if profiles.is_empty() {
+                        ui.label("there are currently no profiles to be shown");
+                    } else {
+                        Grid::new("all profiles view").show(ui, |ui| {
+                            ui.label("uuid");
+                            ui.label("name");
+                            ui.label("top margin");
+                            ui.label("btm margin");
+                            ui.label("delimiter");
+                            ui.label("total width");
+                            ui.label("default tags");
+                            ui.label("edit button");
+                            ui.end_row();
+                            for (key, profile) in profiles.iter() {
+                                ui.label(profile.uuid.to_string());
+                                ui.label(profile.name.clone());
+                                ui.label(format!("{}", profile.margins.0));
+                                ui.label(format!("{}", profile.margins.1));
+                                ui.label(profile.delimiter.to_string());
+                                ui.label(format!("{}", profile.width));
+                                ui.group(|ui| {
+                                    for default_tag in &profile.default_tags {
+                                        ui.label(default_tag);
                                     }
                                 });
-                            if ui.button("edit").clicked() {
-                                self.create_profile.edit(profile);
+                                ui.group(|ui| {
+                                    if ui.button("edit").clicked() {
+                                        self.create_profile.edit(profile);
+                                    }
+                                    self.ui_states
+                                        .default_promise_await(format!("delete_action_{key}"))
+                                        .init_ui(|ui, set_promise| {
+                                            if ui.button("delete").clicked() {
+                                                set_promise(delete_action(*key).into());
+                                            }
+                                        })
+                                    .show(ui);
+                                    });
+                                ui.end_row();
                             }
                         });
-                        ui.end_row();
                     }
+                    ui.separator();
+                    self.create_profile.ui(ui);
                 });
-            }
-            ui.separator();
-            self.create_profile.ui(ui);
         });
     }
 }
