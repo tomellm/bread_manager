@@ -48,7 +48,7 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         default_tags: Vec<String>,
         origin: String,
-        description: Option<DescriptionContainer>
+        description: Option<DescriptionContainer>,
     ) -> Self {
         Self {
             datetime_created: Local::now(),
@@ -186,7 +186,6 @@ impl Display for ExpenseData {
             Self::ExpenseTime(e) => write!(f, "{e}"),
             Self::Other(t, e) => write!(f, "{t}, {e}"),
         }
-        
     }
 }
 
@@ -243,7 +242,7 @@ impl ExpenseRecordBuilder {
                 self.data.clone(),
                 self.default_tags.clone(),
                 self.origin.clone(),
-                self.description.clone().clone()
+                self.description.clone().clone(),
             )),
             _ => Err(ProfileError::build(self.amount, self.datetime)),
         }
@@ -252,9 +251,9 @@ impl ExpenseRecordBuilder {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Description {
-    title: String,
-    desc: String,
-    datetime_created: DateTime<Local>,
+    pub title: String,
+    pub desc: String,
+    pub datetime_created: DateTime<Local>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -291,6 +290,11 @@ impl DescriptionContainer {
         let new_current = self.history.remove(index);
         let old_current = mem::replace(&mut self.current, new_current);
         self.history.push(old_current);
+    }
+    pub fn as_vec(& self) -> Vec<&Description> {
+        let mut iter = vec![&self.current];
+        iter.extend(self.history.iter());
+        iter
     }
 }
 

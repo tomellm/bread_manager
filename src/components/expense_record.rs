@@ -33,10 +33,17 @@ impl<'a> Widget for RecordListView<'a> {
                 ui.end_row();
 
                 ui.label("Description");
-                r.description()
-                    .auto_display("... no description ...")
-                    .show(ui);
+                ui.label("");
                 ui.end_row();
+
+                if let Some(descr_cont) = r.description_container() {
+                    for desc in descr_cont.as_vec() {
+                        ui.label(&desc.title);
+                        ui.label(&desc.desc);
+                        ui.end_row();
+                    }
+                }
+
 
                 ui.label("Tags");
                 ui.horizontal_wrapped(|ui| {

@@ -253,8 +253,9 @@ impl State {
                 file_upload: FileUpload::init(
                     rx_f,
                     db.profiles_signal(),
-                    db.records_signal(),
+                    [db.records_signal(), db.records_signal()],
                     db.possible_links_signal(),
+                    db.links_signal(),
                 )
                 .into(),
                 profiles: Profiles::init(rx_p, [db.profiles_signal(), db.profiles_signal()]).into(),

@@ -10,7 +10,7 @@ use tracing::{warn, info};
 use uuid::Uuid;
 
 use crate::model::{
-    linker::{Linker, PossibleLink},
+    linker::{Link, Linker, PossibleLink},
     profiles::Profile,
     records::ExpenseRecord,
 };
@@ -23,6 +23,7 @@ pub struct FileUpload {
     possible_links: Communicator<Uuid, PossibleLink>,
     dropped_files: Vec<FileToParse>,
     parsed_records: ParsedRecords,
+    linker: Linker,
     ui: UiStates,
 }
 
@@ -34,6 +35,7 @@ impl App for FileUpload {
         self.profiles.state_update();
         self.records.state_update();
         self.possible_links.state_update();
+        self.linker.state_update();
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Files:");
@@ -116,12 +118,13 @@ impl FileUpload {
     pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
         profiles: Communicator<Uuid, Profile>,
-        records: Communicator<Uuid, ExpenseRecord>,
+        [records_one, records_two]: [Communicator<Uuid, ExpenseRecord>; 2],
         possible_links: Communicator<Uuid, PossibleLink>,
+        links: Communicator<Uuid, Link>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let _ = profiles.query_future(QueryType::All).await;
-            let _ = records.query_future(QueryType::All).await;
+            let _ = records_one.query_future(QueryType::All).await;
             // let _ = possible_links.query_future(QueryType::All).await;
             Self {
                 reciver,
@@ -129,8 +132,9 @@ impl FileUpload {
                 update_callback_ctx: None,
                 parsed_records: ParsedRecords::new(),
                 profiles,
-                records,
+                records: records_one,
                 possible_links,
+                linker: Linker::init(links, records_two).await,
                 ui: UiStates::default(),
             }
         }
@@ -158,7 +162,7 @@ impl FileUpload {
 
     pub fn save_parsed_data_action(&mut self) -> ImmediateValuePromise<()> {
         let records = self.parsed_records.drain_records();
-        let links = Linker::find_links(records.iter().collect::<Vec<_>>(), self.records.data());
+        let links = self.linker.find_links(&records);
 
         let records_future = self.records.insert_many_future(records);
         let links_future = self.possible_links.insert_many_future(links);
