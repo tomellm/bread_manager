@@ -6,7 +6,7 @@ use egui::ComboBox;
 use egui_light_states::{default_promise_await::DefaultCreatePromiseAwait, UiStates};
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tokio::sync::mpsc;
-use tracing::{warn, info};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::model::{
@@ -45,39 +45,40 @@ impl App for FileUpload {
                 ui.label("profile");
                 ui.label("remove");
                 ui.end_row();
-                self
-                    .dropped_files
-                    .retain_mut(|file_to_parse| {
-                        ui.label(file_to_parse.file.name.clone());
-                        if let Some(path) = file_to_parse.file.path.as_ref() {
-                            ui.label(path.to_str().unwrap());
-                        } else {
-                            ui.label("..no path..");
-                        }
-                        ComboBox::new(format!("select_profile_{:?}", file_to_parse.file.path), "select profile")
-                            .selected_text({
-                                file_to_parse
-                                    .profile
-                                    .clone()
-                                    .map_or(String::from("none selected"), |p| p.name)
-                            })
-                            .show_ui(ui, |ui| {
-                                for profile in self.profiles.data_iter() {
-                                    ui.selectable_value(
-                                        &mut file_to_parse.profile,
-                                        Some(profile.clone()),
-                                        profile.name.clone(),
-                                    );
-                                }
-                            });
-                        if ui.button("remove").clicked() {
-                            ui.end_row();
-                            false 
-                        } else {
-                            ui.end_row();
-                            true
+                self.dropped_files.retain_mut(|file_to_parse| {
+                    ui.label(file_to_parse.file.name.clone());
+                    if let Some(path) = file_to_parse.file.path.as_ref() {
+                        ui.label(path.to_str().unwrap());
+                    } else {
+                        ui.label("..no path..");
+                    }
+                    ComboBox::new(
+                        format!("select_profile_{:?}", file_to_parse.file.path),
+                        "select profile",
+                    )
+                    .selected_text({
+                        file_to_parse
+                            .profile
+                            .clone()
+                            .map_or(String::from("none selected"), |p| p.name)
+                    })
+                    .show_ui(ui, |ui| {
+                        for profile in self.profiles.data.iter() {
+                            ui.selectable_value(
+                                &mut file_to_parse.profile,
+                                Some(profile.clone()),
+                                profile.name.clone(),
+                            );
                         }
                     });
+                    if ui.button("remove").clicked() {
+                        ui.end_row();
+                        false
+                    } else {
+                        ui.end_row();
+                        true
+                    }
+                });
             });
             ui.horizontal(|ui| {
                 ui.heading("what to do now?");
@@ -123,8 +124,8 @@ impl FileUpload {
         links: Communicator<Uuid, Link>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = profiles.query_future(QueryType::All).await;
-            let _ = records_one.query_future(QueryType::All).await;
+            let _ = profiles.query(QueryType::All).await;
+            let _ = records_one.query(QueryType::All).await;
             // let _ = possible_links.query_future(QueryType::All).await;
             Self {
                 reciver,
@@ -147,7 +148,10 @@ impl FileUpload {
 
     pub fn recive_files(&mut self) {
         while let Ok(file) = self.reciver.try_recv() {
-            info!(msg = "Recived dropped file, adding to list", file = format!("{file:?}"));
+            info!(
+                msg = "Recived dropped file, adding to list",
+                file = format!("{file:?}")
+            );
             self.dropped_files.push(FileToParse::new(file));
         }
     }
@@ -164,8 +168,8 @@ impl FileUpload {
         let records = self.parsed_records.drain_records();
         let links = self.linker.find_links(&records);
 
-        let records_future = self.records.insert_many_future(records);
-        let links_future = self.possible_links.insert_many_future(links);
+        let records_future = self.records.insert_many(records);
+        let links_future = self.possible_links.insert_many(links);
         async move {
             let _ = records_future.await;
             let _ = links_future.await;

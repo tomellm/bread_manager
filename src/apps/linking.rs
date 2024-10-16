@@ -2,7 +2,7 @@ use core::f64;
 use std::{collections::HashMap, f64::consts::E};
 
 use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType, GetKeys,
+    change::ChangeResult, communicator::Communicator, query::QueryType,
 };
 use eframe::App;
 use egui::{
@@ -14,7 +14,10 @@ use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
 
 use crate::{
-    components::{expense_record::RecordListView, option_display::OptionDisplay},
+    components::{
+        expense_record::RecordListView, option_display::OptionDisplay,
+        pagination::PaginationControls,
+    },
     model::{
         linker::{Link, PossibleLink},
         records::{ExpenseRecord, ExpenseRecordUuid},
@@ -73,11 +76,11 @@ impl App for Linking {
                     ui.separator();
                     ui.label(format!(
                         "Currently {} possible links",
-                        self.possible_links.len()
+                        self.possible_links.data.len()
                     ));
-                    ScrollArea::both().show(ui, |ui| match self.anchor {
-                        LinksAnchor::PossibleLinks(_) => self.list_possible_links(ui),
-                        LinksAnchor::Links(_) => self.list_links(ui),
+                    ScrollArea::both().show(ui, |ui| match self.anchor.current {
+                        Anchor::PossibleLinks => self.list_possible_links(ui),
+                        Anchor::Links => self.list_links(ui),
                     });
                 });
             CentralPanel::default().show_inside(ui, |ui| {
@@ -85,7 +88,7 @@ impl App for Linking {
                     if ui.button("delete all possible links").clicked() {
                         let delete_future = self
                             .possible_links
-                            .delete_many(self.possible_links.data_map().keys().cloned().collect());
+                            .delete_many(self.possible_links.data.keys_cloned());
                         self.state
                             .set_future("delete_all_possible_links")
                             .set(delete_future);
@@ -96,9 +99,7 @@ impl App for Linking {
                         .show(ui);
 
                     if ui.button("delete all links").clicked() {
-                        let delete_future = self
-                            .links
-                            .delete_many(self.links.data_map().keys().cloned().collect());
+                        let delete_future = self.links.delete_many(self.links.data.keys_cloned());
                         self.state.set_future("delete_all_links").set(delete_future);
                     }
                     self.state
@@ -121,9 +122,9 @@ impl Linking {
         mut possible_links: Communicator<Uuid, PossibleLink>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query_future(QueryType::All).await;
-            let _ = links.query_future(QueryType::All).await;
-            let _ = possible_links.query_future(QueryType::All).await;
+            let _ = records.query(QueryType::All).await;
+            let _ = links.query(QueryType::All).await;
+            let _ = possible_links.query(QueryType::All).await;
             possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
                 records,
@@ -138,7 +139,15 @@ impl Linking {
     }
 
     fn list_possible_links(&mut self, ui: &mut Ui) {
-        for possible_link in self.possible_links.data_sorted() {
+        let controls = &mut self.anchor.possible_links.0;
+        controls.controls(ui, self.possible_links.data.len());
+        controls.page_info(ui);
+        for possible_link in self
+            .possible_links
+            .data
+            .page(controls.page, controls.per_page)
+            .unwrap()
+        {
             let response = ui
                 .scope_builder(
                     UiBuilder::new()
@@ -190,7 +199,15 @@ impl Linking {
     }
 
     fn list_links(&mut self, ui: &mut Ui) {
-        for link in self.links.data_iter() {
+        let controls = &mut self.anchor.links.0;
+        controls.controls(ui, self.links.data.len());
+        controls.page_info(ui);
+        for link in self
+            .links
+            .data
+            .page(controls.page, controls.per_page)
+            .unwrap()
+        {
             let response = ui
                 .scope_builder(
                     UiBuilder::new()
@@ -228,16 +245,24 @@ impl Linking {
     }
 
     fn view_selected_link(&mut self, ui: &mut Ui) -> Response {
-        ui.group(|ui| match &self.anchor.clone() {
-            LinksAnchor::PossibleLinks(Some(link)) => {
-                self.view_possible_link(ui, link);
+        ui.group(|ui| {
+            if let LinksAnchor {
+                possible_links: (_, Some(link)),
+                current: Anchor::PossibleLinks,
+                ..
+            } = self.anchor.clone()
+            {
+                self.view_possible_link(ui, &link);
                 self.view_records(ui, &link.negative, &link.positive);
-            }
-            LinksAnchor::Links(Some(link)) => {
-                self.view_link(ui, link);
+            } else if let LinksAnchor {
+                links: (_, Some(link)),
+                current: Anchor::Links,
+                ..
+            } = self.anchor.clone()
+            {
+                self.view_link(ui, &link);
                 self.view_records(ui, &link.negative, &link.positive);
-            }
-            _ => {
+            } else {
                 ui.label("click on a uuid in the list to view details");
             }
         })
@@ -314,7 +339,8 @@ impl Linking {
 
     fn view_record(&self, ui: &mut Ui, record: &ExpenseRecordUuid) {
         self.records
-            .data_map()
+            .data
+            .map()
             .get(&**record)
             .display(
                 |ui, val| {
@@ -331,15 +357,22 @@ impl Linking {
     }
 
     fn create_link(&mut self, link: PossibleLink) {
-        let mut links_to_delete = self.possible_links.data_iter().filter_map(|all_links| {
-            if all_links.contains(&link.negative) || all_links.contains(&link.positive) {
-                Some(link.uuid)
-            } else { None }
-        }).collect::<Vec<_>>();
+        let mut links_to_delete = self
+            .possible_links
+            .data
+            .iter()
+            .filter_map(|all_links| {
+                if all_links.contains(&link.negative) || all_links.contains(&link.positive) {
+                    Some(link.uuid)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
         links_to_delete.push(link.uuid);
 
-        let delete_future = self.possible_links.delete_many_future(links_to_delete);
-        let create_future = self.links.insert_future(link.clone().into());
+        let delete_future = self.possible_links.delete_many(links_to_delete);
+        let create_future = self.links.insert(link.clone().into());
         self.state.set_future("save_possible_link").set(async move {
             let _ = create_future.await;
             let _ = delete_future.await;
@@ -352,12 +385,14 @@ impl Linking {
 
         let linked_records = self
             .possible_links
-            .data_iter()
+            .data
+            .iter()
             .flat_map(|link| vec![*link.positive, *link.negative])
             .collect::<Vec<_>>();
         let records = self
             .records
-            .data_map()
+            .data
+            .map()
             .iter()
             .filter_map(|(key, val)| {
                 if linked_records.contains(key) {
@@ -367,7 +402,7 @@ impl Linking {
                 }
             })
             .collect::<HashMap<_, _>>();
-        let links = self.possible_links.data_cloned();
+        let links = self.possible_links.data.cloned();
         let mut update_many = self.possible_links.update_many_action();
         async move {
             let probs = links
@@ -404,28 +439,39 @@ impl Linking {
 }
 
 #[derive(Clone)]
-enum LinksAnchor {
-    PossibleLinks(Option<PossibleLink>),
-    Links(Option<Link>),
+struct LinksAnchor {
+    possible_links: (PaginationControls, Option<PossibleLink>),
+    links: (PaginationControls, Option<Link>),
+    current: Anchor,
+}
+
+#[derive(Clone)]
+enum Anchor {
+    PossibleLinks,
+    Links,
 }
 
 impl LinksAnchor {
     fn set_possible_link(&mut self, link: PossibleLink) {
-        *self = Self::PossibleLinks(Some(link));
+        self.possible_links.1 = Some(link);
     }
     fn set_link(&mut self, link: Link) {
-        *self = Self::Links(Some(link));
+        self.links.1 = Some(link);
     }
     fn switch_possible_links(&mut self) {
-        *self = Self::PossibleLinks(None);
+        self.current = Anchor::PossibleLinks;
     }
     fn switch_links(&mut self) {
-        *self = Self::Links(None);
+        self.current = Anchor::Links;
     }
 }
 
 impl Default for LinksAnchor {
     fn default() -> Self {
-        Self::PossibleLinks(None)
+        Self {
+            possible_links: (PaginationControls::default(), None),
+            links: (PaginationControls::default(), None),
+            current: Anchor::PossibleLinks,
+        }
     }
 }

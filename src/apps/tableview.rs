@@ -1,10 +1,12 @@
 mod filterstate;
 mod tablecolumns;
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use data_communicator::buffered::{change::ChangeResult, communicator::Communicator, query::QueryType};
 use eframe::App;
 use egui::{CentralPanel, SidePanel};
+use egui_light_states::{future_await::FutureAwait, UiStates};
 use filterstate::FilterState;
+use lazy_async_promise::ImmediateValuePromise;
 use tablecolumns::TableColumns;
 use uuid::Uuid;
 
@@ -14,6 +16,7 @@ pub struct TableView {
     records: Communicator<Uuid, ExpenseRecord>,
     columns_info: TableColumns,
     filter_state: FilterState,
+    states: UiStates,
 }
 
 impl App for TableView {
@@ -25,8 +28,13 @@ impl App for TableView {
                 ui.horizontal(|ui| {
                     ui.label("table view");
                     if ui.button("delete all").clicked() {
-                        self.delete_all();
+                        let promise = self.delete_all();
+                        self.states.set_future("delete_all_records")
+                            .set(promise);
                     }
+                    self.states.future_status::<ChangeResult>("delete_all_records")
+                        .only_poll();
+                        
                     ui.label(format!("Curretly {} records.", self.records.data().len()));
                 });
 
@@ -39,7 +47,8 @@ impl App for TableView {
 
                         for record in self
                             .records
-                            .data_sorted_iter()
+                            .data
+                            .sorted_iter()
                             .filter(|r| self.filter_state.filter(r))
                         {
                             self.columns_info.row(record, ui);
@@ -62,11 +71,12 @@ impl TableView {
         records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query_future(QueryType::All).await;
+            let _ = records.query(QueryType::All).await;
             Self {
                 records,
                 columns_info: TableColumns::default(),
                 filter_state: FilterState::default(),
+                states: UiStates::default(),
             }
         }
     }
@@ -74,8 +84,8 @@ impl TableView {
         false
     }
 
-    pub fn delete_all(&mut self) {
-        let keys = self.records.data_map().keys().cloned().collect::<Vec<_>>();
-        self.records.delete_many(keys);
+    pub fn delete_all(&mut self) -> ImmediateValuePromise<ChangeResult>{
+        let keys = self.records.data.keys_cloned();
+        ImmediateValuePromise::new(self.records.delete_many(keys))
     }
 }

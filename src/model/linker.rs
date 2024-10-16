@@ -1,8 +1,6 @@
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
-
-use crate::db::records;
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
 
@@ -70,8 +68,8 @@ impl Linker {
         records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = links.query_future(QueryType::All).await;
-            let _ = records.query_future(QueryType::All).await;
+            let _ = links.query(QueryType::All).await;
+            let _ = records.query(QueryType::All).await;
 
             Self { links, records }
         }
@@ -87,8 +85,8 @@ impl Linker {
 
         let all_records = self
             .records
-            .data_iter()
-            .filter(|record| !self.links.data_iter().any(|link| link.contains(record)));
+            .data.iter()
+            .filter(|record| !self.links.data.iter().any(|link| link.contains(record)));
 
         let internal_links =
             self.find_all_possible_links(new_records.iter(), new_records.iter());
@@ -101,7 +99,7 @@ impl Linker {
         info!(
             msg = format!(
                 "Tried to find possible links between [{}] total and [{}] new records. Found [{}]",
-                self.records.len(),
+                self.records.data.len(),
                 new_records.len(),
                 possible_links.len()
             )

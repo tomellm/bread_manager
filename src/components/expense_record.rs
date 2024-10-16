@@ -3,8 +3,6 @@ use tracing::info;
 
 use crate::model::records::ExpenseRecord;
 
-use super::option_display::AutoOptionDisplay;
-
 pub struct RecordListView<'a> {
     record: &'a ExpenseRecord,
 }

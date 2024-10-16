@@ -24,7 +24,7 @@ pub(super) struct BarChartVis {
 
 impl BarChartVis {
     pub fn new(records: Communicator<Uuid, ExpenseRecord>) -> Self {
-        let (weekly, monthly) = Self::update_graphs(records.data_map());
+        let (weekly, monthly) = Self::update_graphs(records.data.map());
         Self {
             selected: Charts::default(),
             records,
@@ -36,7 +36,7 @@ impl BarChartVis {
     pub fn update(&mut self) {
         self.records.state_update();
         if self.records.has_changed() {
-            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data_map());
+            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data.map());
             self.weekly = weekly;
             self.monthly = monthly;
         }
