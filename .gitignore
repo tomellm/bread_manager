@@ -11,9 +11,10 @@ frontend/dist
 
 **/assets
 
+/db
+
 # Added by cargo
 
 /target
-/db/
 
 /logs
