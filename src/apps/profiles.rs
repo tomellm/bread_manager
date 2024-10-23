@@ -73,7 +73,7 @@ impl App for Profiles {
                         });
                     }
                     ui.separator();
-                    self.create_profile.ui(ui);
+                    self.create_profile.ui_update(ui);
                 });
         });
     }

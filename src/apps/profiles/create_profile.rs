@@ -43,7 +43,7 @@ impl CreateProfile {
         }
     }
 
-    pub fn ui(&mut self, ui: &mut Ui) {
+    pub fn ui_update(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             ui.heading("Create Profiles:");
             if ui.button("reset").clicked() {
