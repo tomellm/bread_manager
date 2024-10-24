@@ -37,23 +37,31 @@ impl FilesToParse {
         self.profiles.state_update();
         self.recive_files();
 
-        egui::Grid::new("uploaded files table").show(ui, |ui| {
-            ui.label("name");
-            ui.label("path");
-            ui.label("profile");
-            ui.label("margin cutoff");
-            ui.label("remove");
-            ui.end_row();
-            self.files.retain_mut(|file_to_parse| {
-                file_to_parse.update_internal_values();
+        if !self.files.is_empty() {
+            egui::Grid::new("uploaded files table").show(ui, |ui| {
+                ui.label("name");
+                ui.label("path");
+                ui.label("profile");
+                ui.label("margin cutoff");
+                ui.label("remove");
+                ui.end_row();
+                self.files.retain_mut(|file_to_parse| {
+                    file_to_parse.update_internal_values();
 
-                ui.label(file_to_parse.file.name.clone());
-                Self::file_path(file_to_parse, ui);
-                Self::profile_select(file_to_parse, &self.profiles, ui);
-                Self::margin_cutoff(file_to_parse, ui);
-                Self::remove_button(ui)
+                    ui.label(file_to_parse.file.name.clone());
+                    Self::file_path(file_to_parse, ui);
+                    Self::profile_select(file_to_parse, &self.profiles, ui);
+                    Self::margin_cutoff(file_to_parse, ui);
+                    Self::remove_button(ui)
+                });
             });
-        });
+        } else {
+            ui.vertical_centered_justified(|ui| {
+                ui.add_space(30.);
+                ui.label(DROPPED_FILES_EMPTY_TEXT);
+                ui.add_space(30.);
+            });
+        }
     }
 
     fn file_path(file: &FileToParse, ui: &mut Ui) {
@@ -183,6 +191,10 @@ impl FilesToParse {
             self.files.push(file.into());
         }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.files.is_empty()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -299,3 +311,5 @@ impl CutOffMargins {
         }
     }
 }
+
+const DROPPED_FILES_EMPTY_TEXT: &str = "Drop in a file to see what happens";

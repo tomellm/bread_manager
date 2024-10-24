@@ -7,9 +7,12 @@ use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValu
 use tracing::warn;
 use uuid::Uuid;
 
-use crate::model::{
-    linker::{Link, Linker, PossibleLink},
-    records::ExpenseRecord,
+use crate::{
+    components::expense_records::table::RecordsTable,
+    model::{
+        linker::{Link, Linker, PossibleLink},
+        records::ExpenseRecord,
+    },
 };
 
 use super::files_to_parse::FileToParse;
@@ -19,8 +22,9 @@ pub(super) struct ParsedRecords {
     possible_links: Communicator<Uuid, PossibleLink>,
     parsed_records: Vec<ExpenseRecord>,
     futures: Vec<ImmediateValuePromise<Vec<ExpenseRecord>>>,
-    ui: UiStates,
     linker: Linker,
+    ui: UiStates,
+    table: RecordsTable,
 }
 
 impl ParsedRecords {
@@ -38,6 +42,7 @@ impl ParsedRecords {
                 parsed_records: vec![],
                 futures: vec![],
                 ui: UiStates::default(),
+                table: RecordsTable::default(),
             }
         }
     }
@@ -48,34 +53,25 @@ impl ParsedRecords {
         self.possible_links.state_update();
         self.linker.state_update();
 
-
-        ui.horizontal(|ui| {
-            ui.heading("Parsed Data:");
-            ui.add_space(20.);
-            if ui.button("Save parsed Data").clicked() {
-                let future = self.save_parsed_data_action();
-                self.ui.set_future("save_parsed_data").set(future);
-            }
-            self.ui
-                .future_status::<()>("save_parsed_data")
-                .default()
-                .show(ui);
-        });
-        ScrollArea::both().show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            Grid::new("expense records table").show(ui, |ui| {
-                ui.label("amount");
-                ui.label("time");
-                ui.label("tags");
-                ui.end_row();
-                for record in &self.parsed_records {
-                    ui.label(format!("{}", record.amount()));
-                    ui.label(format!("{}", record.datetime()));
-                    ui.label(format!("{:?}", record.tags()));
-                    ui.end_row();
+        ui.heading("Parsed Data:");
+        if !self.parsed_records.is_empty() || self.ui.is_running::<()>("save_parsed_data") {
+            ui.vertical_centered(|ui| {
+                if ui.button("Save parsed Data").clicked() {
+                    let future = self.save_parsed_data();
+                    self.ui.set_future("save_parsed_data").set(future);
                 }
             });
-        });
+        }
+        if !self.parsed_records.is_empty() {
+            self.table.toggles(ui);
+            self.table.show(&self.parsed_records, ui);
+        } else {
+            ui.vertical_centered_justified(|ui| {
+                ui.add_space(30.);
+                ui.label(PARSED_RECORDS_EMPTY_TEXT);
+                ui.add_space(30.);
+            });
+        }
     }
 
     fn create_future(file: FileToParse) -> ImmediateValuePromise<Vec<ExpenseRecord>> {
@@ -142,7 +138,7 @@ impl ParsedRecords {
         self.parsed_records.drain(..).collect()
     }
 
-    pub fn save_parsed_data_action(&mut self) -> ImmediateValuePromise<()> {
+    pub fn save_parsed_data(&mut self) -> ImmediateValuePromise<()> {
         let records = self.parsed_records.drain(..).collect::<Vec<_>>();
         let links = self.linker.find_links(&records);
 
@@ -155,3 +151,8 @@ impl ParsedRecords {
         .into()
     }
 }
+
+const PARSED_RECORDS_EMPTY_TEXT: &str = r#"
+Drop in some files, select a profile and then click on 'Parse Files' to preview the parsed records
+before clicking on 'Save parsed Data' to save them.
+"#;

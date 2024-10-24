@@ -15,8 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     components::{
-        expense_record::RecordListView, option_display::OptionDisplay,
-        pagination::PaginationControls,
+        expense_records::list_view::RecordListView, option_display::OptionDisplay, pagination::PaginationControls
     },
     model::{
         linker::{Link, PossibleLink},

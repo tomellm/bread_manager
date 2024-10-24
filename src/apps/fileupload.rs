@@ -24,22 +24,21 @@ pub struct FileUpload {
 impl App for FileUpload {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.heading("Files:");
-                ui.add_space(20.);
-                ui.horizontal(|ui| {
-                    if ui.button("Parse files")
-                        .on_hover_text(TOOL_TIP_PARSE_FILES)
-                        .clicked() {
+            ui.heading("Files:");
+            self.files_to_parse.files_to_parse_list(ui);
+            if !self.files_to_parse.is_empty() {
+                ui.vertical_centered(|ui| {
+                    if ui
+                        .button("Parse files")
+                            .on_hover_text(TOOL_TIP_PARSE_FILES)
+                            .clicked()
+                    {
                         self.parse_files();
                     }
+                    ui.label("");
+                    ui.label("v");
                 });
-            });
-            self.files_to_parse.files_to_parse_list(ui);
-
-            ui.add_space(20.);
-            ui.separator();
-            ui.add_space(20.);
+            }
             self.parsed_records.ui_update(ui);
         });
     }
