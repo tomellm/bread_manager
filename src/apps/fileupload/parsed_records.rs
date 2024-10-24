@@ -8,11 +8,10 @@ use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    components::expense_records::table::RecordsTable,
-    model::{
+    components::expense_records::table::RecordsTable, db::possible_links, model::{
         linker::{Link, Linker, PossibleLink},
         records::ExpenseRecord,
-    },
+    }
 };
 
 use super::files_to_parse::FileToParse;
@@ -30,15 +29,15 @@ pub(super) struct ParsedRecords {
 impl ParsedRecords {
     pub(super) fn init(
         [records_one, records_two]: [Communicator<Uuid, ExpenseRecord>; 2],
-        possible_links: Communicator<Uuid, PossibleLink>,
+        [possible_links_one, possible_links_two]: [Communicator<Uuid, PossibleLink>; 2],
         links: Communicator<Uuid, Link>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let _ = records_one.query(QueryType::All).await;
             Self {
                 records: records_one,
-                possible_links,
-                linker: Linker::init(links, records_two).await,
+                possible_links: possible_links_one,
+                linker: Linker::init(possible_links_two, links, records_two).await,
                 parsed_records: vec![],
                 futures: vec![],
                 ui: UiStates::default(),

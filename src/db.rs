@@ -20,7 +20,11 @@ use sqlx::{
 };
 use uuid::Uuid;
 
-use crate::model::{linker::{Link, PossibleLink}, profiles::Profile, records::ExpenseRecord};
+use crate::model::{
+    linker::{Link, PossibleLink},
+    profiles::Profile,
+    records::ExpenseRecord,
+};
 
 use self::{profiles::DbProfiles, records::DbRecords};
 
@@ -54,16 +58,34 @@ impl DB {
         self.profiles_container.communicator()
     }
 
+    pub fn profiles_signals<const N: usize>(&mut self) -> [Communicator<Uuid, Profile>; N] {
+        std::array::from_fn(|_| self.profiles_container.communicator())
+    }
+
     pub fn records_signal(&mut self) -> Communicator<Uuid, ExpenseRecord> {
         self.records_container.communicator()
+    }
+
+    pub fn records_signals<const N: usize>(&mut self) -> [Communicator<Uuid, ExpenseRecord>; N] {
+        std::array::from_fn(|_| self.records_container.communicator())
     }
 
     pub fn links_signal(&mut self) -> Communicator<Uuid, Link> {
         self.links_container.communicator()
     }
 
+    pub fn links_signals<const N: usize>(&mut self) -> [Communicator<Uuid, Link>; N] {
+        std::array::from_fn(|_| self.links_container.communicator())
+    }
+
     pub fn possible_links_signal(&mut self) -> Communicator<Uuid, PossibleLink> {
         self.possible_links_container.communicator()
+    }
+
+    pub fn possible_links_signals<const N: usize>(
+        &mut self,
+    ) -> [Communicator<Uuid, PossibleLink>; N] {
+        std::array::from_fn(|_| self.possible_links_container.communicator())
     }
 
     pub fn state_update(&mut self) {
@@ -98,11 +120,9 @@ impl IntoChangeResult for Result<(), sqlx::Error> {
 
 impl IntoChangeResult for Vec<ChangeResult> {
     fn into_change_result(self) -> ChangeResult {
-        let (_, errors): (Vec<_>, Vec<_>) = self.into_iter().partition(|res| {
-            match res {
-                ChangeResult::Success => true,
-                ChangeResult::Error(_) => false,
-            }
+        let (_, errors): (Vec<_>, Vec<_>) = self.into_iter().partition(|res| match res {
+            ChangeResult::Success => true,
+            ChangeResult::Error(_) => false,
         });
 
         if !errors.is_empty() {

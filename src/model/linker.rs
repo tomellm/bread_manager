@@ -1,6 +1,10 @@
+use std::{collections::HashMap, f64::consts::E, process::Output};
+
 use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use tracing::{info, warn};
 use uuid::Uuid;
+
+use crate::db::possible_links;
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
 
@@ -55,29 +59,137 @@ impl PossibleLink {
     pub fn contains(&self, record: &ExpenseRecordUuid) -> bool {
         self.positive.eq(record) || self.negative.eq(record)
     }
+
+    pub fn overlaps(&self, other: &Self) -> bool {
+        self.negative.eq(&other.negative)
+            || self.positive.eq(&other.negative)
+            || self.negative.eq(&other.positive)
+            || self.positive.eq(&other.positive)
+    }
 }
 
 pub struct Linker {
+    possible_links: Communicator<Uuid, PossibleLink>,
     links: Communicator<Uuid, Link>,
     records: Communicator<Uuid, ExpenseRecord>,
 }
 
 impl Linker {
     pub fn init(
+        possible_links: Communicator<Uuid, PossibleLink>,
         links: Communicator<Uuid, Link>,
         records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
+            let _ = possible_links.query(QueryType::All).await;
             let _ = links.query(QueryType::All).await;
             let _ = records.query(QueryType::All).await;
 
-            Self { links, records }
+            Self {
+                possible_links,
+                links,
+                records,
+            }
         }
     }
 
     pub fn state_update(&mut self) {
+        self.possible_links.state_update();
         self.links.state_update();
         self.records.state_update();
+    }
+
+    pub fn get_records(
+        &self,
+        possible_link: &PossibleLink,
+    ) -> (Option<&ExpenseRecord>, Option<&ExpenseRecord>) {
+        (
+            self.records.data.map().get(&possible_link.negative),
+            self.records.data.map().get(&possible_link.positive),
+        )
+    }
+
+    pub fn create_link(
+        &mut self,
+        possible_link: &PossibleLink,
+    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let links_to_delete = self
+            .possible_links
+            .data
+            .iter()
+            .filter_map(|other_possible_link| {
+                if possible_link.overlaps(other_possible_link) {
+                    Some(other_possible_link.uuid)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let delete_future = self.possible_links.delete_many(links_to_delete);
+        let create_future = self.links.insert(possible_link.clone().into());
+        async move {
+            let _ = create_future.await;
+            let _ = delete_future.await;
+        }
+    }
+
+    pub fn calculate_probability(
+        &mut self,
+        falloff_steepness: f64,
+        offset_days: f64,
+    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+        let linked_records = self
+            .possible_links
+            .data
+            .iter()
+            .flat_map(|link| vec![*link.positive, *link.negative])
+            .collect::<Vec<_>>();
+        let records = self
+            .records
+            .data
+            .map()
+            .iter()
+            .filter_map(|(key, val)| {
+                if linked_records.contains(key) {
+                    Some((*key, val.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect::<HashMap<_, _>>();
+        let links = self.possible_links.data.cloned();
+        let mut update_many = self.possible_links.update_many_action();
+        async move {
+            let probs = links
+                .iter()
+                .map(|link| {
+                    let Some(positive) = records.get(&link.positive) else {
+                        return (link.uuid, f64::INFINITY);
+                    };
+                    let Some(negative) = records.get(&link.negative) else {
+                        return (link.uuid, f64::INFINITY);
+                    };
+
+                    let time_distance = (*positive.datetime() - *negative.datetime())
+                        .num_days()
+                        .abs() as f64;
+                    (link.uuid, time_distance)
+                })
+                .collect::<HashMap<_, _>>();
+
+            let links = links
+                .into_iter()
+                .map(|mut link| {
+                    let time_distance = probs.get(&link.uuid).unwrap();
+                    link.probability = 1f64
+                        / (1f64 + E.powf((1f64 - falloff_steepness) * time_distance - offset_days));
+                    link
+                })
+                .collect::<Vec<_>>();
+
+            let _ = update_many(links).await;
+        }
     }
 
     pub fn find_links(&mut self, new_records: &[ExpenseRecord]) -> Vec<PossibleLink> {
@@ -85,11 +197,11 @@ impl Linker {
 
         let all_records = self
             .records
-            .data.iter()
+            .data
+            .iter()
             .filter(|record| !self.links.data.iter().any(|link| link.contains(record)));
 
-        let internal_links =
-            self.find_all_possible_links(new_records.iter(), new_records.iter());
+        let internal_links = self.find_all_possible_links(new_records.iter(), new_records.iter());
         let links_to_existing_records =
             self.find_all_possible_links(new_records.iter(), all_records);
 

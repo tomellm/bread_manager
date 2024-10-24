@@ -49,7 +49,7 @@ impl FileUpload {
         reciver: mpsc::Receiver<egui::DroppedFile>,
         records: [Communicator<Uuid, ExpenseRecord>; 2],
         profiles: Communicator<Uuid, Profile>,
-        possible_links: Communicator<Uuid, PossibleLink>,
+        possible_links: [Communicator<Uuid, PossibleLink>; 2],
         links: Communicator<Uuid, Link>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
