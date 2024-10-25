@@ -42,7 +42,6 @@ impl<'a> Widget for RecordListView<'a> {
                     }
                 }
 
-
                 ui.label("Tags");
                 ui.horizontal_wrapped(|ui| {
                     for tag in r.tags() {

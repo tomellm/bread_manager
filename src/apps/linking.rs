@@ -28,19 +28,17 @@ impl App for Linking {
         self.links.state_update();
 
         CentralPanel::default().show(ctx, |ui| {
+            ui.label(ui.available_width().to_string());
             TopBottomPanel::top("possible_links_top_panel").show_inside(ui, |ui| {
-
+                ui.heading("Click which one to view");
                 ui.horizontal(|ui| {
-                    ui.heading("Click which one to view");
-                    ui.horizontal(|ui| {
-                        ui.set_width(300.);
-                        if ui.button("Possible Links").clicked() {
-                            self.anchor = Anchor::PossibleLinks;
-                        }
-                        if ui.button("Links").clicked() {
-                            self.anchor = Anchor::Links;
-                        }
-                    });
+                    ui.set_width(300.);
+                    if ui.button("Possible Links").clicked() {
+                        self.anchor = Anchor::PossibleLinks;
+                    }
+                    if ui.button("Links").clicked() {
+                        self.anchor = Anchor::Links;
+                    }
                 });
             });
             SidePanel::left("possible_link_scroll_area")
@@ -76,7 +74,8 @@ impl Linking {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {
-                possible_links: PossibleLinksView::init(records_one, possible_links, links_one).await,
+                possible_links: PossibleLinksView::init(records_one, possible_links, links_one)
+                    .await,
                 links: LinksView::init(links_two, records_two).await,
                 anchor: Anchor::default(),
             }
@@ -93,13 +92,19 @@ enum Anchor {
 
 fn view_records(negative: Option<&ExpenseRecord>, positive: Option<&ExpenseRecord>, ui: &mut Ui) {
     ui.horizontal(|ui| {
-        ui.vertical_centered(|ui| {
-            ui.group(|ui| {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width() * 0.5);
+            ui.set_height(ui.available_height());
+            ui.vertical(|ui| {
+                ui.heading("Negative Side:");
                 view_record(negative, ui);
             });
         });
-        ui.vertical_centered(|ui| {
-            ui.group(|ui| {
+        ui.group(|ui| {
+            ui.set_width(ui.available_width() * 0.5);
+            ui.set_height(ui.available_height());
+            ui.vertical(|ui| {
+                ui.heading("Positive Side:");
                 view_record(positive, ui);
             });
         });
