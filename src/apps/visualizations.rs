@@ -36,7 +36,7 @@ impl Visualizations {
         records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query_future(QueryType::All).await;
+            let _ = records.query(QueryType::All).await;
             let bars = BarChartVis::new(records);
 
             Self {

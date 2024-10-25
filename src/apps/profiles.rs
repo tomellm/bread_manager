@@ -28,7 +28,7 @@ impl App for Profiles {
                     ui.heading("Profiles");
 
                     let mut delete_action = self.profiles.delete_action();
-                    let profiles = self.profiles.data_map();
+                    let profiles = self.profiles.data.map();
 
                     if profiles.is_empty() {
                         ui.label("there are currently no profiles to be shown");
@@ -73,7 +73,7 @@ impl App for Profiles {
                         });
                     }
                     ui.separator();
-                    self.create_profile.ui(ui);
+                    self.create_profile.ui_update(ui);
                 });
         });
     }
@@ -85,8 +85,8 @@ impl Profiles {
         [profile_one, profile_two]: [Communicator<Uuid, Profile>; 2],
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = profile_one.query_future(QueryType::All).await;
-            let _ = profile_two.query_future(QueryType::All).await;
+            let _ = profile_one.query(QueryType::All).await;
+            let _ = profile_two.query(QueryType::All).await;
             Self {
                 create_profile: CreateProfile::new(reciver, profile_one),
                 profiles: profile_two,

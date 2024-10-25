@@ -1,19 +1,22 @@
 mod filterstate;
-mod tablecolumns;
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use data_communicator::buffered::{
+    change::ChangeResult, communicator::Communicator, query::QueryType,
+};
 use eframe::App;
 use egui::{CentralPanel, SidePanel};
+use egui_light_states::{future_await::FutureAwait, UiStates};
 use filterstate::FilterState;
-use tablecolumns::TableColumns;
+use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
 
-use crate::model::records::ExpenseRecord;
+use crate::{components::expense_records::table::RecordsTable, model::records::ExpenseRecord};
 
 pub struct TableView {
     records: Communicator<Uuid, ExpenseRecord>,
-    columns_info: TableColumns,
+    columns_info: RecordsTable,
     filter_state: FilterState,
+    states: UiStates,
 }
 
 impl App for TableView {
@@ -22,37 +25,44 @@ impl App for TableView {
 
         CentralPanel::default().show(ctx, |ui| {
             CentralPanel::default().show_inside(ui, |ui| {
+                if self.records.is_empty() {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(40.);
+                        ui.label(NO_RECORDS_EMPTY_TEXT);
+                        ui.add_space(40.);
+                    });
+                    return;
+                }
+
+
                 ui.horizontal(|ui| {
                     ui.label("table view");
                     if ui.button("delete all").clicked() {
-                        self.delete_all();
+                        let promise = self.delete_all();
+                        self.states.set_future("delete_all_records").set(promise);
                     }
+                    self.states
+                        .future_status::<ChangeResult>("delete_all_records")
+                        .only_poll();
+
                     ui.label(format!("Curretly {} records.", self.records.data().len()));
                 });
 
                 self.columns_info.toggles(ui);
 
-                egui::ScrollArea::both().show(ui, |ui| {
-                    egui::Grid::new("table of records").show(ui, |ui| {
-                        self.columns_info.header(&mut self.records, ui);
-                        ui.end_row();
-
-                        for record in self
-                            .records
-                            .data_sorted_iter()
-                            .filter(|r| self.filter_state.filter(r))
-                        {
-                            self.columns_info.row(record, ui);
-                            ui.end_row();
-                        }
-                    });
-                });
+                self.columns_info.show_filtered(
+                    &mut self.records,
+                    |r| self.filter_state.filter(r),
+                    ui,
+                );
             });
-            SidePanel::right("filter_selection")
-                .resizable(true)
-                .show_inside(ui, |ui| {
-                    self.filter_state.display_filters(ui);
-                });
+            if !self.records.is_empty() {
+                SidePanel::right("filter_selection")
+                    .resizable(true)
+                    .show_inside(ui, |ui| {
+                        self.filter_state.display_filters(ui);
+                    });
+            }
         });
     }
 }
@@ -62,11 +72,12 @@ impl TableView {
         records: Communicator<Uuid, ExpenseRecord>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query_future(QueryType::All).await;
+            let _ = records.query(QueryType::All).await;
             Self {
                 records,
-                columns_info: TableColumns::default(),
+                columns_info: RecordsTable::default(),
                 filter_state: FilterState::default(),
+                states: UiStates::default(),
             }
         }
     }
@@ -74,8 +85,16 @@ impl TableView {
         false
     }
 
-    pub fn delete_all(&mut self) {
-        let keys = self.records.data_map().keys().cloned().collect::<Vec<_>>();
-        self.records.delete_many(keys);
+    pub fn delete_all(&mut self) -> ImmediateValuePromise<ChangeResult> {
+        let keys = self.records.data.keys_cloned();
+        ImmediateValuePromise::new(self.records.delete_many(keys))
     }
 }
+
+
+const NO_RECORDS_EMPTY_TEXT: &str = r#"
+Usually there would be a list of expenses here...
+
+You have not yet added any expenses to the Application. First create a profile in the Profiles tab,
+then parse a file with it in the File Upload tab and finally view the expenses here.
+"#;

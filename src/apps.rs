@@ -252,18 +252,19 @@ impl State {
             Self {
                 file_upload: FileUpload::init(
                     rx_f,
+                    db.records_signals(),
                     db.profiles_signal(),
-                    db.records_signal(),
-                    db.possible_links_signal(),
+                    db.possible_links_signals(),
+                    db.links_signal(),
                 )
                 .into(),
-                profiles: Profiles::init(rx_p, [db.profiles_signal(), db.profiles_signal()]).into(),
+                profiles: Profiles::init(rx_p, db.profiles_signals()).into(),
                 table_view: TableView::init(db.records_signal()).into(),
                 visualizations: Visualizations::init(db.records_signal()).into(),
-                linking: Linking::new(
-                    db.records_signal(),
-                    db.links_signal(),
-                    db.possible_links_signal(),
+                linking: Linking::init(
+                    db.records_signals(),
+                    db.links_signals(),
+                    db.possible_links_signals(),
                 )
                 .into(),
                 selected_anchor: Anchor::Visualizations,

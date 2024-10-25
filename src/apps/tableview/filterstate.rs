@@ -60,7 +60,7 @@ impl FilterState {
         }
         ui.separator();
         for filter in self.filters.iter_mut() {
-            filter.ui(ui);
+            filter.ui_update(ui);
             ui.add_space(5.)
         }
     }
@@ -82,7 +82,7 @@ where
 }
 
 pub trait TableFilter {
-    fn ui(&mut self, ui: &mut Ui) {
+    fn ui_update(&mut self, ui: &mut Ui) {
         ui.group(|ui| {
             ui.label(self.name());
             ui.horizontal(|ui| {
