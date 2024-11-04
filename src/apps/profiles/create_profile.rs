@@ -5,18 +5,23 @@ mod other_columns;
 use std::sync::Arc;
 
 use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin_name};
-use data_communicator::buffered::{change::ChangeResult, communicator::Communicator};
-use egui::{Spinner, Ui};
-use egui_light_states::{promise_await::{CreatePromiseAwait, DoneResponse}, UiStates};
+use diesel::{QueryDsl, SelectableHelper};
+use egui::Ui;
+use egui_light_states::UiStates;
+use hermes::{container::projecting::ProjectingContainer, factory::Factory};
 use lazy_async_promise::ImmediateValuePromise;
 use main_columns::{datetime_col, expense_col};
 use other_columns::other_cols;
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
-use crate::model::profiles::{
-    builder::{IntermediateProfileState, ProfileBuilder},
-    Profile,
+use crate::{
+    apps::DbConn,
+    db::profiles::{DbProfile, PROFILES_FROM_DB_FN},
+    model::profiles::{
+        builder::{IntermediateProfileState, ProfileBuilder},
+        Profile,
+    },
+    schema::profiles::dsl::profiles as profiles_table,
 };
 
 use super::parser::ProfilePreview;
@@ -25,20 +30,20 @@ pub struct CreateProfile {
     preview: ProfilePreview,
     profile_builder: Arc<ProfileBuilder>,
     intermediate_profile_state: IntermediateProfileState,
-    profiles_communicator: Communicator<Uuid, Profile>,
+    profiles: ProjectingContainer<Profile, DbProfile, DbConn>,
     ui_states: UiStates,
 }
 
 impl CreateProfile {
-    pub fn new(
-        reciver: mpsc::Receiver<egui::DroppedFile>,
-        profiles_communicator: Communicator<Uuid, Profile>,
-    ) -> Self {
+    pub fn new(reciver: mpsc::Receiver<egui::DroppedFile>, factory: Factory<DbConn>) -> Self {
+        let mut profiles = factory.builder().projector_arc(PROFILES_FROM_DB_FN.clone());
+        profiles.query(|| profiles_table.select(DbProfile::as_select()));
+
         Self {
             preview: ProfilePreview::new(reciver),
             profile_builder: Arc::new(ProfileBuilder::default()),
             intermediate_profile_state: IntermediateProfileState::default(),
-            profiles_communicator,
+            profiles,
             ui_states: UiStates::default(),
         }
     }
@@ -67,25 +72,18 @@ impl CreateProfile {
         });
 
         ui.add_sized([ui.available_width(), 50.], |ui: &mut Ui| {
-            ui.vertical_centered_justified(|ui| {
-                let save_profile = self.save_profile();
-                self.ui_states
-                    .promise_await("save profile".into())
-                    .init_ui(|ui, set_promise| match save_profile {
-                        Ok(save_profile_action) => {
-                            if ui.button("save profile").clicked() {
-                                set_promise(save_profile_action());
-                            };
-                        }
-                        Err(()) => {
-                            ui.label("profile is incorrect and cannot be saved");
-                        }
-                    })
-                .waiting_ui(|ui| {
-                    ui.add(Spinner::new());
-                })
-                .done_ui(|_, _| DoneResponse::<ChangeResult>::Clear)
-                    .show(ui);
+            ui.vertical_centered_justified(|ui| match self.parse_profile() {
+                Ok(profile) => {
+                    if ui.button("save profile").clicked() {
+                        self.profiles.execute(
+                            diesel::insert_into(profiles_table)
+                                .values(DbProfile::from_profile(&profile)),
+                        );
+                    };
+                }
+                Err(()) => {
+                    ui.label("profile is incorrect and cannot be saved");
+                }
             })
             .response
         });
@@ -140,10 +138,8 @@ impl CreateProfile {
         }
     }
 
-    fn save_profile(&mut self) -> Result<impl FnOnce() -> ImmediateValuePromise<ChangeResult>, ()> {
+    fn parse_profile(&mut self) -> Result<Profile, ()> {
         self.update_builder();
-        let profile = (*self.profile_builder).clone().build().map_err(|()| {})?;
-        let mut setter = self.profiles_communicator.insert_action();
-        Ok(move || ImmediateValuePromise::new(setter(profile)))
+        (*self.profile_builder).clone().build()
     }
 }

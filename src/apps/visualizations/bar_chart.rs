@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, collections::HashMap, ops::Sub};
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
-use data_communicator::buffered::communicator::Communicator;
+use data_communicator::communicator::Communicator;
 use egui::Ui;
 use egui_plot::{Bar, BarChart, Plot};
 use uuid::Uuid;

@@ -33,13 +33,10 @@ where
     T: App + Send + 'static,
 {
     fn from(value: F) -> Self {
-        let promise = ImmediateValuePromise::new(async move {
-            Ok(value.await)
-        });
+        let promise = ImmediateValuePromise::new(async move { Ok(value.await) });
         Self {
-            state: promise.into()
+            state: promise.into(),
         }
-        
     }
 }
 
@@ -97,14 +94,14 @@ pub trait CompressResult<T> {
     fn compress(&self) -> T;
 }
 
-impl<T> CompressResult<T> for Result<T, T> 
-where 
-    T: Clone
+impl<T> CompressResult<T> for Result<T, T>
+where
+    T: Clone,
 {
     fn compress(&self) -> T {
         match self.clone() {
             Ok(val) => val,
-            Err(err) => err
+            Err(err) => err,
         }
     }
 }
@@ -113,15 +110,32 @@ pub trait CompressDisplayResult {
     fn compless_display(&self) -> String;
 }
 
-impl<V, E> CompressDisplayResult for Result<V, E> 
-where 
+impl<V, E> CompressDisplayResult for Result<V, E>
+where
     V: Display,
     E: Display,
 {
     fn compless_display(&self) -> String {
         match self {
             Ok(val) => val.to_string(),
-            Err(err) => err.to_string()
+            Err(err) => err.to_string(),
         }
+    }
+}
+
+pub trait PromiseUtilities<T> {
+    fn poll_and_check_finished(&mut self) -> bool;
+    fn take_expect(&mut self) -> T;
+}
+
+impl<T> PromiseUtilities<T> for ImmediateValuePromise<T>
+where
+    T: Send + 'static,
+{
+    fn poll_and_check_finished(&mut self) -> bool {
+        !matches!(self.poll_state(), ImmediateValueState::Updating)
+    }
+    fn take_expect(&mut self) -> T {
+        self.take_value().unwrap()
     }
 }

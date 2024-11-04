@@ -1,30 +1,34 @@
 use std::fs;
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use diesel::{QueryDsl, SelectableHelper, SqliteConnection};
 use egui::{
     popup_below_widget, Color32, ComboBox, DroppedFile, Grid, Id, Label, PopupCloseBehavior,
-    RichText, ScrollArea, Ui, Widget,
+    RichText, Ui, Widget,
 };
+use hermes::{container::projecting::ProjectingContainer, factory::Factory};
 use num_traits::Zero;
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::model::profiles::Profile;
+use crate::{db::{profiles::PROFILES_FROM_DB_FN, records::RECORDS_FROM_DB_FN}, schema::profiles::dsl as prof_dsl};
+
+use crate::{apps::DbConn, db::profiles::DbProfile, model::profiles::Profile};
 
 pub(super) struct FilesToParse {
     reciver: mpsc::Receiver<DroppedFile>,
-    profiles: Communicator<Uuid, Profile>,
+    profiles: ProjectingContainer<Profile, DbProfile, DbConn>,
     files: Vec<FileToParse>,
 }
 
 impl FilesToParse {
     pub(super) fn init(
         reciver: mpsc::Receiver<DroppedFile>,
-        profiles: Communicator<Uuid, Profile>,
+        factory: &Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut profiles = factory.builder().projector_arc(PROFILES_FROM_DB_FN.clone());
         async move {
-            let _ = profiles.query(QueryType::All).await;
+            profiles.query(|| prof_dsl::profiles.select(DbProfile::as_select()));
             Self {
                 reciver,
                 profiles,
@@ -50,7 +54,7 @@ impl FilesToParse {
 
                     ui.label(file_to_parse.file.name.clone());
                     Self::file_path(file_to_parse, ui);
-                    Self::profile_select(file_to_parse, &self.profiles, ui);
+                    Self::profile_select(file_to_parse, self.profiles.values(), ui);
                     Self::margin_cutoff(file_to_parse, ui);
                     Self::remove_button(ui)
                 });
@@ -73,7 +77,7 @@ impl FilesToParse {
         }
     }
 
-    fn profile_select(file: &mut FileToParse, profiles: &Communicator<Uuid, Profile>, ui: &mut Ui) {
+    fn profile_select(file: &mut FileToParse, profiles: &Vec<Profile>, ui: &mut Ui) {
         ComboBox::from_id_salt(format!("select_profile_{:?}", file.uuid))
             .selected_text({
                 file.profile
@@ -81,7 +85,7 @@ impl FilesToParse {
                     .map_or(String::from("select profile"), |p| p.name)
             })
             .show_ui(ui, |ui| {
-                for profile in profiles.data.iter() {
+                for profile in profiles.iter() {
                     ui.selectable_value(
                         &mut file.profile,
                         Some(profile.clone()),

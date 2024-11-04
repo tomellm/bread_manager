@@ -5,22 +5,28 @@ mod tableview;
 pub(crate) mod utils;
 mod visualizations;
 
-use std::time::Instant;
+use std::{env, time::Instant};
 
-use data_communicator::buffered::utils::PromiseUtilities;
+use diesel::{
+    r2d2::{ConnectionManager, Pool},
+    SqliteConnection,
+};
 use eframe::{egui, App};
 use egui::global_theme_preference_switch;
+use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 use linking::Linking;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use crate::{db::DB, utils::LoadingScreen};
+use crate::utils::{LoadingScreen, PromiseUtilities};
 
 use self::{
     fileupload::FileUpload, profiles::Profiles, tableview::TableView,
     visualizations::Visualizations,
 };
+
+pub type DbConn = ConnectionManager<SqliteConnection>;
 
 pub struct Fps {
     render_start: Instant,
@@ -29,7 +35,7 @@ pub struct Fps {
 }
 
 pub struct State {
-    db: DB,
+    messenger: Messenger<DbConn>,
     file_upload: LoadingScreen<FileUpload>,
     table_view: LoadingScreen<TableView>,
     profiles: LoadingScreen<Profiles>,
@@ -229,6 +235,7 @@ impl App for BreadApp {
         self.state.db.state_update();
         self.state.fps.update_fps();
         self.update_callback_ctx = Some(ctx.clone());
+        self.state.messenger.state_update();
 
         egui::TopBottomPanel::top("wrap_app_top_bar").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -247,29 +254,28 @@ impl State {
         rx_p: mpsc::Receiver<egui::DroppedFile>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut db = DB::get_db(false).await.unwrap();
+            let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let manager = ConnectionManager::<SqliteConnection>::new(database_url);
 
+            let pool = Pool::builder()
+                .test_on_check_out(true)
+                .build(manager)
+                .expect("Could not build connection pool");
+
+            let messenger = Messenger::new(pool);
+
+            // let mut db = DB::get_db(false).await.unwrap();
+
+            let factory = messenger.factory();
             Self {
-                file_upload: FileUpload::init(
-                    rx_f,
-                    db.records_signals(),
-                    db.profiles_signal(),
-                    db.possible_links_signals(),
-                    db.links_signal(),
-                )
-                .into(),
-                profiles: Profiles::init(rx_p, db.profiles_signals()).into(),
-                table_view: TableView::init(db.records_signal()).into(),
-                visualizations: Visualizations::init(db.records_signal()).into(),
-                linking: Linking::init(
-                    db.records_signals(),
-                    db.links_signals(),
-                    db.possible_links_signals(),
-                )
-                .into(),
+                file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
+                profiles: Profiles::init(rx_p, messenger.factory()).into(),
+                table_view: TableView::init(messenger.factory()).into(),
+                visualizations: Visualizations::init(messenger.factory()).into(),
+                linking: Linking::init(&factory).into(),
                 selected_anchor: Anchor::Visualizations,
-                db,
                 fps: Fps::default(),
+                messenger,
             }
         }
     }

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Local};
-use data_communicator::buffered::communicator::Communicator;
+use data_communicator::communicator::Communicator;
 use egui::Ui;
 use uuid::Uuid;
 

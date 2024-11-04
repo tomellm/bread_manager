@@ -1,15 +1,24 @@
-use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType,
-};
+use diesel::{QueryDsl, SelectableHelper};
 use egui::{Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
-use egui_light_states::{future_await::FutureAwait, UiStates};
-use uuid::Uuid;
+use egui_light_states::UiStates;
+use hermes::{container::projecting::ProjectingContainer, factory::Factory};
 
-use crate::{components::pagination::PaginationControls, model::{linker::Link, records::ExpenseRecord}};
+use crate::{
+    apps::DbConn,
+    components::pagination::PaginationControls,
+    db::{
+        link::{DbLink, LINK_FROM_DB_FN},
+        records::{DbRecord, RECORDS_FROM_DB_FN},
+    },
+    model::{linker::Link, records::ExpenseRecord},
+    schema::{
+        expense_records::dsl::expense_records as records_table, links::dsl::links as links_table,
+    },
+};
 
 pub(super) struct LinksView {
-    links: Communicator<Uuid, Link>,
-    records: Communicator<Uuid, ExpenseRecord>,
+    links: ProjectingContainer<Link, DbLink, DbConn>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
     pagination: PaginationControls,
     selected: Option<Link>,
     state: UiStates,
@@ -17,12 +26,15 @@ pub(super) struct LinksView {
 
 impl LinksView {
     pub(super) fn init(
-        links: Communicator<Uuid, Link>,
-        records: Communicator<Uuid, ExpenseRecord>,
+        factory: &Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut links = factory.builder().projector_arc(LINK_FROM_DB_FN.clone());
+        let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
+
         async move {
-            let _ = links.query(QueryType::All).await;
-            let _ = records.query(QueryType::All).await;
+            let _ = links.query(|| links_table.select(DbLink::as_select()));
+            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+
             Self {
                 links,
                 records,
@@ -38,11 +50,8 @@ impl LinksView {
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
-        if !self.state.is_running::<ChangeResult>("delete_all_links")
-            && ui.button("delete all links").clicked()
-        {
-            let delete_future = self.links.delete_many(self.links.data.keys_cloned());
-            self.state.set_future("delete_all_links").set(delete_future);
+        if ui.button("delete all links").clicked() {
+            self.links.execute(diesel::delete(links_table));
         }
     }
 

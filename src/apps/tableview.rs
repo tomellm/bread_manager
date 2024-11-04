@@ -1,19 +1,25 @@
 mod filterstate;
 
-use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType,
-};
+use diesel::{QueryDsl, SelectableHelper};
 use eframe::App;
 use egui::{CentralPanel, SidePanel};
 use egui_light_states::{future_await::FutureAwait, UiStates};
 use filterstate::FilterState;
+use hermes::{container::projecting::ProjectingContainer, factory::{self, Factory}};
 use lazy_async_promise::ImmediateValuePromise;
 use uuid::Uuid;
 
-use crate::{components::expense_records::table::RecordsTable, model::records::ExpenseRecord};
+use crate::{
+    components::expense_records::table::RecordsTable,
+    db::records::{DbRecord, RECORDS_FROM_DB_FN},
+    model::records::ExpenseRecord,
+    schema::expense_records::dsl::expense_records as records_table,
+};
+
+use super::DbConn;
 
 pub struct TableView {
-    records: Communicator<Uuid, ExpenseRecord>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
     columns_info: RecordsTable,
     filter_state: FilterState,
     states: UiStates,
@@ -33,7 +39,6 @@ impl App for TableView {
                     });
                     return;
                 }
-
 
                 ui.horizontal(|ui| {
                     ui.label("table view");
@@ -69,10 +74,11 @@ impl App for TableView {
 
 impl TableView {
     pub fn init(
-        records: Communicator<Uuid, ExpenseRecord>,
+        factory: Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query(QueryType::All).await;
+            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
+            let _ = records.query(|| records_table.select(DbRecord::as_select()));
             Self {
                 records,
                 columns_info: RecordsTable::default(),
@@ -90,7 +96,6 @@ impl TableView {
         ImmediateValuePromise::new(self.records.delete_many(keys))
     }
 }
-
 
 const NO_RECORDS_EMPTY_TEXT: &str = r#"
 Usually there would be a list of expenses here...

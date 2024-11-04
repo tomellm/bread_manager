@@ -1,24 +1,32 @@
 use std::fs;
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
-use egui::{Grid, ScrollArea, Ui};
+use diesel::{QueryDsl, SelectableHelper};
+use egui::Ui;
 use egui_light_states::{future_await::FutureAwait, UiStates};
+use hermes::{container::projecting::ProjectingContainer, factory::Factory};
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
 use tracing::warn;
-use uuid::Uuid;
+
+use crate::db::possible_links::POSSIBLE_LINK_FROM_DB_FN;
+use crate::db::records::RECORDS_FROM_DB_FN;
+use crate::schema::expense_records::dsl::expense_records as records_table;
+use crate::schema::possible_links::dsl::possible_links as possible_links_table;
 
 use crate::{
-    components::expense_records::table::RecordsTable, db::possible_links, model::{
-        linker::{Link, Linker, PossibleLink},
+    apps::DbConn,
+    components::expense_records::table::RecordsTable,
+    db::{possible_links::DbPossibleLink, records::DbRecord},
+    model::{
+        linker::{Linker, PossibleLink},
         records::ExpenseRecord,
-    }
+    },
 };
 
 use super::files_to_parse::FileToParse;
 
 pub(super) struct ParsedRecords {
-    records: Communicator<Uuid, ExpenseRecord>,
-    possible_links: Communicator<Uuid, PossibleLink>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
     parsed_records: Vec<ExpenseRecord>,
     futures: Vec<ImmediateValuePromise<Vec<ExpenseRecord>>>,
     linker: Linker,
@@ -28,16 +36,21 @@ pub(super) struct ParsedRecords {
 
 impl ParsedRecords {
     pub(super) fn init(
-        [records_one, records_two]: [Communicator<Uuid, ExpenseRecord>; 2],
-        [possible_links_one, possible_links_two]: [Communicator<Uuid, PossibleLink>; 2],
-        links: Communicator<Uuid, Link>,
+        factory: Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records_one.query(QueryType::All).await;
+            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
+            let mut possible_links = factory
+                .builder()
+                .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
+
+            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+            let _ =
+                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
             Self {
-                records: records_one,
-                possible_links: possible_links_one,
-                linker: Linker::init(possible_links_two, links, records_two).await,
+                records,
+                possible_links,
+                linker: Linker::init(factory).await,
                 parsed_records: vec![],
                 futures: vec![],
                 ui: UiStates::default(),

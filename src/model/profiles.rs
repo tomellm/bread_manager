@@ -4,11 +4,11 @@ pub mod error;
 
 use columns::{DateTimeColumn, ExpenseColumn, ParsableWrapper, Parser};
 use error::ProfileError;
+use uuid::Uuid;
 use std::collections::{HashMap, HashSet};
 use tracing::trace;
 
 use bincode as bc;
-use sqlx::types::Uuid;
 
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 

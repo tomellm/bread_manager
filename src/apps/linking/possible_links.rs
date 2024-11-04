@@ -1,25 +1,31 @@
-use std::collections::HashMap;
-
-use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType,
-};
+use diesel::{QueryDsl, SelectableHelper};
 use egui::{Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
 use egui_light_states::{future_await::FutureAwait, UiStates};
-use lazy_async_promise::ImmediateValuePromise;
+use hermes::{
+    container::projecting::ProjectingContainer,
+    factory::{self, Factory},
+};
 use uuid::Uuid;
 
 use crate::{
-    apps::utils::{drag_int, drag_zero_to_one},
-    components::{expense_records::list_view::RecordListView, pagination::PaginationControls},
-    db::possible_links,
-    model::{
-        linker::{Link, Linker, PossibleLink},
-        records::ExpenseRecord,
+    apps::{
+        utils::{drag_int, drag_zero_to_one},
+        DbConn,
+    },
+    components::pagination::PaginationControls,
+    db::{
+        possible_links::{DbPossibleLink, POSSIBLE_LINK_FROM_DB_FN},
+        records::{DbRecord, RECORDS_FROM_DB_FN},
+    },
+    model::linker::{Linker, PossibleLink},
+    schema::{
+        expense_records::dsl::expense_records as records_table,
+        possible_links::dsl::possible_links as possible_links_table,
     },
 };
 
 pub(super) struct PossibleLinksView {
-    possible_links: Communicator<Uuid, PossibleLink>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
     linker: Linker,
     pagination: PaginationControls,
     selected: Option<PossibleLink>,
@@ -30,17 +36,18 @@ pub(super) struct PossibleLinksView {
 
 impl PossibleLinksView {
     pub fn init(
-        records: Communicator<Uuid, ExpenseRecord>,
-        [mut possible_links_one, possible_links_two]: [Communicator<Uuid, PossibleLink>; 2],
-        links: Communicator<Uuid, Link>,
+        factory: &Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut possible_links = factory
+            .builder()
+            .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
         async move {
-            let _ = records.query(QueryType::All).await;
-            let _ = possible_links_one.query(QueryType::All).await;
-            possible_links_one.sort(|a, b| b.probability.total_cmp(&a.probability));
+            let _ =
+                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
+            possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
-                possible_links: possible_links_one,
-                linker: Linker::init(possible_links_two, links, records).await,
+                possible_links,
+                linker: Linker::init(factory.clone()).await,
                 pagination: PaginationControls::default(),
                 selected: None,
                 state: UiStates::default(),
@@ -56,17 +63,8 @@ impl PossibleLinksView {
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
-        if !self
-            .state
-            .is_running::<ChangeResult>("delete_all_possible_links")
-            && ui.button("delete all possible links").clicked()
-        {
-            let delete_future = self
-                .possible_links
-                .delete_many(self.possible_links.data.keys_cloned());
-            self.state
-                .set_future("delete_all_possible_links")
-                .set(delete_future);
+        if ui.button("delete all possible links").clicked() {
+            self.possible_links.execute(diesel::delete(possible_links_table));
         }
     }
 

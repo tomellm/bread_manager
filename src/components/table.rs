@@ -1,4 +1,4 @@
-use data_communicator::buffered::{communicator::Communicator, ValueBounds};
+use data_communicator::{communicator::Communicator, ValueBounds};
 use egui::Ui;
 use uuid::Uuid;
 

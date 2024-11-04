@@ -1,10 +1,25 @@
-use std::{collections::HashMap, f64::consts::E, process::Output};
+use std::{collections::HashMap, f64::consts::E};
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use diesel::associations::HasTable;
+use diesel::{Insertable, QueryDsl, RunQueryDsl, SelectableHelper};
+use hermes::container::projecting::ProjectingContainer;
+use hermes::factory::Factory;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db::possible_links;
+use crate::db::link::DbLink;
+use crate::db::possible_links::DbPossibleLink;
+use crate::schema::expense_records::dsl::expense_records as records_table;
+use crate::schema::links::dsl::links as links_table;
+use crate::schema::possible_links::dsl::possible_links as possible_links_table;
+use crate::{
+    apps::DbConn,
+    db::{
+        link::LINK_FROM_DB_FN,
+        possible_links::POSSIBLE_LINK_FROM_DB_FN,
+        records::{DbRecord, RECORDS_FROM_DB_FN},
+    },
+};
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
 
@@ -69,21 +84,26 @@ impl PossibleLink {
 }
 
 pub struct Linker {
-    possible_links: Communicator<Uuid, PossibleLink>,
-    links: Communicator<Uuid, Link>,
-    records: Communicator<Uuid, ExpenseRecord>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
+    links: ProjectingContainer<Link, DbLink, DbConn>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
 }
 
 impl Linker {
     pub fn init(
-        possible_links: Communicator<Uuid, PossibleLink>,
-        links: Communicator<Uuid, Link>,
-        records: Communicator<Uuid, ExpenseRecord>,
+        factory: Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = possible_links.query(QueryType::All).await;
-            let _ = links.query(QueryType::All).await;
-            let _ = records.query(QueryType::All).await;
+            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
+            let mut possible_links = factory
+                .builder()
+                .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
+            let mut links = factory.builder().projector_arc(LINK_FROM_DB_FN.clone());
+
+            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+            let _ =
+                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
+            let _ = links.query(|| links_table.select(DbLink::as_select()));
 
             Self {
                 possible_links,
@@ -115,7 +135,7 @@ impl Linker {
     ) -> impl std::future::Future<Output = ()> + Send + 'static {
         let links_to_delete = self
             .possible_links
-            .data
+            .values()
             .iter()
             .filter_map(|other_possible_link| {
                 if possible_link.overlaps(other_possible_link) {
@@ -141,25 +161,24 @@ impl Linker {
     ) -> impl std::future::Future<Output = ()> + Send + 'static {
         let linked_records = self
             .possible_links
-            .data
+            .values()
             .iter()
             .flat_map(|link| vec![*link.positive, *link.negative])
             .collect::<Vec<_>>();
         let records = self
             .records
-            .data
-            .map()
+            .values()
             .iter()
-            .filter_map(|(key, val)| {
-                if linked_records.contains(key) {
-                    Some((*key, val.clone()))
+            .filter_map(|val| {
+                if linked_records.contains(&val.uuid()) {
+                    Some((**val.uuid(), val.clone()))
                 } else {
                     None
                 }
             })
             .collect::<HashMap<_, _>>();
-        let links = self.possible_links.data.cloned();
-        let mut update_many = self.possible_links.update_many_action();
+        let links = self.possible_links.values().clone();
+        let possible_links_actor = self.possible_links.actor();
         async move {
             let probs = links
                 .iter()
@@ -184,11 +203,11 @@ impl Linker {
                     let time_distance = probs.get(&link.uuid).unwrap();
                     link.probability = 1f64
                         / (1f64 + E.powf((1f64 - falloff_steepness) * time_distance - offset_days));
-                    link
+                    DbPossibleLink::from(&link)
                 })
                 .collect::<Vec<_>>();
-
-            let _ = update_many(links).await;
+            let query = diesel::insert_into(possible_links_table).values(&links);
+            possible_links_actor.execute(|| query);
         }
     }
 

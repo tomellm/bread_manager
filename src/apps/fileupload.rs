@@ -1,10 +1,11 @@
 mod files_to_parse;
 mod parsed_records;
 
-use data_communicator::buffered::communicator::Communicator;
+use diesel::SqliteConnection;
 use eframe::App;
 use egui_light_states::UiStates;
 use files_to_parse::FilesToParse;
+use hermes::factory::Factory;
 use parsed_records::ParsedRecords;
 use tokio::sync::mpsc;
 use uuid::Uuid;
@@ -14,6 +15,8 @@ use crate::model::{
     profiles::Profile,
     records::ExpenseRecord,
 };
+
+use super::DbConn;
 
 pub struct FileUpload {
     parsed_records: ParsedRecords,
@@ -47,15 +50,12 @@ impl App for FileUpload {
 impl FileUpload {
     pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
-        records: [Communicator<Uuid, ExpenseRecord>; 2],
-        profiles: Communicator<Uuid, Profile>,
-        possible_links: [Communicator<Uuid, PossibleLink>; 2],
-        links: Communicator<Uuid, Link>,
+        factory: Factory<DbConn>
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {
-                files_to_parse: FilesToParse::init(reciver, profiles).await,
-                parsed_records: ParsedRecords::init(records, possible_links, links).await,
+                files_to_parse: FilesToParse::init(reciver, &factory).await,
+                parsed_records: ParsedRecords::init(factory).await,
                 ui: UiStates::default(),
             }
         }

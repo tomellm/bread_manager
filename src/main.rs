@@ -16,6 +16,7 @@ mod components;
 mod db;
 mod model;
 mod utils;
+mod schema;
 
 use apps::BreadApp;
 use eframe::NativeOptions;

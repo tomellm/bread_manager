@@ -1,20 +1,18 @@
 mod links;
 mod possible_links;
 
-use data_communicator::buffered::communicator::Communicator;
 use eframe::App;
 use egui::{CentralPanel, Context, ScrollArea, SidePanel, TopBottomPanel, Ui};
+use hermes::factory::Factory;
 use links::LinksView;
 use possible_links::PossibleLinksView;
-use uuid::Uuid;
 
 use crate::{
     components::{expense_records::list_view::RecordListView, option_display::OptionDisplay},
-    model::{
-        linker::{Link, PossibleLink},
-        records::ExpenseRecord,
-    },
+    model::records::ExpenseRecord,
 };
+
+use super::DbConn;
 
 pub struct Linking {
     possible_links: PossibleLinksView,
@@ -68,14 +66,11 @@ impl App for Linking {
 
 impl Linking {
     pub fn init(
-        [records_one, records_two]: [Communicator<Uuid, ExpenseRecord>; 2],
-        [links_one, links_two]: [Communicator<Uuid, Link>; 2],
-        possible_links: [Communicator<Uuid, PossibleLink>; 2],
+        factory: &Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {
-                possible_links: PossibleLinksView::init(records_one, possible_links, links_one)
-                    .await,
+                possible_links: PossibleLinksView::init(factory).await,
                 links: LinksView::init(links_two, records_two).await,
                 anchor: Anchor::default(),
             }

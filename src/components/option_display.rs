@@ -73,7 +73,7 @@ pub struct OptionDisplayBuilder<'a, T>{
     missing_ui: Box<dyn FnOnce(&mut Ui) + 'a>,
 }
 
-impl<'a, T> OptionDisplayBuilder<'a, T> {
+impl<T> OptionDisplayBuilder<'_, T> {
     pub fn show(self, ui: &mut Ui) {
         match self.option {
             Some(val) => (self.present_ui)(ui, val),

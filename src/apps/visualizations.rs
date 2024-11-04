@@ -1,11 +1,18 @@
 mod bar_chart;
 
 use bar_chart::BarChartVis;
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
+use diesel::{QueryDsl, SelectableHelper};
 use eframe::App;
+use hermes::factory::{self, Factory};
 use uuid::Uuid;
 
-use crate::model::records::ExpenseRecord;
+use crate::{
+    db::records::{DbRecord, RECORDS_FROM_DB_FN},
+    model::records::ExpenseRecord,
+    schema::expense_records::dsl::expense_records as records_table,
+};
+
+use super::DbConn;
 
 pub struct Visualizations {
     update_callback_ctx: Option<egui::Context>,
@@ -33,10 +40,12 @@ impl App for Visualizations {
 
 impl Visualizations {
     pub fn init(
-        records: Communicator<Uuid, ExpenseRecord>,
+        factory: Factory<DbConn>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query(QueryType::All).await;
+            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
+            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+
             let bars = BarChartVis::new(records);
 
             Self {
