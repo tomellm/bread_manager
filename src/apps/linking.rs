@@ -12,8 +12,6 @@ use crate::{
     model::records::ExpenseRecord,
 };
 
-use super::DbConn;
-
 pub struct Linking {
     possible_links: PossibleLinksView,
     links: LinksView,
@@ -65,13 +63,11 @@ impl App for Linking {
 }
 
 impl Linking {
-    pub fn init(
-        factory: &Factory<DbConn>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {
-                possible_links: PossibleLinksView::init(factory).await,
-                links: LinksView::init(links_two, records_two).await,
+                possible_links: PossibleLinksView::init(factory.clone()).await,
+                links: LinksView::init(factory).await,
                 anchor: Anchor::default(),
             }
         }

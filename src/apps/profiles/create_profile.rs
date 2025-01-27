@@ -5,23 +5,25 @@ mod other_columns;
 use std::sync::Arc;
 
 use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin_name};
-use diesel::{QueryDsl, SelectableHelper};
 use egui::Ui;
 use egui_light_states::UiStates;
-use hermes::{container::projecting::ProjectingContainer, factory::Factory};
-use lazy_async_promise::ImmediateValuePromise;
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::projecting::ProjectingContainer,
+    factory::Factory,
+    ToActiveModel,
+};
 use main_columns::{datetime_col, expense_col};
 use other_columns::other_cols;
+use sea_orm::{EntityOrSelect, EntityTrait};
 use tokio::sync::mpsc;
 
 use crate::{
-    apps::DbConn,
-    db::profiles::{DbProfile, PROFILES_FROM_DB_FN},
+    db::profiles::DbProfile,
     model::profiles::{
         builder::{IntermediateProfileState, ProfileBuilder},
         Profile,
     },
-    schema::profiles::dsl::profiles as profiles_table,
 };
 
 use super::parser::ProfilePreview;
@@ -30,14 +32,14 @@ pub struct CreateProfile {
     preview: ProfilePreview,
     profile_builder: Arc<ProfileBuilder>,
     intermediate_profile_state: IntermediateProfileState,
-    profiles: ProjectingContainer<Profile, DbProfile, DbConn>,
+    profiles: ProjectingContainer<Profile, DbProfile>,
     ui_states: UiStates,
 }
 
 impl CreateProfile {
-    pub fn new(reciver: mpsc::Receiver<egui::DroppedFile>, factory: Factory<DbConn>) -> Self {
-        let mut profiles = factory.builder().projector_arc(PROFILES_FROM_DB_FN.clone());
-        profiles.query(|| profiles_table.select(DbProfile::as_select()));
+    pub fn new(reciver: mpsc::Receiver<egui::DroppedFile>, factory: Factory) -> Self {
+        let mut profiles = factory.builder().projector();
+        profiles.query(DbProfile::find().select());
 
         Self {
             preview: ProfilePreview::new(reciver),
@@ -75,10 +77,7 @@ impl CreateProfile {
             ui.vertical_centered_justified(|ui| match self.parse_profile() {
                 Ok(profile) => {
                     if ui.button("save profile").clicked() {
-                        self.profiles.execute(
-                            diesel::insert_into(profiles_table)
-                                .values(DbProfile::from_profile(&profile)),
-                        );
+                        self.profiles.execute(DbProfile::insert(profile.dml()));
                     };
                 }
                 Err(()) => {

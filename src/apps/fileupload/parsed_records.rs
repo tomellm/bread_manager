@@ -1,19 +1,18 @@
 use std::fs;
 
-use diesel::{QueryDsl, SelectableHelper};
 use egui::Ui;
 use egui_light_states::{future_await::FutureAwait, UiStates};
-use hermes::{container::projecting::ProjectingContainer, factory::Factory};
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::projecting::ProjectingContainer,
+    factory::Factory,
+    ToActiveModel,
+};
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
+use sea_orm::{EntityOrSelect, EntityTrait};
 use tracing::warn;
 
-use crate::db::possible_links::POSSIBLE_LINK_FROM_DB_FN;
-use crate::db::records::RECORDS_FROM_DB_FN;
-use crate::schema::expense_records::dsl::expense_records as records_table;
-use crate::schema::possible_links::dsl::possible_links as possible_links_table;
-
 use crate::{
-    apps::DbConn,
     components::expense_records::table::RecordsTable,
     db::{possible_links::DbPossibleLink, records::DbRecord},
     model::{
@@ -25,8 +24,8 @@ use crate::{
 use super::files_to_parse::FileToParse;
 
 pub(super) struct ParsedRecords {
-    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
-    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
     parsed_records: Vec<ExpenseRecord>,
     futures: Vec<ImmediateValuePromise<Vec<ExpenseRecord>>>,
     linker: Linker,
@@ -36,17 +35,15 @@ pub(super) struct ParsedRecords {
 
 impl ParsedRecords {
     pub(super) fn init(
-        factory: Factory<DbConn>,
+        factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
-            let mut possible_links = factory
-                .builder()
-                .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
+            let mut records = factory.builder().projector();
+            let mut possible_links = factory.builder().projector();
 
-            let _ = records.query(|| records_table.select(DbRecord::as_select()));
-            let _ =
-                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
+            let _ = records.query(DbRecord::find().select());
+            let _ = possible_links.query(DbPossibleLink::find().select());
+
             Self {
                 records,
                 possible_links,
@@ -70,7 +67,8 @@ impl ParsedRecords {
             ui.vertical_centered(|ui| {
                 if ui.button("Save parsed Data").clicked() {
                     let future = self.save_parsed_data();
-                    self.ui.set_future("save_parsed_data").set(future);
+                    // ToDo add response
+                    //self.ui.set_future("save_parsed_data").set(future);
                 }
             });
         }
@@ -123,7 +121,7 @@ impl ParsedRecords {
     pub fn state_update(&mut self) {
         let resulting_expenses = self
             .futures
-            .extract_if(|working_future| {
+            .extract_if(.., |working_future| {
                 !matches!(working_future.poll_state(), ImmediateValueState::Updating)
             })
             .filter_map(|mut finished_future| {
@@ -150,17 +148,19 @@ impl ParsedRecords {
         self.parsed_records.drain(..).collect()
     }
 
-    pub fn save_parsed_data(&mut self) -> ImmediateValuePromise<()> {
+    pub fn save_parsed_data(&mut self) {
         let records = self.parsed_records.drain(..).collect::<Vec<_>>();
         let links = self.linker.find_links(&records);
 
-        let records_future = self.records.insert_many(records);
-        let links_future = self.possible_links.insert_many(links);
-        async move {
-            let _ = records_future.await;
-            let _ = links_future.await;
-        }
-        .into()
+        self.records.execute_many(|builder| {
+            builder
+                .execute(DbRecord::insert_many(
+                    records.into_iter().map(ToActiveModel::dml),
+                ))
+                .execute(DbPossibleLink::insert_many(
+                    links.into_iter().map(ToActiveModel::dml),
+                ));
+        });
     }
 }
 

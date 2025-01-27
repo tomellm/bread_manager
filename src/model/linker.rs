@@ -1,25 +1,19 @@
 use std::{collections::HashMap, f64::consts::E};
 
-use diesel::associations::HasTable;
-use diesel::{Insertable, QueryDsl, RunQueryDsl, SelectableHelper};
-use hermes::container::projecting::ProjectingContainer;
+use hermes::carrier::execute::ImplExecuteCarrier;
+use hermes::container::data::ImplData;
 use hermes::factory::Factory;
+use hermes::ToActiveModel;
+use hermes::{carrier::query::ImplQueryCarrier, container::projecting::ProjectingContainer};
+use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter};
+use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
 use uuid::Uuid;
 
+use crate::db;
 use crate::db::link::DbLink;
 use crate::db::possible_links::DbPossibleLink;
-use crate::schema::expense_records::dsl::expense_records as records_table;
-use crate::schema::links::dsl::links as links_table;
-use crate::schema::possible_links::dsl::possible_links as possible_links_table;
-use crate::{
-    apps::DbConn,
-    db::{
-        link::LINK_FROM_DB_FN,
-        possible_links::POSSIBLE_LINK_FROM_DB_FN,
-        records::{DbRecord, RECORDS_FROM_DB_FN},
-    },
-};
+use crate::db::records::DbRecord;
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
 
@@ -29,6 +23,8 @@ pub struct Link {
     pub negative: ExpenseRecordUuid,
     pub positive: ExpenseRecordUuid,
 }
+
+impl_to_database!(Link, <DbLink as EntityTrait>::Model);
 
 impl Link {
     pub fn contains(&self, record: &ExpenseRecord) -> bool {
@@ -61,6 +57,8 @@ pub struct PossibleLink {
     pub probability: f64,
 }
 
+impl_to_database!(PossibleLink, <DbPossibleLink as EntityTrait>::Model);
+
 impl PossibleLink {
     pub fn from_uuids(negative: ExpenseRecordUuid, positive: ExpenseRecordUuid) -> Self {
         Self {
@@ -84,26 +82,21 @@ impl PossibleLink {
 }
 
 pub struct Linker {
-    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
-    links: ProjectingContainer<Link, DbLink, DbConn>,
-    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
+    links: ProjectingContainer<Link, DbLink>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
 }
 
 impl Linker {
-    pub fn init(
-        factory: Factory<DbConn>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
-            let mut possible_links = factory
-                .builder()
-                .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
-            let mut links = factory.builder().projector_arc(LINK_FROM_DB_FN.clone());
+            let mut records = factory.builder().projector();
+            let mut possible_links = factory.builder().projector();
+            let mut links = factory.builder().projector();
 
-            let _ = records.query(|| records_table.select(DbRecord::as_select()));
-            let _ =
-                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
-            let _ = links.query(|| links_table.select(DbLink::as_select()));
+            let _ = records.query(DbRecord::find().select());
+            let _ = possible_links.query(DbPossibleLink::find().select());
+            let _ = links.query(DbLink::find().select());
 
             Self {
                 possible_links,
@@ -123,19 +116,25 @@ impl Linker {
         &self,
         possible_link: &PossibleLink,
     ) -> (Option<&ExpenseRecord>, Option<&ExpenseRecord>) {
-        (
-            self.records.data.map().get(&possible_link.negative),
-            self.records.data.map().get(&possible_link.positive),
-        )
+        self.records
+            .data()
+            .iter()
+            .fold((None, None), |(mut neg, mut pos), record| {
+                let uuid = record.uuid();
+                if uuid.eq(&possible_link.negative) {
+                    neg = Some(record);
+                }
+                if uuid.eq(&possible_link.positive) {
+                    pos = Some(record);
+                }
+                (neg, pos)
+            })
     }
 
-    pub fn create_link(
-        &mut self,
-        possible_link: &PossibleLink,
-    ) -> impl std::future::Future<Output = ()> + Send + 'static {
+    pub fn create_link(&mut self, possible_link: &PossibleLink) {
         let links_to_delete = self
             .possible_links
-            .values()
+            .data()
             .iter()
             .filter_map(|other_possible_link| {
                 if possible_link.overlaps(other_possible_link) {
@@ -146,12 +145,14 @@ impl Linker {
             })
             .collect::<Vec<_>>();
 
-        let delete_future = self.possible_links.delete_many(links_to_delete);
-        let create_future = self.links.insert(possible_link.clone().into());
-        async move {
-            let _ = create_future.await;
-            let _ = delete_future.await;
-        }
+        let link_to_save = Link::from(possible_link.clone());
+
+        self.links.execute_many(move |builder| {
+            builder.execute(DbLink::insert(link_to_save.dml()));
+            builder.execute(
+                DbLink::delete_many().filter(db::link::Column::Uuid.is_in(links_to_delete)),
+            );
+        });
     }
 
     pub fn calculate_probability(
@@ -161,13 +162,13 @@ impl Linker {
     ) -> impl std::future::Future<Output = ()> + Send + 'static {
         let linked_records = self
             .possible_links
-            .values()
+            .data()
             .iter()
             .flat_map(|link| vec![*link.positive, *link.negative])
             .collect::<Vec<_>>();
         let records = self
             .records
-            .values()
+            .data()
             .iter()
             .filter_map(|val| {
                 if linked_records.contains(&val.uuid()) {
@@ -177,8 +178,8 @@ impl Linker {
                 }
             })
             .collect::<HashMap<_, _>>();
-        let links = self.possible_links.values().clone();
-        let possible_links_actor = self.possible_links.actor();
+        let links = self.possible_links.data().clone();
+        let mut possible_links_actor = self.possible_links.actor();
         async move {
             let probs = links
                 .iter()
@@ -197,17 +198,17 @@ impl Linker {
                 })
                 .collect::<HashMap<_, _>>();
 
-            let links = links
+            let new_poss_links = links
                 .into_iter()
                 .map(|mut link| {
                     let time_distance = probs.get(&link.uuid).unwrap();
                     link.probability = 1f64
                         / (1f64 + E.powf((1f64 - falloff_steepness) * time_distance - offset_days));
-                    DbPossibleLink::from(&link)
+                    link.dml()
                 })
                 .collect::<Vec<_>>();
-            let query = diesel::insert_into(possible_links_table).values(&links);
-            possible_links_actor.execute(|| query);
+            //let query = diesel::insert_into(possible_links_table).values(&links);
+            possible_links_actor.execute(DbPossibleLink::insert_many(new_poss_links));
         }
     }
 
@@ -216,9 +217,9 @@ impl Linker {
 
         let all_records = self
             .records
-            .data
+            .data()
             .iter()
-            .filter(|record| !self.links.data.iter().any(|link| link.contains(record)));
+            .filter(|record| !self.links.data().iter().any(|link| link.contains(record)));
 
         let internal_links = self.find_all_possible_links(new_records.iter(), new_records.iter());
         let links_to_existing_records =
@@ -230,7 +231,7 @@ impl Linker {
         info!(
             msg = format!(
                 "Tried to find possible links between [{}] total and [{}] new records. Found [{}]",
-                self.records.data.len(),
+                self.records.data().len(),
                 new_records.len(),
                 possible_links.len()
             )

@@ -1,12 +1,16 @@
 use std::{fmt::Display, mem, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
+use sea_orm::EntityTrait;
 use serde::{Deserialize, Serialize};
+use sqlx_projector::impl_to_database;
 use uuid::Uuid;
+
+use crate::db::records::DbRecord;
 
 use super::profiles::error::ProfileError;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExpenseRecordUuid(pub Uuid);
 
 impl ExpenseRecordUuid {
@@ -40,6 +44,8 @@ pub struct ExpenseRecord {
     tags: Vec<String>,
     origin: String,
 }
+
+impl_to_database!(ExpenseRecord, <DbRecord as EntityTrait>::Model);
 
 impl ExpenseRecord {
     fn new(
@@ -291,7 +297,7 @@ impl DescriptionContainer {
         let old_current = mem::replace(&mut self.current, new_current);
         self.history.push(old_current);
     }
-    pub fn as_vec(& self) -> Vec<&Description> {
+    pub fn as_vec(&self) -> Vec<&Description> {
         let mut iter = vec![&self.current];
         iter.extend(self.history.iter());
         iter

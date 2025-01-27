@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
-use data_communicator::communicator::Communicator;
 use egui::Ui;
+use hermes::container::data::ImplData;
 use uuid::Uuid;
 
 use crate::{components::table::TableColumn, model::records::ExpenseRecord};
@@ -36,11 +36,7 @@ impl RecordsTable {
         self.tags.header(ui);
         self.origin.header(ui);
     }
-    pub(crate) fn sorting_header(
-        &self,
-        records: &mut Communicator<Uuid, ExpenseRecord>,
-        ui: &mut Ui,
-    ) {
+    pub(crate) fn sorting_header(&self, records: &mut impl ImplData<ExpenseRecord>, ui: &mut Ui) {
         self.datetime_created.sorting_header(records, ui);
         self.datetime.sorting_header(records, ui);
         self.uuid.sorting_header(records, ui);
@@ -73,7 +69,7 @@ impl RecordsTable {
     }
     pub(crate) fn show_filtered(
         &self,
-        records: &mut Communicator<Uuid, ExpenseRecord>,
+        records: &mut impl ImplData<ExpenseRecord>,
         filter: impl FnMut(&&ExpenseRecord) -> bool,
         ui: &mut Ui,
     ) {
@@ -82,10 +78,14 @@ impl RecordsTable {
                 self.sorting_header(records, ui);
                 ui.end_row();
 
-                for record in records.data.sorted_iter().filter(filter) {
-                    self.row(record, ui);
-                    ui.end_row();
-                }
+                records
+                    .sorted()
+                    .into_iter()
+                    .filter(filter)
+                    .for_each(|record| {
+                        self.row(record, ui);
+                        ui.end_row();
+                    });
             });
         });
     }

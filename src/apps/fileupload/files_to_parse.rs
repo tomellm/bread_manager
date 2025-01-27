@@ -1,34 +1,36 @@
 use std::fs;
 
-use diesel::{QueryDsl, SelectableHelper, SqliteConnection};
 use egui::{
     popup_below_widget, Color32, ComboBox, DroppedFile, Grid, Id, Label, PopupCloseBehavior,
     RichText, Ui, Widget,
 };
-use hermes::{container::projecting::ProjectingContainer, factory::Factory};
+use hermes::{
+    carrier::query::ImplQueryCarrier,
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
 use num_traits::Zero;
+use sea_orm::{EntityOrSelect, EntityTrait};
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::{db::{profiles::PROFILES_FROM_DB_FN, records::RECORDS_FROM_DB_FN}, schema::profiles::dsl as prof_dsl};
-
-use crate::{apps::DbConn, db::profiles::DbProfile, model::profiles::Profile};
+use crate::{db::profiles::DbProfile, model::profiles::Profile};
 
 pub(super) struct FilesToParse {
     reciver: mpsc::Receiver<DroppedFile>,
-    profiles: ProjectingContainer<Profile, DbProfile, DbConn>,
+    profiles: ProjectingContainer<Profile, DbProfile>,
     files: Vec<FileToParse>,
 }
 
 impl FilesToParse {
     pub(super) fn init(
         reciver: mpsc::Receiver<DroppedFile>,
-        factory: &Factory<DbConn>,
+        factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut profiles = factory.builder().projector_arc(PROFILES_FROM_DB_FN.clone());
+        let mut profiles = factory.builder().projector();
         async move {
-            profiles.query(|| prof_dsl::profiles.select(DbProfile::as_select()));
+            profiles.query(DbProfile::find().select());
             Self {
                 reciver,
                 profiles,
@@ -54,7 +56,7 @@ impl FilesToParse {
 
                     ui.label(file_to_parse.file.name.clone());
                     Self::file_path(file_to_parse, ui);
-                    Self::profile_select(file_to_parse, self.profiles.values(), ui);
+                    Self::profile_select(file_to_parse, self.profiles.data(), ui);
                     Self::margin_cutoff(file_to_parse, ui);
                     Self::remove_button(ui)
                 });
@@ -183,7 +185,7 @@ impl FilesToParse {
     }
 
     pub fn extract_ready_files(&mut self) -> impl Iterator<Item = FileToParse> + '_ {
-        self.files.extract_if(|f| f.profile.is_some())
+        self.files.extract_if(.., |f| f.profile.is_some())
     }
 
     pub fn recive_files(&mut self) {

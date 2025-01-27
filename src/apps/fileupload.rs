@@ -1,22 +1,12 @@
 mod files_to_parse;
 mod parsed_records;
 
-use diesel::SqliteConnection;
 use eframe::App;
 use egui_light_states::UiStates;
 use files_to_parse::FilesToParse;
 use hermes::factory::Factory;
 use parsed_records::ParsedRecords;
 use tokio::sync::mpsc;
-use uuid::Uuid;
-
-use crate::model::{
-    linker::{Link, PossibleLink},
-    profiles::Profile,
-    records::ExpenseRecord,
-};
-
-use super::DbConn;
 
 pub struct FileUpload {
     parsed_records: ParsedRecords,
@@ -33,8 +23,8 @@ impl App for FileUpload {
                 ui.vertical_centered(|ui| {
                     if ui
                         .button("Parse files")
-                            .on_hover_text(TOOL_TIP_PARSE_FILES)
-                            .clicked()
+                        .on_hover_text(TOOL_TIP_PARSE_FILES)
+                        .clicked()
                     {
                         self.parse_files();
                     }
@@ -50,7 +40,7 @@ impl App for FileUpload {
 impl FileUpload {
     pub fn init(
         reciver: mpsc::Receiver<egui::DroppedFile>,
-        factory: Factory<DbConn>
+        factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {

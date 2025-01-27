@@ -1,31 +1,21 @@
-use diesel::{QueryDsl, SelectableHelper};
 use egui::{Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
 use egui_light_states::{future_await::FutureAwait, UiStates};
 use hermes::{
-    container::projecting::ProjectingContainer,
-    factory::{self, Factory},
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
 };
-use uuid::Uuid;
+use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{
-    apps::{
-        utils::{drag_int, drag_zero_to_one},
-        DbConn,
-    },
+    apps::utils::{drag_int, drag_zero_to_one},
     components::pagination::PaginationControls,
-    db::{
-        possible_links::{DbPossibleLink, POSSIBLE_LINK_FROM_DB_FN},
-        records::{DbRecord, RECORDS_FROM_DB_FN},
-    },
+    db::possible_links::DbPossibleLink,
     model::linker::{Linker, PossibleLink},
-    schema::{
-        expense_records::dsl::expense_records as records_table,
-        possible_links::dsl::possible_links as possible_links_table,
-    },
 };
 
 pub(super) struct PossibleLinksView {
-    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink, DbConn>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
     linker: Linker,
     pagination: PaginationControls,
     selected: Option<PossibleLink>,
@@ -35,15 +25,10 @@ pub(super) struct PossibleLinksView {
 }
 
 impl PossibleLinksView {
-    pub fn init(
-        factory: &Factory<DbConn>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut possible_links = factory
-            .builder()
-            .projector_arc(POSSIBLE_LINK_FROM_DB_FN.clone());
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ =
-                possible_links.query(|| possible_links_table.select(DbPossibleLink::as_select()));
+            let mut possible_links = factory.builder().projector();
+            let _ = possible_links.query(DbPossibleLink::find().select());
             possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
                 possible_links,
@@ -64,12 +49,12 @@ impl PossibleLinksView {
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
         if ui.button("delete all possible links").clicked() {
-            self.possible_links.execute(diesel::delete(possible_links_table));
+            self.possible_links.execute(DbPossibleLink::delete_many());
         }
     }
 
     pub(super) fn list(&mut self, ui: &mut Ui) {
-        if self.possible_links.is_empty() {
+        if self.possible_links.data().is_empty() {
             ui.label(POSSIBLE_LINKS_EMPTY_TEXT);
             return;
         }
@@ -93,12 +78,14 @@ impl PossibleLinksView {
         });
         ui.separator();
 
-        self.pagination.controls(ui, self.possible_links.data.len());
+        self.pagination
+            .controls(ui, self.possible_links.data().len());
         self.pagination.page_info(ui);
         for possible_link in self
             .possible_links
-            .data
-            .page(self.pagination.page, self.pagination.per_page)
+            .data()
+            .chunks(self.pagination.per_page)
+            .nth(self.pagination.page)
             .unwrap()
         {
             let response = ui
@@ -183,7 +170,8 @@ impl PossibleLinksView {
                 if !self.state.is_running::<()>("save_possible_link") && ui.button("save").clicked()
                 {
                     let future = self.linker.create_link(link);
-                    self.state.set_future("save_possible_link").set(future);
+                    // ToDo - Add proper state await
+                    // self.state.set_future("save_possible_link").set(future);
                 }
             });
             ui.end_row();

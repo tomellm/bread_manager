@@ -1,40 +1,51 @@
-use std::sync::Arc;
+use hermes::impl_to_active_model;
+use sea_orm::entity::prelude::*;
+use sea_orm::{ActiveModelBehavior, DeriveEntityModel, DeriveRelation, EnumIter};
+use sqlx_projector::projectors::{FromEntity, ToEntity};
+use uuid::Uuid;
 
-use diesel::{prelude::{Insertable, Queryable}, Selectable};
+use crate::model::linker::Link;
 
-use crate::{model::linker::Link, schema};
-
-use super::Uuid;
-
-pub static LINK_FROM_DB_FN: Arc<
-    dyn Fn(DbLink) -> Link + Sync + Send + 'static,
-> = Arc::new(|val: DbLink| Link::from(val));
-
-#[derive(Clone, Debug, Queryable, Selectable, Insertable)]
-#[diesel(table_name = schema::links)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct DbLink {
+#[derive(Clone, Debug, DeriveEntityModel)]
+#[sea_orm(table_name = "links")]
+pub struct Model {
+    #[sea_orm(primary_key)]
     pub uuid: Uuid,
     pub negative: Uuid,
     pub positive: Uuid,
 }
 
-impl From<&Link> for DbLink {
-    fn from(value: &Link) -> Self {
+pub(crate) type DbLink = Entity;
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+
+impl FromEntity<Link> for Model {
+    fn from_entity(entity: Link) -> Self {
         Self {
-            uuid: value.uuid,
-            negative: *value.negative,
-            positive: *value.positive,
+            uuid: entity.uuid,
+            negative: *entity.negative,
+            positive: *entity.positive,
         }
     }
 }
 
-impl From<DbLink> for Link {
-    fn from(value: DbLink) -> Self {
+impl ToEntity<Link> for Model {
+    fn to_entity(self) -> Link {
         Link {
-            uuid: value.uuid,
-            negative: value.negative.into(),
-            positive: value.positive.into(),
+            uuid: self.uuid,
+            negative: self.negative.into(),
+            positive: self.positive.into(),
         }
     }
 }
+
+impl_to_active_model!(Link, Model);
+
+//create table if not exists links (
+//    uuid blob primary key not null,
+//    negative blob not null,
+//    positive blob not null
+//);

@@ -1,47 +1,55 @@
-use std::sync::Arc;
+use hermes::impl_to_active_model;
+use sea_orm::entity::prelude::*;
+use sea_orm::DeriveEntityModel;
+use sqlx_projector::projectors::{FromEntity, ToEntity};
+use uuid::Uuid;
 
-use diesel::{
-    prelude::{Insertable, Queryable},
-    Selectable,
-};
+use crate::model::linker::PossibleLink;
 
-use crate::{model::linker::PossibleLink, schema};
-
-use super::Uuid;
-
-pub static POSSIBLE_LINK_FROM_DB_FN: Arc<
-    dyn Fn(DbPossibleLink) -> PossibleLink + Sync + Send + 'static,
-> = Arc::new(|val: DbPossibleLink| PossibleLink::from(val));
-
-#[derive(Clone, Debug, Queryable, Selectable, Insertable)]
-#[diesel(table_name = schema::possible_links)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-#[diesel(treat_none_as_default_value = false)]
-pub(crate) struct DbPossibleLink {
+#[derive(Clone, Debug, DeriveEntityModel)]
+#[sea_orm(table_name = "possible_links")]
+pub struct Model {
+    #[sea_orm(primary_key)]
     uuid: Uuid,
     negative: Uuid,
     positive: Uuid,
     probability: f64,
 }
 
-impl From<&PossibleLink> for DbPossibleLink {
-    fn from(value: &PossibleLink) -> Self {
+pub type DbPossibleLink = Entity;
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+
+impl FromEntity<PossibleLink> for Model {
+    fn from_entity(entity: PossibleLink) -> Self {
         Self {
-            uuid: value.uuid,
-            negative: *value.negative,
-            positive: *value.positive,
-            probability: value.probability,
+            uuid: entity.uuid,
+            negative: *entity.negative,
+            positive: *entity.positive,
+            probability: entity.probability,
         }
     }
 }
 
-impl From<DbPossibleLink> for PossibleLink {
-    fn from(value: DbPossibleLink) -> Self {
+impl ToEntity<PossibleLink> for Model {
+    fn to_entity(self) -> PossibleLink {
         PossibleLink {
-            uuid: value.uuid,
-            negative: value.negative.into(),
-            positive: value.positive.into(),
-            probability: value.probability,
+            uuid: self.uuid,
+            negative: self.negative.into(),
+            positive: self.positive.into(),
+            probability: self.probability,
         }
     }
 }
+
+impl_to_active_model!(PossibleLink, Model);
+
+//create table if not exists possible_links (
+//    uuid blob primary key not null,
+//    negative blob not null,
+//    positive blob not null,
+//    probability real not null
+//);

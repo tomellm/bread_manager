@@ -1,24 +1,21 @@
-use diesel::{QueryDsl, SelectableHelper};
 use egui::{Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
 use egui_light_states::UiStates;
-use hermes::{container::projecting::ProjectingContainer, factory::Factory};
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
+use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{
-    apps::DbConn,
     components::pagination::PaginationControls,
-    db::{
-        link::{DbLink, LINK_FROM_DB_FN},
-        records::{DbRecord, RECORDS_FROM_DB_FN},
-    },
+    db::{link::DbLink, records::DbRecord},
     model::{linker::Link, records::ExpenseRecord},
-    schema::{
-        expense_records::dsl::expense_records as records_table, links::dsl::links as links_table,
-    },
 };
 
 pub(super) struct LinksView {
-    links: ProjectingContainer<Link, DbLink, DbConn>,
-    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
+    links: ProjectingContainer<Link, DbLink>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
     pagination: PaginationControls,
     selected: Option<Link>,
     state: UiStates,
@@ -26,14 +23,14 @@ pub(super) struct LinksView {
 
 impl LinksView {
     pub(super) fn init(
-        factory: &Factory<DbConn>,
+        factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut links = factory.builder().projector_arc(LINK_FROM_DB_FN.clone());
-        let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
-
         async move {
-            let _ = links.query(|| links_table.select(DbLink::as_select()));
-            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+            let mut links = factory.builder().projector();
+            let mut records = factory.builder().projector();
+
+            let _ = links.query(DbLink::find().select());
+            let _ = records.query(DbRecord::find().select());
 
             Self {
                 links,
@@ -51,24 +48,25 @@ impl LinksView {
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
         if ui.button("delete all links").clicked() {
-            self.links.execute(diesel::delete(links_table));
+            self.links.execute(DbLink::delete_many());
         }
     }
 
     pub(super) fn list(&mut self, ui: &mut Ui) {
-        if self.links.is_empty() {
+        if self.links.data().is_empty() {
             ui.label(LINKS_EMPTY_TEXT);
             return;
         }
 
-        self.pagination.controls(ui, self.links.data.len());
+        self.pagination.controls(ui, self.links.data().len());
         self.pagination.page_info(ui);
-        for link in self
+        let selected_page = self
             .links
-            .data
-            .page(self.pagination.page, self.pagination.per_page)
-            .unwrap()
-        {
+            .data()
+            .chunks(self.pagination.per_page)
+            .nth(self.pagination.page)
+            .unwrap();
+        for link in selected_page {
             let response = ui
                 .scope_builder(
                     UiBuilder::new()
@@ -129,10 +127,12 @@ impl LinksView {
             ui.end_row();
         });
 
-        let (negative, positive) = (
-            self.records.data.map().get(&link.negative),
-            self.records.data.map().get(&link.positive),
-        );
+        let mut records = self
+            .records
+            .data()
+            .iter()
+            .filter(|record| [&link.negative, &link.positive].contains(&record.uuid()));
+        let (negative, positive) = (records.nth(0), records.nth(1));
         super::view_records(negative, positive, ui);
     }
 }

@@ -1,9 +1,11 @@
-use data_communicator::{communicator::Communicator, ValueBounds};
 use egui::Ui;
-use uuid::Uuid;
+use hermes::container::data::ImplData;
 
 use super::soft_button::soft_button;
 
+/// Generic Parameters:
+/// * T: Type of the whole row
+/// * P: Type of the property extracted from T
 pub(crate) struct TableColumn<T, P> {
     name: &'static str,
     active: bool,
@@ -14,7 +16,7 @@ pub(crate) struct TableColumn<T, P> {
 
 impl<T, P> TableColumn<T, P>
 where
-    T: ValueBounds<Uuid>,
+    T: 'static,
     P: Ord + 'static,
 {
     pub(crate) fn active(name: &'static str, display: fn(&T, &mut Ui)) -> Self {
@@ -52,7 +54,7 @@ where
         }
     }
 
-    pub(crate) fn sorting_header(&self, records: &mut Communicator<Uuid, T>, ui: &mut Ui) {
+    pub(crate) fn sorting_header(&self, records: &mut impl ImplData<T>, ui: &mut Ui) {
         if !self.active {
             return;
         }

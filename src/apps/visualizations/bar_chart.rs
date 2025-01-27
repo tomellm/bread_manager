@@ -1,12 +1,16 @@
-use std::{cmp::Ordering, collections::HashMap, ops::Sub};
+use std::{cmp::Ordering, ops::Sub};
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
-use data_communicator::communicator::Communicator;
 use egui::Ui;
 use egui_plot::{Bar, BarChart, Plot};
-use uuid::Uuid;
+use hermes::{
+    carrier::query::ImplQueryCarrier,
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
+use sea_orm::{EntityOrSelect, EntityTrait};
 
-use crate::model::records::ExpenseRecord;
+use crate::{db::records::DbRecord, model::records::ExpenseRecord};
 
 #[derive(Default)]
 enum Charts {
@@ -17,48 +21,50 @@ enum Charts {
 
 pub(super) struct BarChartVis {
     selected: Charts,
-    records: Communicator<Uuid, ExpenseRecord>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
     weekly: Vec<Bar>,
     monthly: Vec<Bar>,
 }
 
 impl BarChartVis {
-    pub fn new(records: Communicator<Uuid, ExpenseRecord>) -> Self {
-        let (weekly, monthly) = Self::update_graphs(records.data.map());
-        Self {
-            selected: Charts::default(),
-            records,
-            weekly,
-            monthly,
+    pub fn new(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut records = factory.builder().projector();
+        async move {
+            records.query(DbRecord::find().select());
+            let (weekly, monthly) = Self::update_graphs(&vec![]);
+            Self {
+                selected: Charts::default(),
+                records,
+                weekly,
+                monthly,
+            }
         }
     }
 
     pub fn update(&mut self) {
         self.records.state_update();
         if self.records.has_changed() {
-            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data.map());
+            let (weekly, monthly) = Self::update_graphs(self.records.data());
             self.weekly = weekly;
             self.monthly = monthly;
         }
     }
 
-    fn update_graphs(records: &HashMap<Uuid, ExpenseRecord>) -> (Vec<Bar>, Vec<Bar>) {
+    fn update_graphs(records: &Vec<ExpenseRecord>) -> (Vec<Bar>, Vec<Bar>) {
         if records.is_empty() {
             return (vec![], vec![]);
         }
 
         let min = records
             .iter()
-            .min_by(|a, b| a.1.datetime().cmp(b.1.datetime()))
+            .min_by(|a, b| a.datetime().cmp(b.datetime()))
             .expect("No min Record found but should be present")
-            .1
             .datetime();
 
         let max = records
             .iter()
-            .max_by(|a, b| a.1.datetime().cmp(b.1.datetime()))
+            .max_by(|a, b| a.datetime().cmp(b.datetime()))
             .expect("No max Record found but should be present")
-            .1
             .datetime();
 
         let mut weekly_amounts = (0..max.sub(min).num_weeks())
@@ -84,7 +90,7 @@ impl BarChartVis {
 
         let is_in_week = is_in_week_fn(min);
 
-        for record in records.values() {
+        for record in records {
             for (week_index_in_days, amount) in &mut weekly_amounts {
                 if is_in_week(*week_index_in_days, record.datetime()) {
                     *amount += record.amount_euro_f64();

@@ -7,15 +7,12 @@ mod visualizations;
 
 use std::{env, time::Instant};
 
-use diesel::{
-    r2d2::{ConnectionManager, Pool},
-    SqliteConnection,
-};
 use eframe::{egui, App};
 use egui::global_theme_preference_switch;
 use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 use linking::Linking;
+use sea_orm::{ConnectOptions, Database};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -26,8 +23,6 @@ use self::{
     visualizations::Visualizations,
 };
 
-pub type DbConn = ConnectionManager<SqliteConnection>;
-
 pub struct Fps {
     render_start: Instant,
     frames_passed: usize,
@@ -35,7 +30,7 @@ pub struct Fps {
 }
 
 pub struct State {
-    messenger: Messenger<DbConn>,
+    messenger: Messenger,
     file_upload: LoadingScreen<FileUpload>,
     table_view: LoadingScreen<TableView>,
     profiles: LoadingScreen<Profiles>,
@@ -219,7 +214,7 @@ impl BreadApp {
 
     pub fn update_sending_files(&mut self) {
         self.sending_files
-            .extract_if(PromiseUtilities::poll_and_check_finished)
+            .extract_if(.., PromiseUtilities::poll_and_check_finished)
             .for_each(|mut result| {
                 if let ImmediateValueState::Error(err) = result.poll_state() {
                     warn!(
@@ -232,7 +227,7 @@ impl BreadApp {
 
 impl App for BreadApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.state.db.state_update();
+        //self.state.db.state_update();
         self.state.fps.update_fps();
         self.update_callback_ctx = Some(ctx.clone());
         self.state.messenger.state_update();
@@ -255,24 +250,21 @@ impl State {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-            let manager = ConnectionManager::<SqliteConnection>::new(database_url);
+            let mut connection_options = ConnectOptions::new(database_url);
+            connection_options
+                .sqlx_logging(true)
+                .sqlx_logging_level(log::LevelFilter::Info);
+            let db = Database::connect(connection_options).await.unwrap();
 
-            let pool = Pool::builder()
-                .test_on_check_out(true)
-                .build(manager)
-                .expect("Could not build connection pool");
-
-            let messenger = Messenger::new(pool);
-
-            // let mut db = DB::get_db(false).await.unwrap();
+            let messenger = Messenger::new(db).await;
 
             let factory = messenger.factory();
             Self {
                 file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
                 profiles: Profiles::init(rx_p, messenger.factory()).into(),
                 table_view: TableView::init(messenger.factory()).into(),
-                visualizations: Visualizations::init(messenger.factory()).into(),
-                linking: Linking::init(&factory).into(),
+                visualizations: Visualizations::init(&factory).into(),
+                linking: Linking::init(messenger.factory()).into(),
                 selected_anchor: Anchor::Visualizations,
                 fps: Fps::default(),
                 messenger,

@@ -1,26 +1,22 @@
-use std::sync::Arc;
-
 use bincode as bc;
 use chrono::{DateTime, Local};
-use diesel::{Insertable, Queryable, Selectable};
+use hermes::impl_to_active_model;
+use sea_orm::entity::prelude::*;
+use sqlx_projector::projectors::{FromEntity, ToEntity};
+use uuid::Uuid;
 
-use crate::{model::records::ExpenseRecord, schema};
-
-use super::Uuid;
+use crate::model::records::ExpenseRecord;
 
 const TAG_SEPARATOR: &str = ";";
 
-pub static RECORDS_FROM_DB_FN: Arc<dyn Fn(DbRecord) -> ExpenseRecord + Sync + Send + 'static> =
-    Arc::new(|val: DbRecord| val.into_record());
-
-#[derive(Queryable, Selectable, Insertable)]
-#[diesel(table_name = schema::expense_records)]
-#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub(crate) struct DbRecord {
-    datetime_created: DateTime<Local>,
+#[derive(Clone, Debug, DeriveEntityModel)]
+#[sea_orm(table_name = "expense_records")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    datetime_created: i64,
     uuid: Uuid,
-    amount: i32,
-    datetime: DateTime<Local>,
+    amount: i64,
+    datetime: i64,
     description: Option<String>,
     description_container: Vec<u8>,
     tags: String,
@@ -28,22 +24,31 @@ pub(crate) struct DbRecord {
     data: Vec<u8>,
 }
 
-impl DbRecord {
-    pub fn from_record(record: &ExpenseRecord) -> Self {
+pub(crate) type DbRecord = Entity;
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {}
+
+impl ActiveModelBehavior for ActiveModel {}
+
+impl FromEntity<ExpenseRecord> for Model {
+    fn from_entity(entity: ExpenseRecord) -> Self {
         Self {
-            datetime_created: record.created().clone().timestamp(),
-            uuid: **record.uuid(),
-            amount: *record.amount() as i32,
-            datetime: record.datetime().clone().timestamp(),
-            description: record.description().cloned(),
-            description_container: bc::serialize(record.description_container()).unwrap(),
-            tags: record.tags().clone().join(TAG_SEPARATOR),
-            data: bc::serialize(record.data()).unwrap(),
-            origin: record.origin().clone(),
+            datetime_created: entity.created().clone().timestamp(),
+            uuid: **entity.uuid(),
+            amount: *entity.amount() as i64,
+            datetime: entity.datetime().clone().timestamp(),
+            description: entity.description().cloned(),
+            description_container: bc::serialize(entity.description_container()).unwrap(),
+            tags: entity.tags().clone().join(TAG_SEPARATOR),
+            data: bc::serialize(entity.data()).unwrap(),
+            origin: entity.origin().clone(),
         }
     }
+}
 
-    pub fn into_record(self) -> ExpenseRecord {
+impl ToEntity<ExpenseRecord> for Model {
+    fn to_entity(self) -> ExpenseRecord {
         ExpenseRecord::new_all(
             DateTime::from_timestamp(self.datetime_created, 0)
                 .map(|d| d.with_timezone(&Local::now().timezone()))
@@ -63,3 +68,18 @@ impl DbRecord {
         )
     }
 }
+
+impl_to_active_model!(ExpenseRecord, Model);
+
+//r#"
+//create table if not exists expense_records (
+//    datetime_created integer not null,
+//    uuid blob primary key not null,
+//    amount integer not null,
+//    datetime integer not null,
+//    description text,
+//    description_container blob not null,
+//    tags text not null,
+//    origin text not null,
+//    data blob not null
+//);

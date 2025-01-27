@@ -1,25 +1,23 @@
 mod filterstate;
 
-use diesel::{QueryDsl, SelectableHelper};
 use eframe::App;
 use egui::{CentralPanel, SidePanel};
-use egui_light_states::{future_await::FutureAwait, UiStates};
+use egui_light_states::UiStates;
 use filterstate::FilterState;
-use hermes::{container::projecting::ProjectingContainer, factory::{self, Factory}};
-use lazy_async_promise::ImmediateValuePromise;
-use uuid::Uuid;
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
+use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{
-    components::expense_records::table::RecordsTable,
-    db::records::{DbRecord, RECORDS_FROM_DB_FN},
+    components::expense_records::table::RecordsTable, db::records::DbRecord,
     model::records::ExpenseRecord,
-    schema::expense_records::dsl::expense_records as records_table,
 };
 
-use super::DbConn;
-
 pub struct TableView {
-    records: ProjectingContainer<ExpenseRecord, DbRecord, DbConn>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
     columns_info: RecordsTable,
     filter_state: FilterState,
     states: UiStates,
@@ -31,7 +29,7 @@ impl App for TableView {
 
         CentralPanel::default().show(ctx, |ui| {
             CentralPanel::default().show_inside(ui, |ui| {
-                if self.records.is_empty() {
+                if self.records.data().is_empty() {
                     ui.vertical_centered(|ui| {
                         ui.add_space(40.);
                         ui.label(NO_RECORDS_EMPTY_TEXT);
@@ -43,12 +41,8 @@ impl App for TableView {
                 ui.horizontal(|ui| {
                     ui.label("table view");
                     if ui.button("delete all").clicked() {
-                        let promise = self.delete_all();
-                        self.states.set_future("delete_all_records").set(promise);
+                        self.records.execute(DbRecord::delete_many())
                     }
-                    self.states
-                        .future_status::<ChangeResult>("delete_all_records")
-                        .only_poll();
 
                     ui.label(format!("Curretly {} records.", self.records.data().len()));
                 });
@@ -61,7 +55,7 @@ impl App for TableView {
                     ui,
                 );
             });
-            if !self.records.is_empty() {
+            if !self.records.data().is_empty() {
                 SidePanel::right("filter_selection")
                     .resizable(true)
                     .show_inside(ui, |ui| {
@@ -73,12 +67,10 @@ impl App for TableView {
 }
 
 impl TableView {
-    pub fn init(
-        factory: Factory<DbConn>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector_arc(RECORDS_FROM_DB_FN.clone());
-            let _ = records.query(|| records_table.select(DbRecord::as_select()));
+            let mut records = factory.builder().projector();
+            let _ = records.query(DbRecord::find().select());
             Self {
                 records,
                 columns_info: RecordsTable::default(),
@@ -91,10 +83,10 @@ impl TableView {
         false
     }
 
-    pub fn delete_all(&mut self) -> ImmediateValuePromise<ChangeResult> {
-        let keys = self.records.data.keys_cloned();
-        ImmediateValuePromise::new(self.records.delete_many(keys))
-    }
+    //pub fn delete_all(&mut self) -> ImmediateValuePromise<ChangeResult> {
+    //    let keys = self.records.data.keys_cloned();
+    //    ImmediateValuePromise::new(self.records.delete_many(keys))
+    //}
 }
 
 const NO_RECORDS_EMPTY_TEXT: &str = r#"

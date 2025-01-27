@@ -4,11 +4,15 @@ pub mod error;
 
 use columns::{DateTimeColumn, ExpenseColumn, ParsableWrapper, Parser};
 use error::ProfileError;
-use uuid::Uuid;
+use sea_orm::EntityTrait;
+use sqlx_projector::impl_to_database;
 use std::collections::{HashMap, HashSet};
 use tracing::trace;
+use uuid::Uuid;
 
 use bincode as bc;
+
+use crate::db::profiles::DbProfile;
 
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
@@ -25,6 +29,8 @@ pub struct Profile {
     pub default_tags: Vec<String>,
     pub origin_name: String,
 }
+
+impl_to_database!(Profile, <DbProfile as EntityTrait>::Model);
 
 type DbProfileParts = (
     (usize, usize),
