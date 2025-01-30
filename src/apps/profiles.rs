@@ -25,7 +25,7 @@ pub struct Profiles {
 
 impl App for Profiles {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.profiles.state_update();
+        self.profiles.state_update(true);
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().show(ui, |ui| {
@@ -93,8 +93,8 @@ impl Profiles {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut profiles = factory.builder().projector();
-            profiles.query(DbProfile::find().select());
+            let mut profiles = factory.builder().name("profiles_profiles").projector();
+            profiles.stored_query(DbProfile::find().select());
             Self {
                 create_profile: CreateProfile::new(reciver, factory),
                 profiles,

@@ -28,9 +28,12 @@ impl FilesToParse {
         reciver: mpsc::Receiver<DroppedFile>,
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut profiles = factory.builder().projector();
+        let mut profiles = factory
+            .builder()
+            .name("files_to_parse_profiles")
+            .projector();
         async move {
-            profiles.query(DbProfile::find().select());
+            profiles.stored_query(DbProfile::find().select());
             Self {
                 reciver,
                 profiles,
@@ -40,7 +43,7 @@ impl FilesToParse {
     }
 
     pub(super) fn files_to_parse_list(&mut self, ui: &mut Ui) {
-        self.profiles.state_update();
+        self.profiles.state_update(true);
         self.recive_files();
 
         if !self.files.is_empty() {
@@ -79,7 +82,7 @@ impl FilesToParse {
         }
     }
 
-    fn profile_select(file: &mut FileToParse, profiles: &Vec<Profile>, ui: &mut Ui) {
+    fn profile_select(file: &mut FileToParse, profiles: &[Profile], ui: &mut Ui) {
         ComboBox::from_id_salt(format!("select_profile_{:?}", file.uuid))
             .selected_text({
                 file.profile

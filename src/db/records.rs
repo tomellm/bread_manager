@@ -21,13 +21,27 @@ pub struct Model {
     description_container: Vec<u8>,
     tags: String,
     origin: String,
+    data_import: Uuid,
     data: Vec<u8>,
 }
 
 pub(crate) type DbRecord = Entity;
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::data_import::Entity",
+        from = "Column::DataImport",
+        to = "super::data_import::Column::Uuid"
+    )]
+    DataImport,
+}
+
+impl Related<super::data_import::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::DataImport.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
 
@@ -43,6 +57,7 @@ impl FromEntity<ExpenseRecord> for Model {
             tags: entity.tags().clone().join(TAG_SEPARATOR),
             data: bc::serialize(entity.data()).unwrap(),
             origin: entity.origin().clone(),
+            data_import: *entity.data_import(),
         }
     }
 }
@@ -65,21 +80,9 @@ impl ToEntity<ExpenseRecord> for Model {
                 .map(str::to_string)
                 .collect::<Vec<String>>(),
             self.origin,
+            self.data_import,
         )
     }
 }
 
 impl_to_active_model!(ExpenseRecord, Model);
-
-//r#"
-//create table if not exists expense_records (
-//    datetime_created integer not null,
-//    uuid blob primary key not null,
-//    amount integer not null,
-//    datetime integer not null,
-//    description text,
-//    description_container blob not null,
-//    tags text not null,
-//    origin text not null,
-//    data blob not null
-//);

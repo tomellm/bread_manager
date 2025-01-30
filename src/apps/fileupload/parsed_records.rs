@@ -14,9 +14,15 @@ use tracing::warn;
 
 use crate::{
     components::expense_records::table::RecordsTable,
-    db::{possible_links::DbPossibleLink, records::DbRecord},
+    db::{
+        data_import::DbDataImport,
+        possible_links::DbPossibleLink,
+        records::{self, DbRecord},
+    },
     model::{
+        data_import::DataImport,
         linker::{Linker, PossibleLink},
+        profiles::ParseResult,
         records::ExpenseRecord,
     },
 };
@@ -27,7 +33,8 @@ pub(super) struct ParsedRecords {
     records: ProjectingContainer<ExpenseRecord, DbRecord>,
     possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
     parsed_records: Vec<ExpenseRecord>,
-    futures: Vec<ImmediateValuePromise<Vec<ExpenseRecord>>>,
+    parsed_imports: Vec<DataImport>,
+    futures: Vec<ImmediateValuePromise<ParseResult>>,
     linker: Linker,
     ui: UiStates,
     table: RecordsTable,
@@ -38,17 +45,21 @@ impl ParsedRecords {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector();
-            let mut possible_links = factory.builder().projector();
+            let mut records = factory.builder().name("parse_records_records").projector();
+            let mut possible_links = factory
+                .builder()
+                .name("parse_records_possible_links")
+                .projector();
 
-            let _ = records.query(DbRecord::find().select());
-            let _ = possible_links.query(DbPossibleLink::find().select());
+            records.stored_query(DbRecord::find().select());
+            possible_links.stored_query(DbPossibleLink::find().select());
 
             Self {
                 records,
                 possible_links,
                 linker: Linker::init(factory).await,
                 parsed_records: vec![],
+                parsed_imports: vec![],
                 futures: vec![],
                 ui: UiStates::default(),
                 table: RecordsTable::default(),
@@ -58,15 +69,15 @@ impl ParsedRecords {
 
     pub fn ui_update(&mut self, ui: &mut Ui) {
         self.state_update();
-        self.records.state_update();
-        self.possible_links.state_update();
+        self.records.state_update(true);
+        self.possible_links.state_update(true);
         self.linker.state_update();
 
         ui.heading("Parsed Data:");
         if !self.parsed_records.is_empty() || self.ui.is_running::<()>("save_parsed_data") {
             ui.vertical_centered(|ui| {
                 if ui.button("Save parsed Data").clicked() {
-                    let future = self.save_parsed_data();
+                    self.save_parsed_data();
                     // ToDo add response
                     //self.ui.set_future("save_parsed_data").set(future);
                 }
@@ -84,7 +95,7 @@ impl ParsedRecords {
         }
     }
 
-    fn create_future(file: FileToParse) -> ImmediateValuePromise<Vec<ExpenseRecord>> {
+    fn create_future(file: FileToParse) -> ImmediateValuePromise<ParseResult> {
         ImmediateValuePromise::new(async move {
             let FileToParse {
                 file,
@@ -100,9 +111,9 @@ impl ParsedRecords {
 
             let file = file.clone().path.unwrap();
             let str_file = fs::read_to_string(file).unwrap();
-            let parsed_file = profile.parse_file(&str_file).unwrap();
+            let parse_result = profile.parse_file(&str_file).unwrap();
 
-            Ok(parsed_file)
+            Ok(parse_result)
         })
     }
 
@@ -119,7 +130,7 @@ impl ParsedRecords {
     }
 
     pub fn state_update(&mut self) {
-        let resulting_expenses = self
+        let (expenses, imports) = self
             .futures
             .extract_if(.., |working_future| {
                 !matches!(working_future.poll_state(), ImmediateValueState::Updating)
@@ -127,7 +138,7 @@ impl ParsedRecords {
             .filter_map(|mut finished_future| {
                 if let Some(result) = finished_future.take_result() {
                     match result {
-                        Ok(expenses) => Some(expenses),
+                        Ok(parse_result) => Some(parse_result),
                         Err(err) => {
                             warn!(
                                 "The parsing future did not succee. Failed with error [{:?}]",
@@ -140,9 +151,16 @@ impl ParsedRecords {
                     None
                 }
             })
-            .flatten()
-            .collect::<Vec<_>>();
-        self.parsed_records.extend(resulting_expenses);
+            .fold(
+                (vec![], vec![]),
+                |(mut records, mut imports), parse_result| {
+                    records.extend(parse_result.rows);
+                    imports.push(parse_result.import);
+                    (records, imports)
+                },
+            );
+        self.parsed_records.extend(expenses);
+        self.parsed_imports.extend(imports);
     }
     pub fn drain_records(&mut self) -> Vec<ExpenseRecord> {
         self.parsed_records.drain(..).collect()
@@ -150,16 +168,25 @@ impl ParsedRecords {
 
     pub fn save_parsed_data(&mut self) {
         let records = self.parsed_records.drain(..).collect::<Vec<_>>();
+        let imports = self.parsed_imports.drain(..).collect::<Vec<_>>();
         let links = self.linker.find_links(&records);
 
         self.records.execute_many(|builder| {
-            builder
-                .execute(DbRecord::insert_many(
+            if !imports.is_empty() {
+                builder.execute(DbDataImport::insert_many(
+                    imports.into_iter().map(ToActiveModel::dml),
+                ));
+            }
+            if !records.is_empty() {
+                builder.execute(DbRecord::insert_many(
                     records.into_iter().map(ToActiveModel::dml),
-                ))
-                .execute(DbPossibleLink::insert_many(
+                ));
+            }
+            if !links.is_empty() {
+                builder.execute(DbPossibleLink::insert_many(
                     links.into_iter().map(ToActiveModel::dml),
                 ));
+            }
         });
     }
 }

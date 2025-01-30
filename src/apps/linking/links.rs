@@ -26,11 +26,11 @@ impl LinksView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut links = factory.builder().projector();
-            let mut records = factory.builder().projector();
+            let mut links = factory.builder().name("links_view_links").projector();
+            let mut records = factory.builder().name("links_view_records").projector();
 
-            let _ = links.query(DbLink::find().select());
-            let _ = records.query(DbRecord::find().select());
+            links.stored_query(DbLink::find().select());
+            records.stored_query(DbRecord::find().select());
 
             Self {
                 links,
@@ -43,7 +43,7 @@ impl LinksView {
     }
 
     pub fn state_update(&mut self) {
-        self.links.state_update();
+        self.links.state_update(true);
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {

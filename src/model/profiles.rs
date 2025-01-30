@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use bincode as bc;
 
-use crate::db::profiles::DbProfile;
+use crate::{db::profiles::DbProfile, model::data_import::DataImport};
 
 use super::records::{ExpenseData, ExpenseRecord, ExpenseRecordBuilder};
 
@@ -77,12 +77,14 @@ impl Profile {
             origin_name,
         }
     }
-    pub fn parse_file(&self, file: &str) -> Result<Vec<ExpenseRecord>, ProfileError> {
+    pub fn parse_file(&self, file: &str) -> Result<ParseResult, ProfileError> {
+        let data_import = DataImport::from_profile_now(self.uuid);
+
         //TODO: dont forget to check that this is correct
         let rows = self.cut_margins(file.lines().collect::<Vec<_>>());
         let res_records = rows
             .into_iter()
-            .map(|row| self.parse_row(row))
+            .map(|row| self.parse_row(row, &data_import))
             .collect::<Vec<_>>();
         trace!(msg = format!("{res_records:?}"));
         if res_records.iter().any(Result::is_err) {
@@ -96,11 +98,18 @@ impl Profile {
                 .unwrap_err()
                 .clone())
         } else {
-            Ok(res_records.into_iter().map(Result::unwrap).collect())
+            Ok(ParseResult::new(
+                res_records.into_iter().map(Result::unwrap).collect(),
+                data_import,
+            ))
         }
     }
 
-    fn parse_row(&self, row: &str) -> Result<ExpenseRecord, ProfileError> {
+    fn parse_row(
+        &self,
+        row: &str,
+        data_import: &DataImport,
+    ) -> Result<ExpenseRecord, ProfileError> {
         let split_row = self.split_row(row);
         if split_row.len() < self.width {
             return Err(ProfileError::width(self.width, split_row.len()));
@@ -147,6 +156,7 @@ impl Profile {
         }
         builder.default_tags(self.default_tags.clone());
         builder.origin(self.origin_name.clone());
+        builder.data_import(data_import.uuid);
         builder.build()
     }
 
@@ -202,5 +212,16 @@ impl Profile {
             default_tags,
             origin_name,
         }
+    }
+}
+
+pub struct ParseResult {
+    pub(crate) rows: Vec<ExpenseRecord>,
+    pub(crate) import: DataImport,
+}
+
+impl ParseResult {
+    pub fn new(rows: Vec<ExpenseRecord>, import: DataImport) -> Self {
+        Self { rows, import }
     }
 }

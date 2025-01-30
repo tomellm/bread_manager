@@ -253,7 +253,7 @@ impl State {
             let mut connection_options = ConnectOptions::new(database_url);
             connection_options
                 .sqlx_logging(true)
-                .sqlx_logging_level(log::LevelFilter::Info);
+                .sqlx_logging_level(log::LevelFilter::Trace);
             let db = Database::connect(connection_options).await.unwrap();
 
             let messenger = Messenger::new(db).await;

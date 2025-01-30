@@ -32,17 +32,18 @@ impl std::ops::Deref for ExpenseRecordUuid {
     }
 }
 
+/// stored as integer as cents
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpenseRecord {
     datetime_created: DateTime<Local>,
     uuid: ExpenseRecordUuid,
-    /// stored as integer as cents
     amount: isize,
     datetime: DateTime<Local>,
     description: Option<DescriptionContainer>,
     data: Vec<ExpenseData>,
     tags: Vec<String>,
     origin: String,
+    data_import: Uuid,
 }
 
 impl_to_database!(ExpenseRecord, <DbRecord as EntityTrait>::Model);
@@ -55,6 +56,7 @@ impl ExpenseRecord {
         default_tags: Vec<String>,
         origin: String,
         description: Option<DescriptionContainer>,
+        data_import: Uuid,
     ) -> Self {
         Self {
             datetime_created: Local::now(),
@@ -65,6 +67,7 @@ impl ExpenseRecord {
             data,
             tags: default_tags,
             origin,
+            data_import,
         }
     }
 
@@ -78,6 +81,7 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         tags: Vec<String>,
         origin: String,
+        data_import: Uuid,
     ) -> Self {
         Self {
             datetime_created,
@@ -88,6 +92,7 @@ impl ExpenseRecord {
             data,
             tags,
             origin,
+            data_import,
         }
     }
     pub fn created(&self) -> &DateTime<Local> {
@@ -125,6 +130,9 @@ impl ExpenseRecord {
     }
     pub fn origin(&self) -> &String {
         &self.origin
+    }
+    pub fn data_import(&self) -> &Uuid {
+        &self.data_import
     }
 }
 
@@ -203,6 +211,7 @@ pub struct ExpenseRecordBuilder {
     description: Option<DescriptionContainer>,
     default_tags: Vec<String>,
     origin: String,
+    data_import: Option<Uuid>,
 }
 
 impl ExpenseRecordBuilder {
@@ -240,17 +249,25 @@ impl ExpenseRecordBuilder {
     pub fn origin(&mut self, origin: String) {
         self.origin = origin;
     }
+    pub fn data_import(&mut self, data_import: Uuid) {
+        self.data_import = Some(data_import);
+    }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
-        match (self.amount, self.datetime) {
-            (Some(amount), Some(datetime)) => Ok(ExpenseRecord::new(
+        match (self.amount, self.datetime, self.data_import) {
+            (Some(amount), Some(datetime), Some(data_import)) => Ok(ExpenseRecord::new(
                 amount,
                 datetime,
                 self.data.clone(),
                 self.default_tags.clone(),
                 self.origin.clone(),
                 self.description.clone().clone(),
+                data_import,
             )),
-            _ => Err(ProfileError::build(self.amount, self.datetime)),
+            _ => Err(ProfileError::build(
+                self.amount,
+                self.datetime,
+                self.data_import,
+            )),
         }
     }
 }

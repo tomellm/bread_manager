@@ -18,7 +18,16 @@ pub struct Model {
 pub(crate) type DbProfile = Entity;
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+pub enum Relation {
+    #[sea_orm(has_many = "super::data_import::Entity")]
+    DataImport,
+}
+
+impl Related<super::data_import::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::DataImport.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
 
@@ -41,10 +50,3 @@ impl ToEntity<Profile> for Model {
 }
 
 impl_to_active_model!(Profile, Model);
-
-//create table if not exists profiles (
-//    uuid blob primary key not null,
-//    name text not null,
-//    origin_name text not null,
-//    data blob not null
-//);

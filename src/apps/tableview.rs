@@ -12,7 +12,8 @@ use hermes::{
 use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{
-    components::expense_records::table::RecordsTable, db::records::DbRecord,
+    components::expense_records::table::RecordsTable,
+    db::{data_import::DbDataImport, records::DbRecord},
     model::records::ExpenseRecord,
 };
 
@@ -25,7 +26,7 @@ pub struct TableView {
 
 impl App for TableView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.records.state_update();
+        self.records.state_update(true);
 
         CentralPanel::default().show(ctx, |ui| {
             CentralPanel::default().show_inside(ui, |ui| {
@@ -41,7 +42,8 @@ impl App for TableView {
                 ui.horizontal(|ui| {
                     ui.label("table view");
                     if ui.button("delete all").clicked() {
-                        self.records.execute(DbRecord::delete_many())
+                        self.records.execute(DbRecord::delete_many());
+                        self.records.execute(DbDataImport::delete_many());
                     }
 
                     ui.label(format!("Curretly {} records.", self.records.data().len()));
@@ -69,8 +71,8 @@ impl App for TableView {
 impl TableView {
     pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector();
-            let _ = records.query(DbRecord::find().select());
+            let mut records = factory.builder().name("tableview_records").projector();
+            records.stored_query(DbRecord::find().select());
             Self {
                 records,
                 columns_info: RecordsTable::default(),

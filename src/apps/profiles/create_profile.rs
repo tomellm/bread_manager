@@ -38,8 +38,11 @@ pub struct CreateProfile {
 
 impl CreateProfile {
     pub fn new(reciver: mpsc::Receiver<egui::DroppedFile>, factory: Factory) -> Self {
-        let mut profiles = factory.builder().projector();
-        profiles.query(DbProfile::find().select());
+        let mut profiles = factory
+            .builder()
+            .name("create_profile_profiles")
+            .projector();
+        profiles.stored_query(DbProfile::find().select());
 
         Self {
             preview: ProfilePreview::new(reciver),

@@ -27,8 +27,11 @@ pub(super) struct PossibleLinksView {
 impl PossibleLinksView {
     pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut possible_links = factory.builder().projector();
-            let _ = possible_links.query(DbPossibleLink::find().select());
+            let mut possible_links = factory
+                .builder()
+                .name("possible_links_view_possible_links")
+                .projector();
+            possible_links.stored_query(DbPossibleLink::find().select());
             possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
                 possible_links,
@@ -43,7 +46,7 @@ impl PossibleLinksView {
     }
 
     pub fn state_update(&mut self) {
-        self.possible_links.state_update();
+        self.possible_links.state_update(true);
         self.linker.state_update();
     }
 
@@ -169,7 +172,7 @@ impl PossibleLinksView {
             ui.horizontal(|ui| {
                 if !self.state.is_running::<()>("save_possible_link") && ui.button("save").clicked()
                 {
-                    let future = self.linker.create_link(link);
+                    let _future = self.linker.create_link(link);
                     // ToDo - Add proper state await
                     // self.state.set_future("save_possible_link").set(future);
                 }

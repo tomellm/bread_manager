@@ -28,9 +28,9 @@ pub(super) struct BarChartVis {
 
 impl BarChartVis {
     pub fn new(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut records = factory.builder().projector();
+        let mut records = factory.builder().name("bar_chart_vis_records").projector();
         async move {
-            records.query(DbRecord::find().select());
+            records.stored_query(DbRecord::find().select());
             let (weekly, monthly) = Self::update_graphs(&vec![]);
             Self {
                 selected: Charts::default(),
@@ -42,7 +42,7 @@ impl BarChartVis {
     }
 
     pub fn update(&mut self) {
-        self.records.state_update();
+        self.records.state_update(true);
         if self.records.has_changed() {
             let (weekly, monthly) = Self::update_graphs(self.records.data());
             self.weekly = weekly;

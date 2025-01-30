@@ -90,13 +90,13 @@ pub struct Linker {
 impl Linker {
     pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().projector();
-            let mut possible_links = factory.builder().projector();
-            let mut links = factory.builder().projector();
+            let mut records = factory.builder().name("linker_records").projector();
+            let mut possible_links = factory.builder().name("linker_possible_links").projector();
+            let mut links = factory.builder().name("linker_links").projector();
 
-            let _ = records.query(DbRecord::find().select());
-            let _ = possible_links.query(DbPossibleLink::find().select());
-            let _ = links.query(DbLink::find().select());
+            records.stored_query(DbRecord::find().select());
+            possible_links.stored_query(DbPossibleLink::find().select());
+            links.stored_query(DbLink::find().select());
 
             Self {
                 possible_links,
@@ -107,9 +107,9 @@ impl Linker {
     }
 
     pub fn state_update(&mut self) {
-        self.possible_links.state_update();
-        self.links.state_update();
-        self.records.state_update();
+        self.possible_links.state_update(true);
+        self.links.state_update(true);
+        self.records.state_update(true);
     }
 
     pub fn get_records(
@@ -171,7 +171,7 @@ impl Linker {
             .data()
             .iter()
             .filter_map(|val| {
-                if linked_records.contains(&val.uuid()) {
+                if linked_records.contains(val.uuid()) {
                     Some((**val.uuid(), val.clone()))
                 } else {
                     None
