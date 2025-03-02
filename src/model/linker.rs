@@ -5,15 +5,20 @@ use hermes::container::data::ImplData;
 use hermes::factory::Factory;
 use hermes::ToActiveModel;
 use hermes::{carrier::query::ImplQueryCarrier, container::projecting::ProjectingContainer};
-use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter};
+use itertools::Itertools;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter, QueryTrait,
+};
+use sea_query::Expr;
 use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-use crate::db;
 use crate::db::link::DbLink;
 use crate::db::possible_links::DbPossibleLink;
+use crate::db::profiles::DbProfile;
 use crate::db::records::DbRecord;
+use crate::db::{self, possible_links};
 
 use super::records::{ExpenseRecord, ExpenseRecordUuid};
 
@@ -132,27 +137,26 @@ impl Linker {
     }
 
     pub fn create_link(&mut self, possible_link: &PossibleLink) {
-        let links_to_delete = self
-            .possible_links
-            .data()
-            .iter()
-            .filter_map(|other_possible_link| {
-                if possible_link.overlaps(other_possible_link) {
-                    Some(other_possible_link.uuid)
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
+        let delete_query = self.delete_related_links_query(possible_link);
         let link_to_save = Link::from(possible_link.clone());
 
         self.links.execute_many(move |builder| {
             builder.execute(DbLink::insert(link_to_save.dml()));
-            builder.execute(
-                DbLink::delete_many().filter(db::link::Column::Uuid.is_in(links_to_delete)),
-            );
+            builder.execute(delete_query);
         });
+    }
+
+    pub fn delete_related_links_query(
+        &self,
+        possible_link: &PossibleLink,
+    ) -> impl QueryTrait + Send + 'static {
+        DbPossibleLink::delete_many().filter(
+            db::possible_links::Column::Positive
+                .eq(*possible_link.positive)
+                .or(db::possible_links::Column::Negative.eq(*possible_link.positive))
+                .or(db::possible_links::Column::Positive.eq(*possible_link.negative))
+                .or(db::possible_links::Column::Negative.eq(*possible_link.negative)),
+        )
     }
 
     pub fn calculate_probability(
@@ -198,41 +202,53 @@ impl Linker {
                 })
                 .collect::<HashMap<_, _>>();
 
-            let new_poss_links = links
+            let uuid_and_vals = links
                 .into_iter()
-                .map(|mut link| {
+                .map(|link| {
+                    let uuid = link.uuid;
                     let time_distance = probs.get(&link.uuid).unwrap();
-                    link.probability = 1f64
+                    let new_val = 1f64
                         / (1f64 + E.powf((1f64 - falloff_steepness) * time_distance - offset_days));
-                    link.dml()
+                    (uuid, new_val)
                 })
-                .collect::<Vec<_>>();
-            //let query = diesel::insert_into(possible_links_table).values(&links);
-            possible_links_actor.execute(DbPossibleLink::insert_many(new_poss_links));
+                .collect_vec();
+
+            possible_links_actor.execute_many(|builder| {
+                uuid_and_vals.into_iter().for_each(|(uuid, new_val)| {
+                    builder.execute(
+                        DbPossibleLink::update_many()
+                            .col_expr(possible_links::Column::Probability, Expr::value(new_val))
+                            .filter(possible_links::Column::Uuid.eq(uuid)),
+                    );
+                });
+            });
         }
     }
 
-    pub fn find_links(&mut self, new_records: &[ExpenseRecord]) -> Vec<PossibleLink> {
+    pub fn find_links<'a>(
+        &'a mut self,
+        new_records: impl Iterator<Item = &'a ExpenseRecord> + Clone,
+    ) -> Vec<PossibleLink> {
         let mut possible_links = vec![];
 
         let all_records = self
             .records
             .data()
             .iter()
+            // remove all records that are already part of a link
             .filter(|record| !self.links.data().iter().any(|link| link.contains(record)));
 
-        let internal_links = self.find_all_possible_links(new_records.iter(), new_records.iter());
+        // find all the links with the remaining records
         let links_to_existing_records =
-            self.find_all_possible_links(new_records.iter(), all_records);
+            self.find_all_possible_links(new_records.clone(), all_records);
 
-        possible_links.extend(internal_links);
         possible_links.extend(links_to_existing_records);
 
         info!(
             msg = format!(
                 "Tried to find possible links between [{}] total and [{}] new records. Found [{}]",
                 self.records.data().len(),
-                new_records.len(),
+                new_records.count(),
                 possible_links.len()
             )
         );
@@ -255,20 +271,20 @@ impl Linker {
     }
 
     fn amounts_are_opposites(&self, left: &ExpenseRecord, right: &ExpenseRecord) -> bool {
-        left.amount() * -1 == *right.amount()
+        (left.amount() * -1).eq(right.amount())
     }
 
     fn create_possible_link(&self, left: &ExpenseRecord, right: &ExpenseRecord) -> PossibleLink {
-        let negative: Uuid;
-        let positive: Uuid;
+        let negative: ExpenseRecordUuid;
+        let positive: ExpenseRecordUuid;
         if left.amount().is_negative() {
-            negative = **left.uuid();
-            positive = **right.uuid();
+            negative = *left.uuid();
+            positive = *right.uuid();
         } else {
-            negative = **right.uuid();
-            positive = **left.uuid();
+            negative = *right.uuid();
+            positive = *left.uuid();
         }
-        PossibleLink::from_uuids(negative.into(), positive.into())
+        PossibleLink::from_uuids(negative, positive)
     }
 
     fn evaluate_if_link(
@@ -276,12 +292,17 @@ impl Linker {
         left: &ExpenseRecord,
         right: &ExpenseRecord,
     ) -> Option<PossibleLink> {
+        // if the uuids are the same
         if left.uuid().eq(right.uuid())
+            // or the amounts are 0
             || self.amounts_empty(left, right)
+            // or the amounts are not opposites
             || !self.amounts_are_opposites(left, right)
         {
+            // no match
             return None;
         }
+        // otherwise create the link
         Some(self.create_possible_link(left, right))
     }
 
@@ -290,9 +311,11 @@ impl Linker {
         outer_records: impl Iterator<Item = &'a ExpenseRecord> + Clone,
         inner_records: impl Iterator<Item = &'a ExpenseRecord> + Clone,
     ) -> Vec<PossibleLink> {
+        // for every outer record
         outer_records
             .into_iter()
             .flat_map(|outer| {
+                // eval if there is a link with the inner records
                 inner_records
                     .clone()
                     .filter_map(|inner| self.evaluate_if_link(outer, inner))

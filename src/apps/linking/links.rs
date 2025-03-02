@@ -5,7 +5,9 @@ use hermes::{
     container::{data::ImplData, projecting::ProjectingContainer},
     factory::Factory,
 };
+use log::info;
 use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_query::ExprTrait;
 
 use crate::{
     components::pagination::PaginationControls,
@@ -99,6 +101,7 @@ impl LinksView {
 
             if response.clicked() {
                 self.selected = Some(link.clone());
+                info!("{:?}, {:?}", link.negative, link.positive);
             }
         }
     }
@@ -127,12 +130,19 @@ impl LinksView {
             ui.end_row();
         });
 
-        let mut records = self
-            .records
-            .data()
-            .iter()
-            .filter(|record| [&link.negative, &link.positive].contains(&record.uuid()));
-        let (negative, positive) = (records.nth(0), records.nth(1));
+        let (negative, positive) =
+            self.records
+                .data()
+                .iter()
+                .fold((None, None), |mut matches, record| {
+                    if link.negative.eq(record.uuid()) {
+                        let _ = matches.0.insert(record);
+                    }
+                    if link.positive.eq(record.uuid()) {
+                        let _ = matches.1.insert(record);
+                    }
+                    matches
+                });
         super::view_records(negative, positive, ui);
     }
 }

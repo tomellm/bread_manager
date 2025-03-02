@@ -84,9 +84,11 @@ impl PossibleLinksView {
         self.pagination
             .controls(ui, self.possible_links.data().len());
         self.pagination.page_info(ui);
+
         for possible_link in self
             .possible_links
-            .data()
+            .data
+            .sorted()
             .chunks(self.pagination.per_page)
             .nth(self.pagination.page)
             .unwrap()
@@ -136,7 +138,7 @@ impl PossibleLinksView {
                 .response;
 
             if response.clicked() {
-                self.selected = Some(possible_link.clone());
+                self.selected = Some((*possible_link).clone());
             }
         }
     }
@@ -170,11 +172,16 @@ impl PossibleLinksView {
 
             ui.label("");
             ui.horizontal(|ui| {
-                if !self.state.is_running::<()>("save_possible_link") && ui.button("save").clicked()
-                {
-                    let _future = self.linker.create_link(link);
-                    // ToDo - Add proper state await
-                    // self.state.set_future("save_possible_link").set(future);
+                if ui.button("save").clicked() {
+                    self.linker.create_link(link);
+                }
+                if ui.button("delete").clicked() {
+                    self.possible_links
+                        .execute(DbPossibleLink::delete_by_id(link.uuid));
+                }
+                if ui.button("delete and similars").clicked() {
+                    self.possible_links
+                        .execute(self.linker.delete_related_links_query(link));
                 }
             });
             ui.end_row();

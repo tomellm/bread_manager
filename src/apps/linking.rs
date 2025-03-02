@@ -82,18 +82,19 @@ enum Anchor {
 }
 
 fn view_records(negative: Option<&ExpenseRecord>, positive: Option<&ExpenseRecord>, ui: &mut Ui) {
-    ui.horizontal(|ui| {
+    ui.vertical(|ui| {
         ui.group(|ui| {
-            ui.set_width(ui.available_width() * 0.5);
-            ui.set_height(ui.available_height());
             ui.vertical(|ui| {
                 ui.heading("Negative Side:");
                 view_record(negative, ui);
             });
         });
+        ui.add_space(10.);
+        ui.vertical_centered(|ui| {
+            ui.label("|\n|\nv");
+        });
+        ui.add_space(10.);
         ui.group(|ui| {
-            ui.set_width(ui.available_width() * 0.5);
-            ui.set_height(ui.available_height());
             ui.vertical(|ui| {
                 ui.heading("Positive Side:");
                 view_record(positive, ui);

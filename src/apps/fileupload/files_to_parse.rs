@@ -17,6 +17,8 @@ use uuid::Uuid;
 
 use crate::{db::profiles::DbProfile, model::profiles::Profile};
 
+use super::ParsingFileState;
+
 pub(super) struct FilesToParse {
     reciver: mpsc::Receiver<DroppedFile>,
     profiles: ProjectingContainer<Profile, DbProfile>,
@@ -42,7 +44,7 @@ impl FilesToParse {
         }
     }
 
-    pub(super) fn files_to_parse_list(&mut self, ui: &mut Ui) {
+    pub(super) fn files_to_parse_list(&mut self, parsing_file: &mut ParsingFileState, ui: &mut Ui) {
         self.profiles.state_update(true);
         self.recive_files();
 
@@ -51,7 +53,7 @@ impl FilesToParse {
                 ui.label("name");
                 ui.label("path");
                 ui.label("profile");
-                ui.label("margin cutoff");
+                ui.label("margin\ncutoff");
                 ui.label("remove");
                 ui.end_row();
                 self.files.retain_mut(|file_to_parse| {
@@ -61,7 +63,7 @@ impl FilesToParse {
                     Self::file_path(file_to_parse, ui);
                     Self::profile_select(file_to_parse, self.profiles.data(), ui);
                     Self::margin_cutoff(file_to_parse, ui);
-                    Self::remove_button(ui)
+                    Self::parse_and_remove_button(file_to_parse, parsing_file, ui)
                 });
             });
         } else {
@@ -177,14 +179,29 @@ impl FilesToParse {
         );
     }
 
-    fn remove_button(ui: &mut Ui) -> bool {
+    fn parse_and_remove_button(
+        file_to_parse: &mut FileToParse,
+        parsing_file: &mut ParsingFileState,
+        ui: &mut Ui,
+    ) -> bool {
+        let mut to_remove = true;
+
         if ui.button("remove").clicked() {
-            ui.end_row();
-            false
-        } else {
-            ui.end_row();
-            true
+            to_remove = false;
         }
+
+        ui.add_enabled_ui(
+            parsing_file.ready_for_parse() && file_to_parse.profile.is_some(),
+            |ui| {
+                if ui.button("parse file").clicked() {
+                    parsing_file.insert(file_to_parse.clone());
+                    to_remove = false;
+                }
+            },
+        );
+
+        ui.end_row();
+        to_remove
     }
 
     pub fn extract_ready_files(&mut self) -> impl Iterator<Item = FileToParse> + '_ {

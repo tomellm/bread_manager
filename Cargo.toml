@@ -34,4 +34,6 @@ sqlx_projector = { path = "../sqlx_projector" }
 sea-query = "0.32.1"
 sea-orm = { version = "1.1.4", features = ["macros", "runtime-tokio", "sqlx-sqlite", "uuid", "with-uuid"] }
 log = "0.4.25"
+futures = "0.3.31"
+itertools = "0.14.0"
 # diesel = { version = "2.2.4", features = ["chrono", "i-implement-a-third-party-backend-and-opt-into-breaking-changes", "r2d2", "returning_clauses_for_sqlite_3_35", "sqlite", "time", "uuid"] }

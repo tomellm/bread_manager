@@ -1,4 +1,4 @@
-use std::{fmt::Display, mem, ops::Deref};
+use std::{cmp::Ordering, fmt::Display, mem, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use sea_orm::EntityTrait;
@@ -133,6 +133,26 @@ impl ExpenseRecord {
     }
     pub fn data_import(&self) -> &Uuid {
         &self.data_import
+    }
+
+    pub fn is_same_record(&self, other: &Self) -> bool {
+        let desc_overlaps = match (&self.description, &other.description) {
+            (Some(this), Some(other)) => this.overlaps_with(other),
+            _ => true,
+        };
+
+        self.amount == other.amount
+            && self.origin.eq(&other.origin)
+            && desc_overlaps
+            && self.datetime.eq(&other.datetime)
+    }
+
+    pub fn sorting_fn() -> impl FnMut(&Self, &Self) -> Ordering {
+        |a, b| {
+            a.datetime()
+                .cmp(b.datetime())
+                .then(a.amount().cmp(b.amount()))
+        }
     }
 }
 
@@ -318,6 +338,24 @@ impl DescriptionContainer {
         let mut iter = vec![&self.current];
         iter.extend(self.history.iter());
         iter
+    }
+
+    pub fn overlaps_with(&self, other: &Self) -> bool {
+        let mut this = self
+            .history
+            .iter()
+            .map(|desc| &desc.desc)
+            .collect::<Vec<_>>();
+        this.push(&self.current.desc);
+
+        let mut others = other
+            .history
+            .iter()
+            .map(|desc| &desc.desc)
+            .collect::<Vec<_>>();
+        others.push(&other.current.desc);
+
+        this.iter().any(|this_item| others.contains(this_item))
     }
 }
 
