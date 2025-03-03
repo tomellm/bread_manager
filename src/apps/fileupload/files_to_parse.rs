@@ -1,30 +1,41 @@
 use std::fs;
 
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use egui::{
     popup_below_widget, Color32, ComboBox, DroppedFile, Grid, Id, Label, PopupCloseBehavior,
-    RichText, ScrollArea, Ui, Widget,
+    RichText, Ui, Widget,
+};
+use hermes::{
+    carrier::query::ImplQueryCarrier,
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
 };
 use num_traits::Zero;
+use sea_orm::{EntityOrSelect, EntityTrait};
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::model::profiles::Profile;
+use crate::{db::profiles::DbProfile, model::profiles::Profile};
+
+use super::ParsingFileState;
 
 pub(super) struct FilesToParse {
     reciver: mpsc::Receiver<DroppedFile>,
-    profiles: Communicator<Uuid, Profile>,
+    profiles: ProjectingContainer<Profile, DbProfile>,
     files: Vec<FileToParse>,
 }
 
 impl FilesToParse {
     pub(super) fn init(
         reciver: mpsc::Receiver<DroppedFile>,
-        profiles: Communicator<Uuid, Profile>,
+        factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut profiles = factory
+            .builder()
+            .name("files_to_parse_profiles")
+            .projector();
         async move {
-            let _ = profiles.query(QueryType::All).await;
+            profiles.stored_query(DbProfile::find().select());
             Self {
                 reciver,
                 profiles,
@@ -33,8 +44,8 @@ impl FilesToParse {
         }
     }
 
-    pub(super) fn files_to_parse_list(&mut self, ui: &mut Ui) {
-        self.profiles.state_update();
+    pub(super) fn files_to_parse_list(&mut self, parsing_file: &mut ParsingFileState, ui: &mut Ui) {
+        self.profiles.state_update(true);
         self.recive_files();
 
         if !self.files.is_empty() {
@@ -42,7 +53,7 @@ impl FilesToParse {
                 ui.label("name");
                 ui.label("path");
                 ui.label("profile");
-                ui.label("margin cutoff");
+                ui.label("margin\ncutoff");
                 ui.label("remove");
                 ui.end_row();
                 self.files.retain_mut(|file_to_parse| {
@@ -50,9 +61,9 @@ impl FilesToParse {
 
                     ui.label(file_to_parse.file.name.clone());
                     Self::file_path(file_to_parse, ui);
-                    Self::profile_select(file_to_parse, &self.profiles, ui);
+                    Self::profile_select(file_to_parse, self.profiles.data(), ui);
                     Self::margin_cutoff(file_to_parse, ui);
-                    Self::remove_button(ui)
+                    Self::parse_and_remove_button(file_to_parse, parsing_file, ui)
                 });
             });
         } else {
@@ -73,7 +84,7 @@ impl FilesToParse {
         }
     }
 
-    fn profile_select(file: &mut FileToParse, profiles: &Communicator<Uuid, Profile>, ui: &mut Ui) {
+    fn profile_select(file: &mut FileToParse, profiles: &[Profile], ui: &mut Ui) {
         ComboBox::from_id_salt(format!("select_profile_{:?}", file.uuid))
             .selected_text({
                 file.profile
@@ -81,7 +92,7 @@ impl FilesToParse {
                     .map_or(String::from("select profile"), |p| p.name)
             })
             .show_ui(ui, |ui| {
-                for profile in profiles.data.iter() {
+                for profile in profiles.iter() {
                     ui.selectable_value(
                         &mut file.profile,
                         Some(profile.clone()),
@@ -168,18 +179,33 @@ impl FilesToParse {
         );
     }
 
-    fn remove_button(ui: &mut Ui) -> bool {
+    fn parse_and_remove_button(
+        file_to_parse: &mut FileToParse,
+        parsing_file: &mut ParsingFileState,
+        ui: &mut Ui,
+    ) -> bool {
+        let mut to_remove = true;
+
         if ui.button("remove").clicked() {
-            ui.end_row();
-            false
-        } else {
-            ui.end_row();
-            true
+            to_remove = false;
         }
+
+        ui.add_enabled_ui(
+            parsing_file.ready_for_parse() && file_to_parse.profile.is_some(),
+            |ui| {
+                if ui.button("parse file").clicked() {
+                    parsing_file.insert(file_to_parse.clone());
+                    to_remove = false;
+                }
+            },
+        );
+
+        ui.end_row();
+        to_remove
     }
 
     pub fn extract_ready_files(&mut self) -> impl Iterator<Item = FileToParse> + '_ {
-        self.files.extract_if(|f| f.profile.is_some())
+        self.files.extract_if(.., |f| f.profile.is_some())
     }
 
     pub fn recive_files(&mut self) {

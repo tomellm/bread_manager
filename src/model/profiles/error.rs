@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use uuid::Uuid;
 
 use super::columns::money::NumberFormat;
 
@@ -26,9 +27,13 @@ impl ProfileError {
             "The profile expects a minimum width of {expected} but got a width of {actual}"
         ))
     }
-    pub fn build(amount: Option<isize>, date: Option<DateTime<Local>>) -> Self {
+    pub fn build(
+        amount: Option<isize>,
+        date: Option<DateTime<Local>>,
+        data_import: Option<Uuid>,
+    ) -> Self {
         Self::BuildRecord(format!(
-            "One of these two is not present: {amount:?} {date:?}"
+            "One of these three is not present: {amount:?} {date:?} {data_import:?}"
         ))
     }
 }

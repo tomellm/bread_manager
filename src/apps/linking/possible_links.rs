@@ -1,25 +1,21 @@
-use std::collections::HashMap;
-
-use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType,
-};
 use egui::{Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
 use egui_light_states::{future_await::FutureAwait, UiStates};
-use lazy_async_promise::ImmediateValuePromise;
-use uuid::Uuid;
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
+use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{
     apps::utils::{drag_int, drag_zero_to_one},
-    components::{expense_records::list_view::RecordListView, pagination::PaginationControls},
-    db::possible_links,
-    model::{
-        linker::{Link, Linker, PossibleLink},
-        records::ExpenseRecord,
-    },
+    components::pagination::PaginationControls,
+    db::possible_links::DbPossibleLink,
+    model::linker::{Linker, PossibleLink},
 };
 
 pub(super) struct PossibleLinksView {
-    possible_links: Communicator<Uuid, PossibleLink>,
+    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
     linker: Linker,
     pagination: PaginationControls,
     selected: Option<PossibleLink>,
@@ -29,18 +25,17 @@ pub(super) struct PossibleLinksView {
 }
 
 impl PossibleLinksView {
-    pub fn init(
-        records: Communicator<Uuid, ExpenseRecord>,
-        [mut possible_links_one, possible_links_two]: [Communicator<Uuid, PossibleLink>; 2],
-        links: Communicator<Uuid, Link>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = records.query(QueryType::All).await;
-            let _ = possible_links_one.query(QueryType::All).await;
-            possible_links_one.sort(|a, b| b.probability.total_cmp(&a.probability));
+            let mut possible_links = factory
+                .builder()
+                .name("possible_links_view_possible_links")
+                .projector();
+            possible_links.stored_query(DbPossibleLink::find().select());
+            possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
-                possible_links: possible_links_one,
-                linker: Linker::init(possible_links_two, links, records).await,
+                possible_links,
+                linker: Linker::init(factory.clone()).await,
                 pagination: PaginationControls::default(),
                 selected: None,
                 state: UiStates::default(),
@@ -51,27 +46,18 @@ impl PossibleLinksView {
     }
 
     pub fn state_update(&mut self) {
-        self.possible_links.state_update();
+        self.possible_links.state_update(true);
         self.linker.state_update();
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
-        if !self
-            .state
-            .is_running::<ChangeResult>("delete_all_possible_links")
-            && ui.button("delete all possible links").clicked()
-        {
-            let delete_future = self
-                .possible_links
-                .delete_many(self.possible_links.data.keys_cloned());
-            self.state
-                .set_future("delete_all_possible_links")
-                .set(delete_future);
+        if ui.button("delete all possible links").clicked() {
+            self.possible_links.execute(DbPossibleLink::delete_many());
         }
     }
 
     pub(super) fn list(&mut self, ui: &mut Ui) {
-        if self.possible_links.is_empty() {
+        if self.possible_links.data().is_empty() {
             ui.label(POSSIBLE_LINKS_EMPTY_TEXT);
             return;
         }
@@ -95,12 +81,16 @@ impl PossibleLinksView {
         });
         ui.separator();
 
-        self.pagination.controls(ui, self.possible_links.data.len());
+        self.pagination
+            .controls(ui, self.possible_links.data().len());
         self.pagination.page_info(ui);
+
         for possible_link in self
             .possible_links
             .data
-            .page(self.pagination.page, self.pagination.per_page)
+            .sorted()
+            .chunks(self.pagination.per_page)
+            .nth(self.pagination.page)
             .unwrap()
         {
             let response = ui
@@ -148,7 +138,7 @@ impl PossibleLinksView {
                 .response;
 
             if response.clicked() {
-                self.selected = Some(possible_link.clone());
+                self.selected = Some((*possible_link).clone());
             }
         }
     }
@@ -182,10 +172,16 @@ impl PossibleLinksView {
 
             ui.label("");
             ui.horizontal(|ui| {
-                if !self.state.is_running::<()>("save_possible_link") && ui.button("save").clicked()
-                {
-                    let future = self.linker.create_link(link);
-                    self.state.set_future("save_possible_link").set(future);
+                if ui.button("save").clicked() {
+                    self.linker.create_link(link);
+                }
+                if ui.button("delete").clicked() {
+                    self.possible_links
+                        .execute(DbPossibleLink::delete_by_id(link.uuid));
+                }
+                if ui.button("delete and similars").clicked() {
+                    self.possible_links
+                        .execute(self.linker.delete_related_links_query(link));
                 }
             });
             ui.end_row();

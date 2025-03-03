@@ -1,15 +1,23 @@
-use data_communicator::buffered::{
-    change::ChangeResult, communicator::Communicator, query::QueryType,
-};
 use egui::{Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
-use egui_light_states::{future_await::FutureAwait, UiStates};
-use uuid::Uuid;
+use egui_light_states::UiStates;
+use hermes::{
+    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
+    container::{data::ImplData, projecting::ProjectingContainer},
+    factory::Factory,
+};
+use log::info;
+use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_query::ExprTrait;
 
-use crate::{components::pagination::PaginationControls, model::{linker::Link, records::ExpenseRecord}};
+use crate::{
+    components::pagination::PaginationControls,
+    db::{link::DbLink, records::DbRecord},
+    model::{linker::Link, records::ExpenseRecord},
+};
 
 pub(super) struct LinksView {
-    links: Communicator<Uuid, Link>,
-    records: Communicator<Uuid, ExpenseRecord>,
+    links: ProjectingContainer<Link, DbLink>,
+    records: ProjectingContainer<ExpenseRecord, DbRecord>,
     pagination: PaginationControls,
     selected: Option<Link>,
     state: UiStates,
@@ -17,12 +25,15 @@ pub(super) struct LinksView {
 
 impl LinksView {
     pub(super) fn init(
-        links: Communicator<Uuid, Link>,
-        records: Communicator<Uuid, ExpenseRecord>,
+        factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let _ = links.query(QueryType::All).await;
-            let _ = records.query(QueryType::All).await;
+            let mut links = factory.builder().name("links_view_links").projector();
+            let mut records = factory.builder().name("links_view_records").projector();
+
+            links.stored_query(DbLink::find().select());
+            records.stored_query(DbRecord::find().select());
+
             Self {
                 links,
                 records,
@@ -34,32 +45,30 @@ impl LinksView {
     }
 
     pub fn state_update(&mut self) {
-        self.links.state_update();
+        self.links.state_update(true);
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
-        if !self.state.is_running::<ChangeResult>("delete_all_links")
-            && ui.button("delete all links").clicked()
-        {
-            let delete_future = self.links.delete_many(self.links.data.keys_cloned());
-            self.state.set_future("delete_all_links").set(delete_future);
+        if ui.button("delete all links").clicked() {
+            self.links.execute(DbLink::delete_many());
         }
     }
 
     pub(super) fn list(&mut self, ui: &mut Ui) {
-        if self.links.is_empty() {
+        if self.links.data().is_empty() {
             ui.label(LINKS_EMPTY_TEXT);
             return;
         }
 
-        self.pagination.controls(ui, self.links.data.len());
+        self.pagination.controls(ui, self.links.data().len());
         self.pagination.page_info(ui);
-        for link in self
+        let selected_page = self
             .links
-            .data
-            .page(self.pagination.page, self.pagination.per_page)
-            .unwrap()
-        {
+            .data()
+            .chunks(self.pagination.per_page)
+            .nth(self.pagination.page)
+            .unwrap();
+        for link in selected_page {
             let response = ui
                 .scope_builder(
                     UiBuilder::new()
@@ -92,6 +101,7 @@ impl LinksView {
 
             if response.clicked() {
                 self.selected = Some(link.clone());
+                info!("{:?}, {:?}", link.negative, link.positive);
             }
         }
     }
@@ -120,10 +130,19 @@ impl LinksView {
             ui.end_row();
         });
 
-        let (negative, positive) = (
-            self.records.data.map().get(&link.negative),
-            self.records.data.map().get(&link.positive),
-        );
+        let (negative, positive) =
+            self.records
+                .data()
+                .iter()
+                .fold((None, None), |mut matches, record| {
+                    if link.negative.eq(record.uuid()) {
+                        let _ = matches.0.insert(record);
+                    }
+                    if link.positive.eq(record.uuid()) {
+                        let _ = matches.1.insert(record);
+                    }
+                    matches
+                });
         super::view_records(negative, positive, ui);
     }
 }

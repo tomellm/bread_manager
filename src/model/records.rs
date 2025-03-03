@@ -1,12 +1,16 @@
-use std::{fmt::Display, mem, ops::Deref};
+use std::{cmp::Ordering, fmt::Display, mem, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
+use sea_orm::EntityTrait;
 use serde::{Deserialize, Serialize};
+use sqlx_projector::impl_to_database;
 use uuid::Uuid;
+
+use crate::db::records::DbRecord;
 
 use super::profiles::error::ProfileError;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExpenseRecordUuid(pub Uuid);
 
 impl ExpenseRecordUuid {
@@ -28,18 +32,21 @@ impl std::ops::Deref for ExpenseRecordUuid {
     }
 }
 
+/// stored as integer as cents
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExpenseRecord {
     datetime_created: DateTime<Local>,
     uuid: ExpenseRecordUuid,
-    /// stored as integer as cents
     amount: isize,
     datetime: DateTime<Local>,
     description: Option<DescriptionContainer>,
     data: Vec<ExpenseData>,
     tags: Vec<String>,
     origin: String,
+    data_import: Uuid,
 }
+
+impl_to_database!(ExpenseRecord, <DbRecord as EntityTrait>::Model);
 
 impl ExpenseRecord {
     fn new(
@@ -49,6 +56,7 @@ impl ExpenseRecord {
         default_tags: Vec<String>,
         origin: String,
         description: Option<DescriptionContainer>,
+        data_import: Uuid,
     ) -> Self {
         Self {
             datetime_created: Local::now(),
@@ -59,6 +67,7 @@ impl ExpenseRecord {
             data,
             tags: default_tags,
             origin,
+            data_import,
         }
     }
 
@@ -72,6 +81,7 @@ impl ExpenseRecord {
         data: Vec<ExpenseData>,
         tags: Vec<String>,
         origin: String,
+        data_import: Uuid,
     ) -> Self {
         Self {
             datetime_created,
@@ -82,6 +92,7 @@ impl ExpenseRecord {
             data,
             tags,
             origin,
+            data_import,
         }
     }
     pub fn created(&self) -> &DateTime<Local> {
@@ -119,6 +130,29 @@ impl ExpenseRecord {
     }
     pub fn origin(&self) -> &String {
         &self.origin
+    }
+    pub fn data_import(&self) -> &Uuid {
+        &self.data_import
+    }
+
+    pub fn is_same_record(&self, other: &Self) -> bool {
+        let desc_overlaps = match (&self.description, &other.description) {
+            (Some(this), Some(other)) => this.overlaps_with(other),
+            _ => true,
+        };
+
+        self.amount == other.amount
+            && self.origin.eq(&other.origin)
+            && desc_overlaps
+            && self.datetime.eq(&other.datetime)
+    }
+
+    pub fn sorting_fn() -> impl FnMut(&Self, &Self) -> Ordering {
+        |a, b| {
+            a.datetime()
+                .cmp(b.datetime())
+                .then(a.amount().cmp(b.amount()))
+        }
     }
 }
 
@@ -197,6 +231,7 @@ pub struct ExpenseRecordBuilder {
     description: Option<DescriptionContainer>,
     default_tags: Vec<String>,
     origin: String,
+    data_import: Option<Uuid>,
 }
 
 impl ExpenseRecordBuilder {
@@ -234,17 +269,25 @@ impl ExpenseRecordBuilder {
     pub fn origin(&mut self, origin: String) {
         self.origin = origin;
     }
+    pub fn data_import(&mut self, data_import: Uuid) {
+        self.data_import = Some(data_import);
+    }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
-        match (self.amount, self.datetime) {
-            (Some(amount), Some(datetime)) => Ok(ExpenseRecord::new(
+        match (self.amount, self.datetime, self.data_import) {
+            (Some(amount), Some(datetime), Some(data_import)) => Ok(ExpenseRecord::new(
                 amount,
                 datetime,
                 self.data.clone(),
                 self.default_tags.clone(),
                 self.origin.clone(),
                 self.description.clone().clone(),
+                data_import,
             )),
-            _ => Err(ProfileError::build(self.amount, self.datetime)),
+            _ => Err(ProfileError::build(
+                self.amount,
+                self.datetime,
+                self.data_import,
+            )),
         }
     }
 }
@@ -291,10 +334,28 @@ impl DescriptionContainer {
         let old_current = mem::replace(&mut self.current, new_current);
         self.history.push(old_current);
     }
-    pub fn as_vec(& self) -> Vec<&Description> {
+    pub fn as_vec(&self) -> Vec<&Description> {
         let mut iter = vec![&self.current];
         iter.extend(self.history.iter());
         iter
+    }
+
+    pub fn overlaps_with(&self, other: &Self) -> bool {
+        let mut this = self
+            .history
+            .iter()
+            .map(|desc| &desc.desc)
+            .collect::<Vec<_>>();
+        this.push(&self.current.desc);
+
+        let mut others = other
+            .history
+            .iter()
+            .map(|desc| &desc.desc)
+            .collect::<Vec<_>>();
+        others.push(&other.current.desc);
+
+        this.iter().any(|this_item| others.contains(this_item))
     }
 }
 

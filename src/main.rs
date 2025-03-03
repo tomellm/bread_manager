@@ -50,7 +50,7 @@ async fn main() -> eframe::Result<()> {
         ..Default::default()
     };
     eframe::run_native(
-        "My egui App",
+        "Bread App",
         options,
         Box::new(|_cc| Ok(Box::new(LoadingScreen::from(BreadApp::init())))),
     )

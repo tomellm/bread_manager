@@ -5,17 +5,18 @@ mod tableview;
 pub(crate) mod utils;
 mod visualizations;
 
-use std::time::Instant;
+use std::{env, time::Instant};
 
-use data_communicator::buffered::utils::PromiseUtilities;
 use eframe::{egui, App};
 use egui::global_theme_preference_switch;
+use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 use linking::Linking;
+use sea_orm::{ConnectOptions, Database};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use crate::{db::DB, utils::LoadingScreen};
+use crate::utils::{LoadingScreen, PromiseUtilities};
 
 use self::{
     fileupload::FileUpload, profiles::Profiles, tableview::TableView,
@@ -29,7 +30,7 @@ pub struct Fps {
 }
 
 pub struct State {
-    db: DB,
+    messenger: Messenger,
     file_upload: LoadingScreen<FileUpload>,
     table_view: LoadingScreen<TableView>,
     profiles: LoadingScreen<Profiles>,
@@ -213,7 +214,7 @@ impl BreadApp {
 
     pub fn update_sending_files(&mut self) {
         self.sending_files
-            .extract_if(PromiseUtilities::poll_and_check_finished)
+            .extract_if(.., PromiseUtilities::poll_and_check_finished)
             .for_each(|mut result| {
                 if let ImmediateValueState::Error(err) = result.poll_state() {
                     warn!(
@@ -226,9 +227,10 @@ impl BreadApp {
 
 impl App for BreadApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        self.state.db.state_update();
+        //self.state.db.state_update();
         self.state.fps.update_fps();
         self.update_callback_ctx = Some(ctx.clone());
+        self.state.messenger.state_update();
 
         egui::TopBottomPanel::top("wrap_app_top_bar").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
@@ -247,29 +249,25 @@ impl State {
         rx_p: mpsc::Receiver<egui::DroppedFile>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut db = DB::get_db(false).await.unwrap();
+            let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let mut connection_options = ConnectOptions::new(database_url);
+            connection_options
+                .sqlx_logging(true)
+                .sqlx_logging_level(log::LevelFilter::Info);
+            let db = Database::connect(connection_options).await.unwrap();
 
+            let messenger = Messenger::new(db).await;
+
+            let factory = messenger.factory();
             Self {
-                file_upload: FileUpload::init(
-                    rx_f,
-                    db.records_signals(),
-                    db.profiles_signal(),
-                    db.possible_links_signals(),
-                    db.links_signal(),
-                )
-                .into(),
-                profiles: Profiles::init(rx_p, db.profiles_signals()).into(),
-                table_view: TableView::init(db.records_signal()).into(),
-                visualizations: Visualizations::init(db.records_signal()).into(),
-                linking: Linking::init(
-                    db.records_signals(),
-                    db.links_signals(),
-                    db.possible_links_signals(),
-                )
-                .into(),
+                file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
+                profiles: Profiles::init(rx_p, messenger.factory()).into(),
+                table_view: TableView::init(messenger.factory()).into(),
+                visualizations: Visualizations::init(&factory).into(),
+                linking: Linking::init(messenger.factory()).into(),
                 selected_anchor: Anchor::Visualizations,
-                db,
                 fps: Fps::default(),
+                messenger,
             }
         }
     }

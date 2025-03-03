@@ -1,19 +1,15 @@
 mod links;
 mod possible_links;
 
-use data_communicator::buffered::communicator::Communicator;
 use eframe::App;
 use egui::{CentralPanel, Context, ScrollArea, SidePanel, TopBottomPanel, Ui};
+use hermes::factory::Factory;
 use links::LinksView;
 use possible_links::PossibleLinksView;
-use uuid::Uuid;
 
 use crate::{
     components::{expense_records::list_view::RecordListView, option_display::OptionDisplay},
-    model::{
-        linker::{Link, PossibleLink},
-        records::ExpenseRecord,
-    },
+    model::records::ExpenseRecord,
 };
 
 pub struct Linking {
@@ -67,16 +63,11 @@ impl App for Linking {
 }
 
 impl Linking {
-    pub fn init(
-        [records_one, records_two]: [Communicator<Uuid, ExpenseRecord>; 2],
-        [links_one, links_two]: [Communicator<Uuid, Link>; 2],
-        possible_links: [Communicator<Uuid, PossibleLink>; 2],
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             Self {
-                possible_links: PossibleLinksView::init(records_one, possible_links, links_one)
-                    .await,
-                links: LinksView::init(links_two, records_two).await,
+                possible_links: PossibleLinksView::init(factory.clone()).await,
+                links: LinksView::init(factory).await,
                 anchor: Anchor::default(),
             }
         }
@@ -91,18 +82,19 @@ enum Anchor {
 }
 
 fn view_records(negative: Option<&ExpenseRecord>, positive: Option<&ExpenseRecord>, ui: &mut Ui) {
-    ui.horizontal(|ui| {
+    ui.vertical(|ui| {
         ui.group(|ui| {
-            ui.set_width(ui.available_width() * 0.5);
-            ui.set_height(ui.available_height());
             ui.vertical(|ui| {
                 ui.heading("Negative Side:");
                 view_record(negative, ui);
             });
         });
+        ui.add_space(10.);
+        ui.vertical_centered(|ui| {
+            ui.label("|\n|\nv");
+        });
+        ui.add_space(10.);
         ui.group(|ui| {
-            ui.set_width(ui.available_width() * 0.5);
-            ui.set_height(ui.available_height());
             ui.vertical(|ui| {
                 ui.heading("Positive Side:");
                 view_record(positive, ui);

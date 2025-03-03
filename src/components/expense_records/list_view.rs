@@ -12,7 +12,7 @@ impl<'a> RecordListView<'a> {
     }
 }
 
-impl<'a> Widget for RecordListView<'a> {
+impl Widget for RecordListView<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         let r = self.record;
 

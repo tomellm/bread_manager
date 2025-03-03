@@ -1,11 +1,8 @@
 mod bar_chart;
 
 use bar_chart::BarChartVis;
-use data_communicator::buffered::{communicator::Communicator, query::QueryType};
 use eframe::App;
-use uuid::Uuid;
-
-use crate::model::records::ExpenseRecord;
+use hermes::factory::Factory;
 
 pub struct Visualizations {
     update_callback_ctx: Option<egui::Context>,
@@ -32,16 +29,12 @@ impl App for Visualizations {
 }
 
 impl Visualizations {
-    pub fn init(
-        records: Communicator<Uuid, ExpenseRecord>,
-    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let bars = BarChartVis::new(factory);
         async move {
-            let _ = records.query(QueryType::All).await;
-            let bars = BarChartVis::new(records);
-
             Self {
                 update_callback_ctx: None,
-                bars,
+                bars: bars.await,
                 selected_anchor: Anchor::BarChart,
             }
         }
