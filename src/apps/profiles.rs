@@ -10,10 +10,14 @@ use hermes::{
     factory::Factory,
     ToActiveModel,
 };
-use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter};
+use sea_query::Expr;
 use tokio::sync::mpsc;
 
-use crate::{db::profiles::DbProfile, model::profiles::Profile};
+use crate::{
+    db::{self, profiles::DbProfile},
+    model::profiles::Profile,
+};
 
 use self::create_profile::CreateProfile;
 
@@ -64,7 +68,14 @@ impl App for Profiles {
                                     self.create_profile.edit(profile);
                                 }
                                 if ui.button("delete").clicked() {
-                                    delete_action(DbProfile::delete(profile.dml_clone()));
+                                    delete_action(
+                                        DbProfile::update_many()
+                                            .filter(db::profiles::Column::Uuid.eq(profile.uuid))
+                                            .col_expr(
+                                                db::profiles::Column::Deleted,
+                                                Expr::value(true),
+                                            ),
+                                    );
                                     //set_promise(delete_action(*key).into());
                                 }
                                 //self.ui_states
@@ -94,7 +105,7 @@ impl Profiles {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut profiles = factory.builder().name("profiles_profiles").projector();
-            profiles.stored_query(DbProfile::find().select());
+            profiles.stored_query(DbProfile::find_all_active());
             Self {
                 create_profile: CreateProfile::new(reciver, factory),
                 profiles,

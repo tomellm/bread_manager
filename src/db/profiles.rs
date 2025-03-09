@@ -1,5 +1,5 @@
 use hermes::impl_to_active_model;
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -13,6 +13,7 @@ pub struct Model {
     name: String,
     origin_name: String,
     data: Vec<u8>,
+    deleted: bool,
 }
 
 pub(crate) type DbProfile = Entity;
@@ -33,20 +34,33 @@ impl ActiveModelBehavior for ActiveModel {}
 
 impl FromEntity<Profile> for Model {
     fn from_entity(entity: Profile) -> Self {
-        let (uuid, name, origin_name, data) = entity.to_db();
+        let (uuid, name, origin_name, data, deleted) = entity.to_db();
         Self {
             uuid,
             name,
             origin_name,
             data,
+            deleted,
         }
     }
 }
 
 impl ToEntity<Profile> for Model {
     fn to_entity(self) -> Profile {
-        Profile::from_db(self.uuid, self.name, self.origin_name, &self.data)
+        Profile::from_db(
+            self.uuid,
+            self.name,
+            self.origin_name,
+            &self.data,
+            self.deleted,
+        )
     }
 }
 
 impl_to_active_model!(Profile, Model);
+
+impl Entity {
+    pub fn find_all_active() -> Select<Self> {
+        Self::find().select().filter(Column::Deleted.eq(false))
+    }
+}

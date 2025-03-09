@@ -10,7 +10,6 @@ use hermes::{
     factory::Factory,
 };
 use num_traits::Zero;
-use sea_orm::{EntityOrSelect, EntityTrait};
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
@@ -35,7 +34,7 @@ impl FilesToParse {
             .name("files_to_parse_profiles")
             .projector();
         async move {
-            profiles.stored_query(DbProfile::find().select());
+            profiles.stored_query(DbProfile::find_all_active());
             Self {
                 reciver,
                 profiles,

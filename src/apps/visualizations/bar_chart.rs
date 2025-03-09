@@ -8,7 +8,6 @@ use hermes::{
     container::{data::ImplData, projecting::ProjectingContainer},
     factory::Factory,
 };
-use sea_orm::{EntityOrSelect, EntityTrait};
 
 use crate::{db::records::DbRecord, model::records::ExpenseRecord};
 
@@ -30,7 +29,7 @@ impl BarChartVis {
     pub fn new(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         let mut records = factory.builder().name("bar_chart_vis_records").projector();
         async move {
-            records.stored_query(DbRecord::find().select());
+            records.stored_query(DbRecord::find_all_active());
             let (weekly, monthly) = Self::update_graphs(&vec![]);
             Self {
                 selected: Charts::default(),

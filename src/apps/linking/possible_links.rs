@@ -5,13 +5,14 @@ use hermes::{
     container::{data::ImplData, projecting::ProjectingContainer},
     factory::Factory,
 };
-use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+use sea_query::Expr;
 
 use crate::{
     apps::utils::{drag_int, drag_zero_to_one},
     components::pagination::PaginationControls,
-    db::possible_links::DbPossibleLink,
-    model::linker::{Linker, PossibleLink},
+    db::{self, possible_links::DbPossibleLink},
+    model::linker::{Linker, PossibleLink, PossibleLinkState},
 };
 
 pub(super) struct PossibleLinksView {
@@ -31,7 +32,7 @@ impl PossibleLinksView {
                 .builder()
                 .name("possible_links_view_possible_links")
                 .projector();
-            possible_links.stored_query(DbPossibleLink::find().select());
+            possible_links.stored_query(DbPossibleLink::find_all_active());
             possible_links.sort(|a, b| b.probability.total_cmp(&a.probability));
             Self {
                 possible_links,
@@ -52,7 +53,14 @@ impl PossibleLinksView {
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
         if ui.button("delete all possible links").clicked() {
-            self.possible_links.execute(DbPossibleLink::delete_many());
+            self.possible_links.execute(
+                DbPossibleLink::update_many()
+                    .filter(db::possible_links::Column::State.eq(PossibleLinkState::Active))
+                    .col_expr(
+                        db::possible_links::Column::State,
+                        Expr::value(PossibleLinkState::Deleted),
+                    ),
+            );
         }
     }
 

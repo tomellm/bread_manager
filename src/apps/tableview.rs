@@ -72,7 +72,7 @@ impl TableView {
     pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut records = factory.builder().name("tableview_records").projector();
-            records.stored_query(DbRecord::find().select());
+            records.stored_query(DbRecord::find_all_active());
             Self {
                 records,
                 columns_info: RecordsTable::default(),

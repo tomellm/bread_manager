@@ -2,10 +2,7 @@ use crate::{
     components::expense_records::table::RecordsTable,
     db::{self, data_import::DbDataImport, possible_links::DbPossibleLink, records::DbRecord},
     model::{
-        data_import::DataImport,
-        linker::{Linker, PossibleLink},
-        profiles::ParseResult,
-        records::ExpenseRecord,
+        data_import::DataImport, linker::Linker, profiles::ParseResult, records::ExpenseRecord,
     },
     utils::PromiseUtilities,
 };
@@ -28,7 +25,6 @@ use super::{files_to_parse::FileToParse, ParsingFileState};
 
 pub(super) struct ParsedRecords {
     records: ProjectingContainer<ExpenseRecord, DbRecord>,
-    possible_links: ProjectingContainer<PossibleLink, DbPossibleLink>,
 
     import_state: ImportParsingState,
     selected_overlay: usize,
@@ -46,17 +42,11 @@ impl ParsedRecords {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut records = factory.builder().name("parse_records_records").projector();
-            let mut possible_links = factory
-                .builder()
-                .name("parse_records_possible_links")
-                .projector();
 
             records.stored_query(DbRecord::find().select());
-            possible_links.stored_query(DbPossibleLink::find().select());
 
             Self {
                 records,
-                possible_links,
                 linker: Linker::init(factory).await,
                 import_state: ImportParsingState::None,
                 selected_overlay: 0,
@@ -71,7 +61,6 @@ impl ParsedRecords {
         self.import_state.try_resolve();
 
         self.records.state_update(true);
-        self.possible_links.state_update(true);
         self.linker.state_update();
 
         if parsing_file.has_new_file() && self.import_state.ready_for_new() {

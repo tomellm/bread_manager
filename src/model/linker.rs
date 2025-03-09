@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::{collections::HashMap, f64::consts::E};
 
 use hermes::carrier::execute::ImplExecuteCarrier;
@@ -6,17 +7,14 @@ use hermes::factory::Factory;
 use hermes::ToActiveModel;
 use hermes::{carrier::query::ImplQueryCarrier, container::projecting::ProjectingContainer};
 use itertools::Itertools;
-use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter, QueryTrait,
-};
-use sea_query::Expr;
+use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter, QueryTrait};
+use sea_query::{Expr, SimpleExpr};
 use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::db::link::DbLink;
 use crate::db::possible_links::DbPossibleLink;
-use crate::db::profiles::DbProfile;
 use crate::db::records::DbRecord;
 use crate::db::{self, possible_links};
 
@@ -27,6 +25,7 @@ pub struct Link {
     pub uuid: Uuid,
     pub negative: ExpenseRecordUuid,
     pub positive: ExpenseRecordUuid,
+    pub deleted: bool,
 }
 
 impl_to_database!(Link, <DbLink as EntityTrait>::Model);
@@ -50,6 +49,7 @@ impl From<PossibleLink> for Link {
             uuid,
             negative,
             positive,
+            deleted: false,
         }
     }
 }
@@ -60,9 +60,42 @@ pub struct PossibleLink {
     pub negative: ExpenseRecordUuid,
     pub positive: ExpenseRecordUuid,
     pub probability: f64,
+    pub state: PossibleLinkState,
 }
 
 impl_to_database!(PossibleLink, <DbPossibleLink as EntityTrait>::Model);
+
+#[derive(Clone, Debug)]
+pub enum PossibleLinkState {
+    Active,
+    Deleted,
+    Converted,
+}
+
+impl Display for PossibleLinkState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<PossibleLinkState> for sea_query::Value {
+    fn from(value: PossibleLinkState) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<String> for PossibleLinkState {
+    fn from(value: String) -> Self {
+        // ToDo: instead of writing out the strings I could
+        // use a list of the values and compare using to_string
+        match value.as_str() {
+            "Active" => Self::Active,
+            "Deleted" => Self::Deleted,
+            "Converted" => Self::Converted,
+            _ => unreachable!(),
+        }
+    }
+}
 
 impl PossibleLink {
     pub fn from_uuids(negative: ExpenseRecordUuid, positive: ExpenseRecordUuid) -> Self {
@@ -71,6 +104,7 @@ impl PossibleLink {
             negative,
             positive,
             probability: 1f64,
+            state: PossibleLinkState::Active,
         }
     }
 
@@ -99,9 +133,21 @@ impl Linker {
             let mut possible_links = factory.builder().name("linker_possible_links").projector();
             let mut links = factory.builder().name("linker_links").projector();
 
-            records.stored_query(DbRecord::find().select());
-            possible_links.stored_query(DbPossibleLink::find().select());
-            links.stored_query(DbLink::find().select());
+            records.stored_query(
+                DbRecord::find()
+                    .select()
+                    .filter(db::records::Column::Deleted.eq(false)),
+            );
+            possible_links.stored_query(
+                DbPossibleLink::find()
+                    .select()
+                    .filter(db::possible_links::Column::State.eq("Active")),
+            );
+            links.stored_query(
+                DbLink::find()
+                    .select()
+                    .filter(db::link::Column::Deleted.eq(false)),
+            );
 
             Self {
                 possible_links,
@@ -150,13 +196,18 @@ impl Linker {
         &self,
         possible_link: &PossibleLink,
     ) -> impl QueryTrait + Send + 'static {
-        DbPossibleLink::delete_many().filter(
-            db::possible_links::Column::Positive
-                .eq(*possible_link.positive)
-                .or(db::possible_links::Column::Negative.eq(*possible_link.positive))
-                .or(db::possible_links::Column::Positive.eq(*possible_link.negative))
-                .or(db::possible_links::Column::Negative.eq(*possible_link.negative)),
-        )
+        DbPossibleLink::update_many()
+            .col_expr(
+                db::possible_links::Column::State,
+                Expr::value(PossibleLinkState::Deleted.to_string()),
+            )
+            .filter(
+                db::possible_links::Column::Positive
+                    .eq(*possible_link.positive)
+                    .or(db::possible_links::Column::Negative.eq(*possible_link.positive))
+                    .or(db::possible_links::Column::Positive.eq(*possible_link.negative))
+                    .or(db::possible_links::Column::Negative.eq(*possible_link.negative)),
+            )
     }
 
     pub fn calculate_probability(

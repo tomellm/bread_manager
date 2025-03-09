@@ -44,6 +44,7 @@ pub struct ExpenseRecord {
     tags: Vec<String>,
     origin: String,
     data_import: Uuid,
+    deleted: bool,
 }
 
 impl_to_database!(ExpenseRecord, <DbRecord as EntityTrait>::Model);
@@ -68,6 +69,7 @@ impl ExpenseRecord {
             tags: default_tags,
             origin,
             data_import,
+            deleted: false,
         }
     }
 
@@ -82,6 +84,7 @@ impl ExpenseRecord {
         tags: Vec<String>,
         origin: String,
         data_import: Uuid,
+        deleted: bool,
     ) -> Self {
         Self {
             datetime_created,
@@ -93,6 +96,7 @@ impl ExpenseRecord {
             tags,
             origin,
             data_import,
+            deleted,
         }
     }
     pub fn created(&self) -> &DateTime<Local> {
@@ -133,6 +137,9 @@ impl ExpenseRecord {
     }
     pub fn data_import(&self) -> &Uuid {
         &self.data_import
+    }
+    pub fn deleted(&self) -> bool {
+        self.deleted
     }
 
     pub fn is_same_record(&self, other: &Self) -> bool {
