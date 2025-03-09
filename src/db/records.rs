@@ -1,7 +1,7 @@
 use bincode as bc;
 use chrono::{DateTime, Local};
 use hermes::impl_to_active_model;
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -23,6 +23,7 @@ pub struct Model {
     origin: String,
     data_import: Uuid,
     data: Vec<u8>,
+    deleted: bool,
 }
 
 pub(crate) type DbRecord = Entity;
@@ -58,6 +59,7 @@ impl FromEntity<ExpenseRecord> for Model {
             data: bc::serialize(entity.data()).unwrap(),
             origin: entity.origin().clone(),
             data_import: *entity.data_import(),
+            deleted: entity.deleted(),
         }
     }
 }
@@ -81,8 +83,15 @@ impl ToEntity<ExpenseRecord> for Model {
                 .collect::<Vec<String>>(),
             self.origin,
             self.data_import,
+            self.deleted,
         )
     }
 }
 
 impl_to_active_model!(ExpenseRecord, Model);
+
+impl Entity {
+    pub fn find_all_active() -> Select<Self> {
+        Self::find().select().filter(Column::Deleted.eq(false))
+    }
+}

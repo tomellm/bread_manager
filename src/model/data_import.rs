@@ -11,6 +11,7 @@ pub struct DataImport {
     pub(crate) uuid: Uuid,
     pub(crate) imported_at: DateTime<FixedOffset>,
     pub(crate) profile_used: Uuid,
+    pub(crate) deleted: bool,
 }
 
 impl DataImport {
@@ -19,6 +20,7 @@ impl DataImport {
             uuid: Uuid::new_v4(),
             imported_at: Local::now().into(),
             profile_used: profile,
+            deleted: false,
         }
     }
 }

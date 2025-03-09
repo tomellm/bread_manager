@@ -15,7 +15,7 @@ use hermes::{
 };
 use main_columns::{datetime_col, expense_col};
 use other_columns::other_cols;
-use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_orm::EntityTrait;
 use tokio::sync::mpsc;
 
 use crate::{
@@ -42,7 +42,7 @@ impl CreateProfile {
             .builder()
             .name("create_profile_profiles")
             .projector();
-        profiles.stored_query(DbProfile::find().select());
+        profiles.stored_query(DbProfile::find_all_active());
 
         Self {
             preview: ProfilePreview::new(reciver),

@@ -251,9 +251,7 @@ impl State {
         async move {
             let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let mut connection_options = ConnectOptions::new(database_url);
-            connection_options
-                .sqlx_logging(true)
-                .sqlx_logging_level(log::LevelFilter::Info);
+            connection_options.sqlx_logging(true);
             let db = Database::connect(connection_options).await.unwrap();
 
             let messenger = Messenger::new(db).await;

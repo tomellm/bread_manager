@@ -28,6 +28,7 @@ pub struct Profile {
     pub width: usize,
     pub default_tags: Vec<String>,
     pub origin_name: String,
+    pub deleted: bool,
 }
 
 impl_to_database!(Profile, <DbProfile as EntityTrait>::Model);
@@ -75,6 +76,7 @@ impl Profile {
             width: profile_width,
             default_tags,
             origin_name,
+            deleted: false,
         }
     }
     pub fn parse_file(&self, file: &str) -> Result<ParseResult, ProfileError> {
@@ -171,7 +173,7 @@ impl Profile {
         rows
     }
 
-    pub fn to_db(&self) -> (Uuid, String, String, Vec<u8>) {
+    pub fn to_db(&self) -> (Uuid, String, String, Vec<u8>, bool) {
         (
             self.uuid,
             self.name.clone(),
@@ -186,10 +188,17 @@ impl Profile {
                 self.default_tags.clone(),
             ))
             .unwrap(),
+            self.deleted,
         )
     }
 
-    pub fn from_db(uuid: Uuid, name: String, origin_name: String, data: &[u8]) -> Self {
+    pub fn from_db(
+        uuid: Uuid,
+        name: String,
+        origin_name: String,
+        data: &[u8],
+        deleted: bool,
+    ) -> Self {
         let (
             margins,
             delimiter,
@@ -211,6 +220,7 @@ impl Profile {
             width: profile_width,
             default_tags,
             origin_name,
+            deleted,
         }
     }
 }

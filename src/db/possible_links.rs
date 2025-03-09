@@ -1,6 +1,6 @@
 use hermes::impl_to_active_model;
-use sea_orm::entity::prelude::*;
 use sea_orm::DeriveEntityModel;
+use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -14,6 +14,7 @@ pub struct Model {
     negative: Uuid,
     positive: Uuid,
     probability: f64,
+    state: String,
 }
 
 pub type DbPossibleLink = Entity;
@@ -30,6 +31,7 @@ impl FromEntity<PossibleLink> for Model {
             negative: *entity.negative,
             positive: *entity.positive,
             probability: entity.probability,
+            state: entity.state.to_string(),
         }
     }
 }
@@ -41,6 +43,7 @@ impl ToEntity<PossibleLink> for Model {
             negative: self.negative.into(),
             positive: self.positive.into(),
             probability: self.probability,
+            state: self.state.into(),
         }
     }
 }
@@ -53,3 +56,9 @@ impl_to_active_model!(PossibleLink, Model);
 //    positive blob not null,
 //    probability real not null
 //);
+
+impl Entity {
+    pub fn find_all_active() -> Select<Self> {
+        Self::find().select().filter(Column::State.eq("Active"))
+    }
+}

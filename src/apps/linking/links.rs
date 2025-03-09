@@ -7,7 +7,6 @@ use hermes::{
 };
 use log::info;
 use sea_orm::{EntityOrSelect, EntityTrait};
-use sea_query::ExprTrait;
 
 use crate::{
     components::pagination::PaginationControls,
@@ -31,7 +30,7 @@ impl LinksView {
             let mut links = factory.builder().name("links_view_links").projector();
             let mut records = factory.builder().name("links_view_records").projector();
 
-            links.stored_query(DbLink::find().select());
+            links.stored_query(DbLink::find_all_active());
             records.stored_query(DbRecord::find().select());
 
             Self {
@@ -49,7 +48,7 @@ impl LinksView {
     }
 
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
-        if ui.button("delete all links").clicked() {
+        if ui.button("(hard) delete all links").clicked() {
             self.links.execute(DbLink::delete_many());
         }
     }

@@ -1,5 +1,5 @@
 use hermes::impl_to_active_model;
-use sea_orm::entity::prelude::*;
+use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -12,6 +12,7 @@ pub struct Model {
     uuid: Uuid,
     imported_at: ChronoDateTimeWithTimeZone,
     profile_used: Uuid,
+    deleted: bool,
 }
 
 pub(crate) type DbDataImport = Entity;
@@ -48,6 +49,7 @@ impl FromEntity<DataImport> for Model {
             uuid: entity.uuid,
             imported_at: entity.imported_at,
             profile_used: entity.profile_used,
+            deleted: entity.deleted,
         }
     }
 }
@@ -58,8 +60,15 @@ impl ToEntity<DataImport> for Model {
             uuid: self.uuid,
             imported_at: self.imported_at,
             profile_used: self.profile_used,
+            deleted: self.deleted,
         }
     }
 }
 
 impl_to_active_model!(DataImport, Model);
+
+impl Entity {
+    pub fn find_all_active() -> Select<Self> {
+        Self::find().select().filter(Column::Deleted.eq(false))
+    }
+}
