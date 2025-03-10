@@ -9,7 +9,7 @@ use hermes::{
     container::{data::ImplData, projecting::ProjectingContainer},
     factory::Factory,
 };
-use sea_orm::{EntityOrSelect, EntityTrait};
+use sea_orm::EntityTrait;
 
 use crate::{
     components::expense_records::table::RecordsTable,
@@ -20,7 +20,10 @@ use crate::{
 pub struct TableView {
     records: ProjectingContainer<ExpenseRecord, DbRecord>,
     columns_info: RecordsTable,
+
     filter_state: FilterState,
+    hide_filters: bool,
+
     states: UiStates,
 }
 
@@ -47,6 +50,10 @@ impl App for TableView {
                     }
 
                     ui.label(format!("Curretly {} records.", self.records.data().len()));
+
+                    if self.hide_filters && ui.button("filters").clicked() {
+                        self.hide_filters = false;
+                    }
                 });
 
                 self.columns_info.toggles(ui);
@@ -57,11 +64,12 @@ impl App for TableView {
                     ui,
                 );
             });
-            if !self.records.data().is_empty() {
+            if !self.records.data().is_empty() && !self.hide_filters {
                 SidePanel::right("filter_selection")
                     .resizable(true)
                     .show_inside(ui, |ui| {
-                        self.filter_state.display_filters(ui);
+                        self.filter_state
+                            .display_filters(&mut self.hide_filters, ui);
                     });
             }
         });
@@ -77,6 +85,7 @@ impl TableView {
                 records,
                 columns_info: RecordsTable::default(),
                 filter_state: FilterState::default(),
+                hide_filters: true,
                 states: UiStates::default(),
             }
         }

@@ -8,9 +8,8 @@ use hermes::{
     carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
     container::{data::ImplData, projecting::ProjectingContainer},
     factory::Factory,
-    ToActiveModel,
 };
-use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use sea_query::Expr;
 use tokio::sync::mpsc;
 
