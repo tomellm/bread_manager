@@ -8,7 +8,7 @@ use hermes::ToActiveModel;
 use hermes::{carrier::query::ImplQueryCarrier, container::projecting::ProjectingContainer};
 use itertools::Itertools;
 use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter, QueryTrait};
-use sea_query::{Expr, SimpleExpr};
+use sea_query::Expr;
 use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
 use uuid::Uuid;

@@ -43,7 +43,7 @@ impl BarChartVis {
     pub fn update(&mut self) {
         self.records.state_update(true);
         if self.records.has_changed() {
-            let (weekly, monthly) = Self::update_graphs(self.records.data());
+            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data());
             self.weekly = weekly;
             self.monthly = monthly;
         }

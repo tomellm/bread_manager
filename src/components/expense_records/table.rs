@@ -74,19 +74,21 @@ impl RecordsTable {
         ui: &mut Ui,
     ) {
         egui::ScrollArea::both().show(ui, |ui| {
-            egui::Grid::new("table_of_records").show(ui, |ui| {
-                self.sorting_header(records, ui);
-                ui.end_row();
+            egui::Grid::new("table_of_records")
+                .striped(true)
+                .show(ui, |ui| {
+                    self.sorting_header(records, ui);
+                    ui.end_row();
 
-                records
-                    .sorted()
-                    .into_iter()
-                    .filter(filter)
-                    .for_each(|record| {
-                        self.row(record, ui);
-                        ui.end_row();
-                    });
-            });
+                    records
+                        .sorted()
+                        .into_iter()
+                        .filter(filter)
+                        .for_each(|record| {
+                            self.row(record, ui);
+                            ui.end_row();
+                        });
+                });
         });
     }
 }

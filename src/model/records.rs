@@ -1,6 +1,7 @@
 use std::{cmp::Ordering, fmt::Display, mem, ops::Deref};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
+use itertools::Itertools;
 use sea_orm::EntityTrait;
 use serde::{Deserialize, Serialize};
 use sqlx_projector::impl_to_database;
@@ -144,7 +145,7 @@ impl ExpenseRecord {
 
     pub fn is_same_record(&self, other: &Self) -> bool {
         let desc_overlaps = match (&self.description, &other.description) {
-            (Some(this), Some(other)) => this.overlaps_with(other),
+            (Some(this), Some(other)) => this.one_overlaps_with_exact(other),
             _ => true,
         };
 
@@ -347,22 +348,40 @@ impl DescriptionContainer {
         iter
     }
 
-    pub fn overlaps_with(&self, other: &Self) -> bool {
-        let mut this = self
-            .history
-            .iter()
-            .map(|desc| &desc.desc)
-            .collect::<Vec<_>>();
-        this.push(&self.current.desc);
+    /// This method checks if this String overlaps with any part of any
+    /// field of this object, or any field overlaps with any part of the
+    /// passed String
+    pub fn str_overlaps_with(&self, other: &str) -> bool {
+        let other = other.to_lowercase();
+        let this = self.all_str().map(String::as_str).map(str::to_lowercase);
 
-        let mut others = other
-            .history
-            .iter()
-            .map(|desc| &desc.desc)
-            .collect::<Vec<_>>();
-        others.push(&other.current.desc);
+        this.into_iter()
+            .any(|this_item| this_item.contains(&other) || other.contains(&this_item))
+    }
 
-        this.iter().any(|this_item| others.contains(this_item))
+    /// This method checks if this String overlaps with any part of any
+    /// field of this object, or any field overlaps with any part of the
+    /// passed String
+    pub fn str_overlaps_with_exact(&self, other: &String) -> bool {
+        let this = self.all_str();
+
+        this.into_iter().any(|this_item| this_item.eq(other))
+    }
+
+    /// This method checks wherether the other object of the same type
+    /// has at least one field that exactly overlaps with one field of
+    /// this object
+    pub fn one_overlaps_with_exact(&self, other: &Self) -> bool {
+        let this = self.all_str();
+        let others = other.all_str().collect_vec();
+
+        this.into_iter()
+            .any(|this_item| others.contains(&this_item))
+    }
+
+    fn all_str(&self) -> impl Iterator<Item = &String> {
+        let this = self.history.iter().map(|desc| &desc.desc);
+        this.chain([&self.current.desc])
     }
 }
 

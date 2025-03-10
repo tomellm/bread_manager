@@ -1,13 +1,15 @@
 mod amount;
 mod date;
-mod uuid;
-mod tags;
+mod description;
 mod origin;
+mod tags;
+mod uuid;
 
 use std::sync::Arc;
 
 use amount::AmountFilter;
 use date::DateFilter;
+use description::DescriptionFilter;
 use egui::Ui;
 use origin::OriginFilter;
 use tags::TagsFilter;
@@ -28,6 +30,7 @@ impl Default for FilterState {
                 UuidFilter::default().into(),
                 AmountFilter::default().into(),
                 DateFilter::default().into(),
+                DescriptionFilter::default().into(),
                 TagsFilter::default().into(),
                 OriginFilter::default().into(),
             ],
@@ -54,10 +57,15 @@ impl FilterState {
         }
     }
 
-    pub(super) fn display_filters(&mut self, ui: &mut Ui) {
-        if ui.button("apply filter").clicked() {
-            self.set_filter();
-        }
+    pub(super) fn display_filters(&mut self, hide_filters: &mut bool, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            if ui.button("apply filter").clicked() {
+                self.set_filter();
+            }
+            if ui.button(">>").clicked() {
+                *hide_filters = true;
+            }
+        });
         ui.separator();
         for filter in self.filters.iter_mut() {
             filter.ui_update(ui);
