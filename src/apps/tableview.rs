@@ -1,5 +1,7 @@
+pub mod actions;
 mod filterstate;
 
+use actions::ActionState;
 use eframe::App;
 use egui::{CentralPanel, SidePanel};
 use egui_light_states::UiStates;
@@ -23,8 +25,23 @@ pub struct TableView {
 
     filter_state: FilterState,
     hide_filters: bool,
+    action_state: ActionState,
 
+    side_panel_state: SidePanelState,
     states: UiStates,
+}
+
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+enum SidePanelState {
+    #[default]
+    Filters,
+    Actions,
+}
+
+impl SidePanelState {
+    fn values() -> [SidePanelState; 2] {
+        [SidePanelState::Filters, SidePanelState::Actions]
+    }
 }
 
 impl App for TableView {
@@ -68,8 +85,28 @@ impl App for TableView {
                 SidePanel::right("filter_selection")
                     .resizable(true)
                     .show_inside(ui, |ui| {
-                        self.filter_state
-                            .display_filters(&mut self.hide_filters, ui);
+                        ui.horizontal(|ui| {
+                            SidePanelState::values().into_iter().for_each(|val| {
+                                ui.add_enabled_ui(val != self.side_panel_state, |ui| {
+                                    if ui.button(format!("{val:?}")).clicked() {
+                                        self.side_panel_state = val;
+                                    }
+                                });
+                            });
+                            if ui.button(">>").clicked() {
+                                self.hide_filters = true;
+                            }
+                        });
+                        ui.separator();
+
+                        match self.side_panel_state {
+                            SidePanelState::Filters => self.filter_state.display_filters(ui),
+                            SidePanelState::Actions => self.action_state.display_actions(
+                                &mut self.records,
+                                |r| self.filter_state.filter(r),
+                                ui,
+                            ),
+                        };
                     });
             }
         });
@@ -82,10 +119,12 @@ impl TableView {
             let mut records = factory.builder().name("tableview_records").projector();
             records.stored_query(DbRecord::find_all_active());
             Self {
+                action_state: ActionState::new(records.actor()),
                 records,
                 columns_info: RecordsTable::default(),
                 filter_state: FilterState::default(),
                 hide_filters: true,
+                side_panel_state: SidePanelState::default(),
                 states: UiStates::default(),
             }
         }

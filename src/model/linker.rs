@@ -7,7 +7,7 @@ use hermes::factory::Factory;
 use hermes::ToActiveModel;
 use hermes::{carrier::query::ImplQueryCarrier, container::projecting::ProjectingContainer};
 use itertools::Itertools;
-use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter, QueryTrait};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
 use sea_query::Expr;
 use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
@@ -133,21 +133,9 @@ impl Linker {
             let mut possible_links = factory.builder().name("linker_possible_links").projector();
             let mut links = factory.builder().name("linker_links").projector();
 
-            records.stored_query(
-                DbRecord::find()
-                    .select()
-                    .filter(db::records::Column::Deleted.eq(false)),
-            );
-            possible_links.stored_query(
-                DbPossibleLink::find()
-                    .select()
-                    .filter(db::possible_links::Column::State.eq("Active")),
-            );
-            links.stored_query(
-                DbLink::find()
-                    .select()
-                    .filter(db::link::Column::Deleted.eq(false)),
-            );
+            records.stored_query(DbRecord::find_all_active());
+            possible_links.stored_query(DbPossibleLink::find_all_active());
+            links.stored_query(DbLink::find_all_active());
 
             Self {
                 possible_links,

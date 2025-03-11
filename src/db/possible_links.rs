@@ -4,7 +4,7 @@ use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
-use crate::model::linker::PossibleLink;
+use crate::model::linker::{PossibleLink, PossibleLinkState};
 
 #[derive(Clone, Debug, DeriveEntityModel)]
 #[sea_orm(table_name = "possible_links")]
@@ -59,6 +59,8 @@ impl_to_active_model!(PossibleLink, Model);
 
 impl Entity {
     pub fn find_all_active() -> Select<Self> {
-        Self::find().select().filter(Column::State.eq("Active"))
+        Self::find()
+            .select()
+            .filter(Column::State.eq(PossibleLinkState::Active))
     }
 }
