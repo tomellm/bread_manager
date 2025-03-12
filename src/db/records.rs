@@ -5,7 +5,7 @@ use sea_orm::{entity::prelude::*, EntityOrSelect};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
-use crate::model::records::ExpenseRecord;
+use crate::model::records::{ExpenseRecord, ExpenseRecordState};
 
 const TAG_SEPARATOR: &str = ";";
 
@@ -23,7 +23,7 @@ pub struct Model {
     origin: String,
     data_import: Uuid,
     data: Vec<u8>,
-    deleted: bool,
+    state: String,
 }
 
 pub(crate) type DbRecord = Entity;
@@ -59,7 +59,7 @@ impl FromEntity<ExpenseRecord> for Model {
             data: bc::serialize(entity.data()).unwrap(),
             origin: entity.origin().clone(),
             data_import: *entity.data_import(),
-            deleted: entity.deleted(),
+            state: entity.state().to_string(),
         }
     }
 }
@@ -83,7 +83,7 @@ impl ToEntity<ExpenseRecord> for Model {
                 .collect::<Vec<String>>(),
             self.origin,
             self.data_import,
-            self.deleted,
+            self.state.into(),
         )
     }
 }
@@ -92,6 +92,8 @@ impl_to_active_model!(ExpenseRecord, Model);
 
 impl Entity {
     pub fn find_all_active() -> Select<Self> {
-        Self::find().select().filter(Column::Deleted.eq(false))
+        Self::find()
+            .select()
+            .filter(Column::State.eq(ExpenseRecordState::Active))
     }
 }

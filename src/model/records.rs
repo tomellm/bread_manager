@@ -45,7 +45,40 @@ pub struct ExpenseRecord {
     tags: Vec<String>,
     origin: String,
     data_import: Uuid,
-    deleted: bool,
+    state: ExpenseRecordState,
+}
+
+#[derive(Default, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum ExpenseRecordState {
+    #[default]
+    Active,
+    Ignored,
+    Deleted,
+}
+
+impl Display for ExpenseRecordState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<ExpenseRecordState> for sea_query::Value {
+    fn from(value: ExpenseRecordState) -> Self {
+        value.to_string().into()
+    }
+}
+
+impl From<String> for ExpenseRecordState {
+    fn from(value: String) -> Self {
+        // ToDo: instead of writing out the strings I could
+        // use a list of the values and compare using to_string
+        match value.as_str() {
+            "Active" => Self::Active,
+            "Ignored" => Self::Ignored,
+            "Deleted" => Self::Deleted,
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl_to_database!(ExpenseRecord, <DbRecord as EntityTrait>::Model);
@@ -70,7 +103,7 @@ impl ExpenseRecord {
             tags: default_tags,
             origin,
             data_import,
-            deleted: false,
+            state: ExpenseRecordState::default(),
         }
     }
 
@@ -85,7 +118,7 @@ impl ExpenseRecord {
         tags: Vec<String>,
         origin: String,
         data_import: Uuid,
-        deleted: bool,
+        state: ExpenseRecordState,
     ) -> Self {
         Self {
             datetime_created,
@@ -97,7 +130,7 @@ impl ExpenseRecord {
             tags,
             origin,
             data_import,
-            deleted,
+            state,
         }
     }
     pub fn created(&self) -> &DateTime<Local> {
@@ -139,8 +172,8 @@ impl ExpenseRecord {
     pub fn data_import(&self) -> &Uuid {
         &self.data_import
     }
-    pub fn deleted(&self) -> bool {
-        self.deleted
+    pub fn state(&self) -> ExpenseRecordState {
+        self.state
     }
 
     pub fn is_same_record(&self, other: &Self) -> bool {

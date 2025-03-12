@@ -57,15 +57,10 @@ impl FilterState {
         }
     }
 
-    pub(super) fn display_filters(&mut self, hide_filters: &mut bool, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            if ui.button("apply filter").clicked() {
-                self.set_filter();
-            }
-            if ui.button(">>").clicked() {
-                *hide_filters = true;
-            }
-        });
+    pub(super) fn display_filters(&mut self, ui: &mut Ui) {
+        if ui.button("apply filter").clicked() {
+            self.set_filter();
+        }
         ui.separator();
         for filter in self.filters.iter_mut() {
             filter.ui_update(ui);
