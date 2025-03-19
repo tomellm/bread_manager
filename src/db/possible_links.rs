@@ -19,8 +19,32 @@ pub struct Model {
 
 pub type DbPossibleLink = Entity;
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {}
+#[derive(Copy, Clone, Debug, EnumIter)]
+pub enum Relation {
+    Negative,
+    Positive,
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::Negative => Entity::belongs_to(super::records::Entity)
+                .from(Column::Negative)
+                .to(super::records::Column::Uuid)
+                .into(),
+            Relation::Positive => Entity::belongs_to(super::records::Entity)
+                .from(Column::Positive)
+                .to(super::records::Column::Uuid)
+                .into(),
+        }
+    }
+}
+
+impl Related<super::records::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Negative.def()
+    }
+}
 
 impl ActiveModelBehavior for ActiveModel {}
 
@@ -62,5 +86,18 @@ impl Entity {
         Self::find()
             .select()
             .filter(Column::State.eq(PossibleLinkState::Active))
+    }
+
+    pub fn negative_rel() -> RelationDef {
+        Entity::belongs_to(super::records::Entity)
+            .from(Column::Negative)
+            .to(super::records::Column::Uuid)
+            .into()
+    }
+    pub fn positive_rel() -> RelationDef {
+        Entity::belongs_to(super::records::Entity)
+            .from(Column::Positive)
+            .to(super::records::Column::Uuid)
+            .into()
     }
 }

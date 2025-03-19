@@ -1,6 +1,6 @@
 use hermes::impl_to_active_model;
 use sea_orm::entity::prelude::*;
-use sea_orm::{ActiveModelBehavior, DeriveEntityModel, DeriveRelation, EntityOrSelect, EnumIter};
+use sea_orm::{ActiveModelBehavior, DeriveEntityModel, EntityOrSelect, EnumIter};
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -50,6 +50,19 @@ impl_to_active_model!(Link, Model);
 impl Entity {
     pub fn find_all_active() -> Select<Self> {
         Self::find().select().filter(Column::Deleted.eq(false))
+    }
+
+    pub fn negative_rel() -> RelationDef {
+        Entity::belongs_to(super::records::Entity)
+            .from(Column::Negative)
+            .to(super::records::Column::Uuid)
+            .into()
+    }
+    pub fn positive_rel() -> RelationDef {
+        Entity::belongs_to(super::records::Entity)
+            .from(Column::Positive)
+            .to(super::records::Column::Uuid)
+            .into()
     }
 }
 
