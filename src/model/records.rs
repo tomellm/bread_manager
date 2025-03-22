@@ -62,12 +62,6 @@ impl Display for ExpenseRecordState {
     }
 }
 
-impl From<ExpenseRecordState> for sea_query::Value {
-    fn from(value: ExpenseRecordState) -> Self {
-        value.to_string().into()
-    }
-}
-
 impl From<String> for ExpenseRecordState {
     fn from(value: String) -> Self {
         // ToDo: instead of writing out the strings I could

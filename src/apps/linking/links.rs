@@ -100,7 +100,7 @@ impl LinksView {
 
             if response.clicked() {
                 self.selected = Some(link.clone());
-                info!("{:?}, {:?}", link.negative, link.positive);
+                info!("{:?}, {:?}", link.leading, link.following);
             }
         }
     }
@@ -121,11 +121,11 @@ impl LinksView {
             ui.end_row();
 
             ui.label("Negative Side Uuid:");
-            ui.label(format!("{}", *link.negative));
+            ui.label(format!("{}", *link.leading));
             ui.end_row();
 
             ui.label("Positive Side Uuid:");
-            ui.label(format!("{}", *link.positive));
+            ui.label(format!("{}", *link.following));
             ui.end_row();
         });
 
@@ -134,10 +134,10 @@ impl LinksView {
                 .data()
                 .iter()
                 .fold((None, None), |mut matches, record| {
-                    if link.negative.eq(record.uuid()) {
+                    if link.leading.eq(record.uuid()) {
                         let _ = matches.0.insert(record);
                     }
-                    if link.positive.eq(record.uuid()) {
+                    if link.following.eq(record.uuid()) {
                         let _ = matches.1.insert(record);
                     }
                     matches

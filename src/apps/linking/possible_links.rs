@@ -167,11 +167,11 @@ impl PossibleLinksView {
             ui.end_row();
 
             ui.label("Negative Side Uuid:");
-            ui.label(format!("{}", *link.negative));
+            ui.label(format!("{}", *link.leading));
             ui.end_row();
 
             ui.label("Positive Side Uuid:");
-            ui.label(format!("{}", *link.positive));
+            ui.label(format!("{}", *link.following));
             ui.end_row();
 
             ui.label("Probability of beeing correct:");

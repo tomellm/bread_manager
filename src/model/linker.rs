@@ -9,7 +9,6 @@ use hermes::{carrier::query::ImplQueryCarrier, container::projecting::Projecting
 use itertools::Itertools;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
 use sea_query::Expr;
-use sqlx_projector::impl_to_database;
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -23,16 +22,36 @@ use super::records::{ExpenseRecord, ExpenseRecordUuid};
 #[derive(Clone, Debug)]
 pub struct Link {
     pub uuid: Uuid,
-    pub negative: ExpenseRecordUuid,
-    pub positive: ExpenseRecordUuid,
+    pub leading: ExpenseRecordUuid,
+    pub following: ExpenseRecordUuid,
     pub deleted: bool,
+    pub link_type: LinkType,
 }
 
-impl_to_database!(Link, <DbLink as EntityTrait>::Model);
+/// This LinkType describes the relationship between the leading to the
+/// following records linked to in the link object.
+#[derive(Debug, Clone, Copy, Default)]
+pub enum LinkType {
+    /// Means that the leading records amount was transferred to the
+    /// following records. Also means that the records only describe a
+    /// movement between internal accounts
+    #[default]
+    Transfer,
+    /// Means that the leading record is a duplicate of the following record.
+    /// In this case there can also be many different records that are
+    /// duplicates of the same one record
+    DuplicateOf,
+}
+
+impl Display for LinkType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 impl Link {
     pub fn contains(&self, record: &ExpenseRecord) -> bool {
-        self.negative.eq(record.uuid()) || self.positive.eq(record.uuid())
+        self.leading.eq(record.uuid()) || self.following.eq(record.uuid())
     }
 }
 
@@ -40,16 +59,18 @@ impl From<PossibleLink> for Link {
     fn from(
         PossibleLink {
             uuid,
-            negative,
-            positive,
+            leading: negative,
+            following: positive,
+            link_type,
             ..
         }: PossibleLink,
     ) -> Self {
         Self {
             uuid,
-            negative,
-            positive,
+            leading: negative,
+            following: positive,
             deleted: false,
+            link_type,
         }
     }
 }
@@ -57,13 +78,14 @@ impl From<PossibleLink> for Link {
 #[derive(Clone, Debug)]
 pub struct PossibleLink {
     pub uuid: Uuid,
-    pub negative: ExpenseRecordUuid,
-    pub positive: ExpenseRecordUuid,
+    /// negative
+    pub leading: ExpenseRecordUuid,
+    /// positive
+    pub following: ExpenseRecordUuid,
     pub probability: f64,
     pub state: PossibleLinkState,
+    pub link_type: LinkType,
 }
-
-impl_to_database!(PossibleLink, <DbPossibleLink as EntityTrait>::Model);
 
 #[derive(Clone, Debug)]
 pub enum PossibleLinkState {
@@ -78,45 +100,31 @@ impl Display for PossibleLinkState {
     }
 }
 
-impl From<PossibleLinkState> for sea_query::Value {
-    fn from(value: PossibleLinkState) -> Self {
-        value.to_string().into()
-    }
-}
-
-impl From<String> for PossibleLinkState {
-    fn from(value: String) -> Self {
-        // ToDo: instead of writing out the strings I could
-        // use a list of the values and compare using to_string
-        match value.as_str() {
-            "Active" => Self::Active,
-            "Deleted" => Self::Deleted,
-            "Converted" => Self::Converted,
-            _ => unreachable!(),
-        }
-    }
-}
-
 impl PossibleLink {
-    pub fn from_uuids(negative: ExpenseRecordUuid, positive: ExpenseRecordUuid) -> Self {
+    pub fn from_uuids(
+        left: ExpenseRecordUuid,
+        right: ExpenseRecordUuid,
+        link_type: LinkType,
+    ) -> Self {
         Self {
             uuid: Uuid::new_v4(),
-            negative,
-            positive,
+            leading: left,
+            following: right,
             probability: 1f64,
             state: PossibleLinkState::Active,
+            link_type,
         }
     }
 
     pub fn contains(&self, record: &ExpenseRecordUuid) -> bool {
-        self.positive.eq(record) || self.negative.eq(record)
+        self.following.eq(record) || self.leading.eq(record)
     }
 
     pub fn overlaps(&self, other: &Self) -> bool {
-        self.negative.eq(&other.negative)
-            || self.positive.eq(&other.negative)
-            || self.negative.eq(&other.positive)
-            || self.positive.eq(&other.positive)
+        self.leading.eq(&other.leading)
+            || self.following.eq(&other.leading)
+            || self.leading.eq(&other.following)
+            || self.following.eq(&other.following)
     }
 }
 
@@ -160,10 +168,10 @@ impl Linker {
             .iter()
             .fold((None, None), |(mut neg, mut pos), record| {
                 let uuid = record.uuid();
-                if uuid.eq(&possible_link.negative) {
+                if uuid.eq(&possible_link.leading) {
                     neg = Some(record);
                 }
-                if uuid.eq(&possible_link.positive) {
+                if uuid.eq(&possible_link.following) {
                     pos = Some(record);
                 }
                 (neg, pos)
@@ -190,11 +198,15 @@ impl Linker {
                 Expr::value(PossibleLinkState::Deleted.to_string()),
             )
             .filter(
-                db::possible_links::Column::Positive
-                    .eq(*possible_link.positive)
-                    .or(db::possible_links::Column::Negative.eq(*possible_link.positive))
-                    .or(db::possible_links::Column::Positive.eq(*possible_link.negative))
-                    .or(db::possible_links::Column::Negative.eq(*possible_link.negative)),
+                db::possible_links::Column::LinkType
+                    .eq(LinkType::Transfer)
+                    .and(
+                        db::possible_links::Column::Leading
+                            .eq(*possible_link.following)
+                            .or(db::possible_links::Column::Following.eq(*possible_link.following))
+                            .or(db::possible_links::Column::Leading.eq(*possible_link.leading))
+                            .or(db::possible_links::Column::Following.eq(*possible_link.leading)),
+                    ),
             )
     }
 
@@ -207,7 +219,7 @@ impl Linker {
             .possible_links
             .data()
             .iter()
-            .flat_map(|link| vec![*link.positive, *link.negative])
+            .flat_map(|link| vec![*link.following, *link.leading])
             .collect::<Vec<_>>();
         let records = self
             .records
@@ -227,10 +239,10 @@ impl Linker {
             let probs = links
                 .iter()
                 .map(|link| {
-                    let Some(positive) = records.get(&link.positive) else {
+                    let Some(positive) = records.get(&link.following) else {
                         return (link.uuid, f64::INFINITY);
                     };
-                    let Some(negative) = records.get(&link.negative) else {
+                    let Some(negative) = records.get(&link.leading) else {
                         return (link.uuid, f64::INFINITY);
                     };
 
@@ -313,7 +325,11 @@ impl Linker {
         (left.amount() * -1).eq(right.amount())
     }
 
-    fn create_possible_link(&self, left: &ExpenseRecord, right: &ExpenseRecord) -> PossibleLink {
+    fn create_transfer_possible_link(
+        &self,
+        left: &ExpenseRecord,
+        right: &ExpenseRecord,
+    ) -> PossibleLink {
         let negative: ExpenseRecordUuid;
         let positive: ExpenseRecordUuid;
         if left.amount().is_negative() {
@@ -323,7 +339,7 @@ impl Linker {
             negative = *right.uuid();
             positive = *left.uuid();
         }
-        PossibleLink::from_uuids(negative, positive)
+        PossibleLink::from_uuids(negative, positive, LinkType::Transfer)
     }
 
     fn evaluate_if_link(
@@ -342,7 +358,7 @@ impl Linker {
             return None;
         }
         // otherwise create the link
-        Some(self.create_possible_link(left, right))
+        Some(self.create_transfer_possible_link(left, right))
     }
 
     fn find_all_possible_links<'a>(

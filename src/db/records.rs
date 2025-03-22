@@ -28,6 +28,12 @@ pub struct Model {
     state: String,
 }
 
+impl From<ExpenseRecordState> for sea_query::Value {
+    fn from(value: ExpenseRecordState) -> Self {
+        value.to_string().into()
+    }
+}
+
 pub(crate) type DbRecord = Entity;
 
 #[derive(Copy, Clone, Debug, EnumIter)]
@@ -46,10 +52,10 @@ impl RelationTrait for Relation {
                 .from(Column::DataImport)
                 .to(super::data_import::Column::Uuid)
                 .into(),
-            Relation::NegativePossibleLink => Entity::negative_poss_link_rel(),
-            Relation::PositivePossibleLink => Entity::positive_poss_link_rel(),
-            Relation::NegativeLink => Entity::negative_link_rel(),
-            Relation::PositiveLink => Entity::positive_link_rel(),
+            Relation::NegativePossibleLink => Entity::leading_poss_link_rel(),
+            Relation::PositivePossibleLink => Entity::following_poss_link_rel(),
+            Relation::NegativeLink => Entity::leading_link_rel(),
+            Relation::PositiveLink => Entity::following_link_rel(),
         }
     }
 }
@@ -112,46 +118,46 @@ impl Entity {
             .select()
             .join_as(
                 JoinType::LeftJoin,
-                Self::positive_link_rel(),
+                Self::following_link_rel(),
                 Alias::new("pos"),
             )
             .join_as(
                 JoinType::LeftJoin,
-                Self::negative_link_rel(),
+                Self::leading_link_rel(),
                 Alias::new("neg"),
             )
             .filter(
                 Column::State
                     .eq(ExpenseRecordState::Active)
-                    .and(Expr::col((Alias::new("pos"), super::link::Column::Positive)).is_null())
-                    .and(Expr::col((Alias::new("neg"), super::link::Column::Negative)).is_null()),
+                    .and(Expr::col((Alias::new("pos"), super::link::Column::Leading)).is_null())
+                    .and(Expr::col((Alias::new("neg"), super::link::Column::Following)).is_null()),
             )
     }
 
-    pub fn negative_link_rel() -> RelationDef {
+    pub fn leading_link_rel() -> RelationDef {
         Entity::belongs_to(super::link::Entity)
             .from(Column::Uuid)
-            .to(super::link::Column::Negative)
+            .to(super::link::Column::Leading)
             .into()
     }
-    pub fn positive_link_rel() -> RelationDef {
+    pub fn following_link_rel() -> RelationDef {
         Entity::belongs_to(super::link::Entity)
             .from(Column::Uuid)
-            .to(super::link::Column::Positive)
+            .to(super::link::Column::Following)
             .into()
     }
 
-    pub fn negative_poss_link_rel() -> RelationDef {
-        Entity::has_many(super::possible_links::Entity)
+    pub fn leading_poss_link_rel() -> RelationDef {
+        Entity::belongs_to(super::possible_links::Entity)
             .from(Column::Uuid)
-            .to(super::possible_links::Column::Negative)
+            .to(super::possible_links::Column::Leading)
             .into()
     }
 
-    pub fn positive_poss_link_rel() -> RelationDef {
-        Entity::has_many(super::possible_links::Entity)
+    pub fn following_poss_link_rel() -> RelationDef {
+        Entity::belongs_to(super::possible_links::Entity)
             .from(Column::Uuid)
-            .to(super::possible_links::Column::Positive)
+            .to(super::possible_links::Column::Following)
             .into()
     }
 }
