@@ -26,8 +26,11 @@ pub(super) struct BarChartVis {
 }
 
 impl BarChartVis {
-    pub fn new(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut records = factory.builder().name("bar_chart_vis_records").projector();
+    pub fn new(
+        factory: &Factory,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
+        let mut records =
+            factory.builder().name("bar_chart_vis_records").projector();
         async move {
             records.stored_query(DbRecord::find_all_active());
             let (weekly, monthly) = Self::update_graphs(&vec![]);
@@ -43,7 +46,8 @@ impl BarChartVis {
     pub fn update(&mut self) {
         self.records.state_update(true);
         if self.records.has_changed() {
-            let (weekly, monthly) = Self::update_graphs(self.records.set_viewed().data());
+            let (weekly, monthly) =
+                Self::update_graphs(self.records.set_viewed().data());
             self.weekly = weekly;
             self.monthly = monthly;
         }
@@ -73,8 +77,9 @@ impl BarChartVis {
         let mut monthly_amounts = {
             // Takes the inbetween years to calc the whole years inbetween and then
             // adds the two ends from the starting date to the ending date.
-            let months_diff =
-                ((max.year() - min.year()) as u32 * 12) + (12 - min.month()) + max.month();
+            let months_diff = ((max.year() - min.year()) as u32 * 12)
+                + (12 - min.month())
+                + max.month();
             let first_month = min.clone().with_day(1).unwrap();
 
             (0..months_diff)
@@ -110,7 +115,8 @@ impl BarChartVis {
                     .expect("Adding days shouldnt fail")
                     .format("%e %B %Y");
                 let bar_name = format!("{date} {amount:.2}€");
-                Bar::new(week_index_as_days as f64 / 7f64, amount).name(bar_name)
+                Bar::new(week_index_as_days as f64 / 7f64, amount)
+                    .name(bar_name)
             })
             .collect::<Vec<_>>();
         let month_bars = monthly_amounts
@@ -148,17 +154,20 @@ impl BarChartVis {
                     });
             }
             Charts::Monthly => {
-                Plot::new("monthly_plot")
-                    .view_aspect(2.0)
-                    .show(ui, |plot_ui| {
+                Plot::new("monthly_plot").view_aspect(2.0).show(
+                    ui,
+                    |plot_ui| {
                         plot_ui.bar_chart(BarChart::new(self.monthly.clone()))
-                    });
+                    },
+                );
             }
         }
     }
 }
 
-fn is_in_week_fn(min: &DateTime<Local>) -> impl Fn(u64, &DateTime<Local>) -> bool + '_ {
+fn is_in_week_fn(
+    min: &DateTime<Local>,
+) -> impl Fn(u64, &DateTime<Local>) -> bool + '_ {
     |weeks_from_in_days: u64, to_cmp: &DateTime<Local>| -> bool {
         let lower = min
             .checked_add_days(Days::new(weeks_from_in_days))

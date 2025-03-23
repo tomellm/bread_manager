@@ -69,7 +69,9 @@ impl TableFilter for DescriptionFilter {
                         record
                             .description_container()
                             .as_ref()
-                            .map(|cont| cont.str_overlaps_with_exact(&exact_desc))
+                            .map(|cont| {
+                                cont.str_overlaps_with_exact(&exact_desc)
+                            })
                             .unwrap_or(false)
                     })
                 }

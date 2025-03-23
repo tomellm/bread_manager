@@ -73,7 +73,9 @@ impl BreadApp {
         }
     }
 
-    fn apps_iter_mut(&mut self) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
+    fn apps_iter_mut(
+        &mut self,
+    ) -> impl Iterator<Item = (&str, Anchor, &mut dyn eframe::App)> {
         let vec = vec![
             (
                 "Visualizations",
@@ -126,10 +128,16 @@ impl BreadApp {
         self.state.selected_anchor = selected_anchor;
     }
 
-    fn show_selected_app(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn show_selected_app(
+        &mut self,
+        ctx: &egui::Context,
+        frame: &mut eframe::Frame,
+    ) {
         let selected_anchor = self.state.selected_anchor;
         for (_, anchor, app) in self.apps_iter_mut() {
-            if anchor == selected_anchor || ctx.memory(egui::Memory::everything_is_visible) {
+            if anchor == selected_anchor
+                || ctx.memory(egui::Memory::everything_is_visible)
+            {
                 app.update(ctx, frame);
             }
         }
@@ -139,7 +147,9 @@ impl BreadApp {
         use egui::{Align2, Color32, Id, LayerId, Order, TextStyle};
         use std::fmt::Write as _;
 
-        if ![Anchor::FileUpload, Anchor::Profiles].contains(&self.state.selected_anchor) {
+        if ![Anchor::FileUpload, Anchor::Profiles]
+            .contains(&self.state.selected_anchor)
+        {
             return;
         }
 
@@ -159,11 +169,17 @@ impl BreadApp {
                 text
             });
 
-            let painter =
-                ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
+            let painter = ctx.layer_painter(LayerId::new(
+                Order::Foreground,
+                Id::new("file_drop_target"),
+            ));
 
             let screen_rect = ctx.screen_rect();
-            painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
+            painter.rect_filled(
+                screen_rect,
+                0.0,
+                Color32::from_black_alpha(192),
+            );
             painter.text(
                 screen_rect.center(),
                 Align2::CENTER_CENTER,
@@ -204,7 +220,9 @@ impl BreadApp {
         move || ctx.request_repaint()
     }
 
-    pub fn get_current_sender(&self) -> Option<mpsc::Sender<egui::DroppedFile>> {
+    pub fn get_current_sender(
+        &self,
+    ) -> Option<mpsc::Sender<egui::DroppedFile>> {
         match self.state.selected_anchor {
             Anchor::FileUpload => Some(self.send_dropped_file_upload.clone()),
             Anchor::Profiles => Some(self.send_dropped_profiles.clone()),
@@ -218,7 +236,10 @@ impl BreadApp {
             .for_each(|mut result| {
                 if let ImmediateValueState::Error(err) = result.poll_state() {
                     warn!(
-                        msg = format!("Sending a dropped file resulted in an error: [{}]", err.0)
+                        msg = format!(
+                            "Sending a dropped file resulted in an error: [{}]",
+                            err.0
+                        )
                     );
                 };
             })
@@ -249,7 +270,8 @@ impl State {
         rx_p: mpsc::Receiver<egui::DroppedFile>,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+            let database_url =
+                env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let mut connection_options = ConnectOptions::new(database_url);
             connection_options.sqlx_logging(true);
             let db = Database::connect(connection_options).await.unwrap();

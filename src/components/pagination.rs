@@ -24,7 +24,9 @@ impl PaginationControls {
             if ui.button("+10").clicked() {
                 self.per_page += 10;
             }
-            if ui.button(">").clicked() && self.page < num_elements / self.per_page {
+            if ui.button(">").clicked()
+                && self.page < num_elements / self.per_page
+            {
                 self.page += 1;
             }
         });
@@ -36,7 +38,6 @@ impl PaginationControls {
             ui.label(format!("Per Page: {}", self.per_page));
         });
     }
-
 }
 
 impl Default for PaginationControls {
@@ -45,5 +46,38 @@ impl Default for PaginationControls {
             page: 0,
             per_page: 30,
         }
+    }
+}
+
+pub trait Paginator<T> {
+    fn paginate<'a>(
+        &'a self,
+        controls: &'a PaginationControls,
+    ) -> Option<impl IntoIterator<Item = &'a T>>
+    where
+        T: 'a;
+}
+
+impl<T> Paginator<T> for Vec<T> {
+    fn paginate<'a>(
+        &'a self,
+        controls: &'a PaginationControls,
+    ) -> Option<impl IntoIterator<Item = &'a T>>
+    where
+        T: 'a,
+    {
+        self.chunks(controls.per_page).nth(controls.page)
+    }
+}
+
+impl<T> Paginator<T> for &[T] {
+    fn paginate<'a>(
+        &'a self,
+        controls: &PaginationControls,
+    ) -> Option<impl IntoIterator<Item = &'a T>>
+    where
+        T: 'a,
+    {
+        self.chunks(controls.per_page).nth(controls.page)
     }
 }

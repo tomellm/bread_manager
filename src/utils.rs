@@ -2,7 +2,9 @@ use std::{fmt::Display, future::Future, mem};
 
 use eframe::App;
 use egui::Spinner;
-use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise, ImmediateValueState};
+use lazy_async_promise::{
+    DirectCacheAccess, ImmediateValuePromise, ImmediateValueState,
+};
 
 pub struct LoadingScreen<T>
 where
@@ -33,7 +35,8 @@ where
     T: App + Send + 'static,
 {
     fn from(value: F) -> Self {
-        let promise = ImmediateValuePromise::new(async move { Ok(value.await) });
+        let promise =
+            ImmediateValuePromise::new(async move { Ok(value.await) });
         Self {
             state: promise.into(),
         }
@@ -54,7 +57,10 @@ where
                     let response = match &mut self.state {
                         State::Finished(_) => ui.label("Done!"),
                         State::Loading(promise) => {
-                            if !matches!(promise.poll_state(), ImmediateValueState::Updating) {
+                            if !matches!(
+                                promise.poll_state(),
+                                ImmediateValueState::Updating
+                            ) {
                                 finished = true;
                             }
                             ui.add(Spinner::new())

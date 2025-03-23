@@ -56,7 +56,8 @@ impl Profile {
         origin_name: String,
     ) -> Self {
         let uuid = Uuid::new_v4();
-        let mut positions = other_data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
+        let mut positions =
+            other_data.iter().map(|(pos, _)| *pos).collect::<Vec<_>>();
         positions.extend(amount.get_positions());
         positions.extend(datetime.get_positions());
         let profile_width = positions.into_iter().max().unwrap();
@@ -119,7 +120,8 @@ impl Profile {
 
         let mut builder = ExpenseRecordBuilder::default();
 
-        let get_from_vec = |pos: usize| -> String { split_row.get(pos).unwrap().to_string() };
+        let get_from_vec =
+            |pos: usize| -> String { split_row.get(pos).unwrap().to_string() };
 
         match &self.amount {
             ExpenseColumn::Split((pos1, income), (pos2, expense)) => {
@@ -129,21 +131,28 @@ impl Profile {
                 );
             }
             ExpenseColumn::Combined(pos, movement) => {
-                builder.amount_combined(movement.parse_str(&get_from_vec(*pos))?);
+                builder
+                    .amount_combined(movement.parse_str(&get_from_vec(*pos))?);
             }
             ExpenseColumn::OnlyExpense(pos, pos_expense) => {
-                builder.amount_split(0, pos_expense.parse_str(&get_from_vec(*pos))?);
+                builder.amount_split(
+                    0,
+                    pos_expense.parse_str(&get_from_vec(*pos))?,
+                );
             }
         };
         match &self.datetime {
             DateTimeColumn::DateTime(pos, el) => {
                 builder.datetime(el.parse_str(&get_from_vec(*pos))?);
             }
-            DateTimeColumn::Date(pos, el) => builder.date(el.parse_str(&get_from_vec(*pos))?),
-            DateTimeColumn::DateAndTime((pos1, el1), (pos2, el2)) => builder.date_time(
-                el1.parse_str(&get_from_vec(*pos1))?,
-                el2.parse_str(&get_from_vec(*pos2))?,
-            ),
+            DateTimeColumn::Date(pos, el) => {
+                builder.date(el.parse_str(&get_from_vec(*pos))?)
+            }
+            DateTimeColumn::DateAndTime((pos1, el1), (pos2, el2)) => builder
+                .date_time(
+                    el1.parse_str(&get_from_vec(*pos1))?,
+                    el2.parse_str(&get_from_vec(*pos2))?,
+                ),
         }
 
         for (index, element) in split_row.into_iter().enumerate() {

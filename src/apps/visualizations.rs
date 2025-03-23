@@ -29,7 +29,9 @@ impl App for Visualizations {
 }
 
 impl Visualizations {
-    pub fn init(factory: &Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(
+        factory: &Factory,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
         let bars = BarChartVis::new(factory);
         async move {
             Self {

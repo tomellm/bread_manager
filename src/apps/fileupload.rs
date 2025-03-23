@@ -69,7 +69,9 @@ impl ParsingFileState {
     }
 
     pub fn start_parsing(&mut self) -> FileToParse {
-        let ParsingFileState::NewFile(boxed) = mem::replace(self, ParsingFileState::Parsing) else {
+        let ParsingFileState::NewFile(boxed) =
+            mem::replace(self, ParsingFileState::Parsing)
+        else {
             unreachable!()
         };
         *boxed

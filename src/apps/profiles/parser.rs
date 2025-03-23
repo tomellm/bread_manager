@@ -2,13 +2,16 @@ use std::{ops::Deref, sync::Arc};
 
 use egui::{DroppedFile, Response, Ui};
 use lazy_async_promise::{
-    send_data, set_error, set_finished, unpack_result, DataState, LazyVecPromise, Message, Promise,
+    send_data, set_error, set_finished, unpack_result, DataState,
+    LazyVecPromise, Message, Promise,
 };
 use tokio::sync::mpsc;
 use tracing::trace;
 
 use crate::{
-    apps::utils::blank_option_display, model::profiles::builder::{IntermediateParse, ProfileBuilder}, utils::{CompressDisplayResult, CompressResult},
+    apps::utils::blank_option_display,
+    model::profiles::builder::{IntermediateParse, ProfileBuilder},
+    utils::{CompressDisplayResult, CompressResult},
 };
 
 pub(super) struct ProfilePreview {
@@ -26,7 +29,11 @@ impl ProfilePreview {
         }
     }
 
-    pub fn profile_preview(&mut self, ui: &mut Ui, builder: &Arc<ProfileBuilder>) -> Response {
+    pub fn profile_preview(
+        &mut self,
+        ui: &mut Ui,
+        builder: &Arc<ProfileBuilder>,
+    ) -> Response {
         self.recive_files(builder);
 
         if let Some(ref mut parsed_file) = &mut self.parsed_testing_file {
@@ -103,15 +110,17 @@ impl ProfilePreview {
         };
         let to_be_parsed = Arc::clone(&self.testing_file);
         let builder = Arc::clone(builder);
-        trace!( msg = format!("{builder:?}") );
+        trace!(msg = format!("{builder:?}"));
         let updater = move |tx: mpsc::Sender<Message<IntermediateParse>>| {
             let to_be_parsed = Arc::clone(&to_be_parsed);
             let builder = Arc::clone(&builder);
             async move {
                 let file = to_be_parsed.deref().clone();
                 let file = file.unwrap().path.unwrap();
-                let str_file = unpack_result!(std::fs::read_to_string(file), tx);
-                let rows: Vec<String> = str_file.lines().map(str::to_string).collect();
+                let str_file =
+                    unpack_result!(std::fs::read_to_string(file), tx);
+                let rows: Vec<String> =
+                    str_file.lines().map(str::to_string).collect();
                 let total_len = rows.len();
                 for (index, row) in rows.into_iter().enumerate() {
                     let parsed = unpack_result!(

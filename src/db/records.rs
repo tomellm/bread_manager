@@ -48,10 +48,12 @@ pub enum Relation {
 impl RelationTrait for Relation {
     fn def(&self) -> RelationDef {
         match self {
-            Relation::DataImport => Entity::belongs_to(super::data_import::Entity)
-                .from(Column::DataImport)
-                .to(super::data_import::Column::Uuid)
-                .into(),
+            Relation::DataImport => {
+                Entity::belongs_to(super::data_import::Entity)
+                    .from(Column::DataImport)
+                    .to(super::data_import::Column::Uuid)
+                    .into()
+            }
             Relation::NegativePossibleLink => Entity::leading_poss_link_rel(),
             Relation::PositivePossibleLink => Entity::following_poss_link_rel(),
             Relation::NegativeLink => Entity::leading_link_rel(),
@@ -76,7 +78,10 @@ impl FromEntity<ExpenseRecord> for Model {
             amount: *entity.amount() as i64,
             datetime: entity.datetime().clone().timestamp(),
             description: entity.description().cloned(),
-            description_container: bc::serialize(entity.description_container()).unwrap(),
+            description_container: bc::serialize(
+                entity.description_container(),
+            )
+            .unwrap(),
             tags: entity.tags().clone().join(TAG_SEPARATOR),
             data: bc::serialize(entity.data()).unwrap(),
             origin: entity.origin().clone(),
@@ -129,8 +134,20 @@ impl Entity {
             .filter(
                 Column::State
                     .eq(ExpenseRecordState::Active)
-                    .and(Expr::col((Alias::new("pos"), super::link::Column::Leading)).is_null())
-                    .and(Expr::col((Alias::new("neg"), super::link::Column::Following)).is_null()),
+                    .and(
+                        Expr::col((
+                            Alias::new("pos"),
+                            super::link::Column::Leading,
+                        ))
+                        .is_null(),
+                    )
+                    .and(
+                        Expr::col((
+                            Alias::new("neg"),
+                            super::link::Column::Following,
+                        ))
+                        .is_null(),
+                    ),
             )
     }
 

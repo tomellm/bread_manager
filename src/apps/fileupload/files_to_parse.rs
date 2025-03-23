@@ -1,8 +1,8 @@
 use std::fs;
 
 use egui::{
-    popup_below_widget, Color32, ComboBox, DroppedFile, Grid, Id, Label, PopupCloseBehavior,
-    RichText, Ui, Widget,
+    popup_below_widget, Color32, ComboBox, DroppedFile, Grid, Id, Label,
+    PopupCloseBehavior, RichText, Ui, Widget,
 };
 use hermes::{
     carrier::query::ImplQueryCarrier,
@@ -43,7 +43,11 @@ impl FilesToParse {
         }
     }
 
-    pub(super) fn files_to_parse_list(&mut self, parsing_file: &mut ParsingFileState, ui: &mut Ui) {
+    pub(super) fn files_to_parse_list(
+        &mut self,
+        parsing_file: &mut ParsingFileState,
+        ui: &mut Ui,
+    ) {
         self.profiles.state_update(true);
         self.recive_files();
 
@@ -60,9 +64,17 @@ impl FilesToParse {
 
                     ui.label(file_to_parse.file.name.clone());
                     Self::file_path(file_to_parse, ui);
-                    Self::profile_select(file_to_parse, self.profiles.data(), ui);
+                    Self::profile_select(
+                        file_to_parse,
+                        self.profiles.data(),
+                        ui,
+                    );
                     Self::margin_cutoff(file_to_parse, ui);
-                    Self::parse_and_remove_button(file_to_parse, parsing_file, ui)
+                    Self::parse_and_remove_button(
+                        file_to_parse,
+                        parsing_file,
+                        ui,
+                    )
                 });
             });
         } else {
@@ -83,7 +95,11 @@ impl FilesToParse {
         }
     }
 
-    fn profile_select(file: &mut FileToParse, profiles: &[Profile], ui: &mut Ui) {
+    fn profile_select(
+        file: &mut FileToParse,
+        profiles: &[Profile],
+        ui: &mut Ui,
+    ) {
         ComboBox::from_id_salt(format!("select_profile_{:?}", file.uuid))
             .selected_text({
                 file.profile
@@ -132,48 +148,68 @@ impl FilesToParse {
 
                 let luminance = 70;
 
-                Grid::new(format!("cut_off_margis_grid_{}", file.uuid)).show(ui, |ui| {
-                    if let Some(top) = file.cut_off_margins.top.as_ref() {
-                        for (index, row) in top[0..(top.len() - 1)].iter().enumerate() {
-                            ui.label((index + 1).to_string());
-                            for el in row {
-                                ui.label(el);
+                Grid::new(format!("cut_off_margis_grid_{}", file.uuid)).show(
+                    ui,
+                    |ui| {
+                        if let Some(top) = file.cut_off_margins.top.as_ref() {
+                            for (index, row) in
+                                top[0..(top.len() - 1)].iter().enumerate()
+                            {
+                                ui.label((index + 1).to_string());
+                                for el in row {
+                                    ui.label(el);
+                                }
+                                ui.end_row();
+                            }
+
+                            ui.label("");
+                            for el in top.last().unwrap() {
+                                Label::new(
+                                    RichText::new(el)
+                                        .color(Color32::from_gray(luminance)),
+                                )
+                                .ui(ui);
                             }
                             ui.end_row();
                         }
 
                         ui.label("");
-                        for el in top.last().unwrap() {
-                            Label::new(RichText::new(el).color(Color32::from_gray(luminance)))
-                                .ui(ui);
-                        }
-                        ui.end_row();
-                    }
-
-                    ui.label("");
-                    for _ in 0..file.cut_off_margins.width().unwrap() {
-                        Label::new(RichText::new("...").color(Color32::from_gray(luminance)))
+                        for _ in 0..file.cut_off_margins.width().unwrap() {
+                            Label::new(
+                                RichText::new("...")
+                                    .color(Color32::from_gray(luminance)),
+                            )
                             .ui(ui);
-                    }
-                    ui.end_row();
-
-                    if let Some(bottom) = file.cut_off_margins.bottom.as_ref() {
-                        ui.label("");
-                        for el in bottom.first().unwrap() {
-                            Label::new(RichText::new(el).color(Color32::from_gray(luminance)))
-                                .ui(ui);
                         }
                         ui.end_row();
 
-                        for (index, row) in bottom[1..bottom.len()].iter().enumerate() {
-                            ui.label((profile.margins.1 - index).to_string());
-                            for el in row {
-                                ui.label(el);
+                        if let Some(bottom) =
+                            file.cut_off_margins.bottom.as_ref()
+                        {
+                            ui.label("");
+                            for el in bottom.first().unwrap() {
+                                Label::new(
+                                    RichText::new(el)
+                                        .color(Color32::from_gray(luminance)),
+                                )
+                                .ui(ui);
                             }
                             ui.end_row();
+
+                            for (index, row) in
+                                bottom[1..bottom.len()].iter().enumerate()
+                            {
+                                ui.label(
+                                    (profile.margins.1 - index).to_string(),
+                                );
+                                for el in row {
+                                    ui.label(el);
+                                }
+                                ui.end_row();
+                            }
                         }
-                    }
-                });
+                    },
+                );
             },
         );
     }
@@ -203,7 +239,9 @@ impl FilesToParse {
         to_remove
     }
 
-    pub fn extract_ready_files(&mut self) -> impl Iterator<Item = FileToParse> + '_ {
+    pub fn extract_ready_files(
+        &mut self,
+    ) -> impl Iterator<Item = FileToParse> + '_ {
         self.files.extract_if(.., |f| f.profile.is_some())
     }
 
@@ -252,10 +290,13 @@ impl FileToParse {
             let len = str.lines().count();
 
             for (index, line) in str.lines().enumerate() {
-                if !profile.margins.0.is_zero() && index < profile.margins.0 + 1 {
+                if !profile.margins.0.is_zero() && index < profile.margins.0 + 1
+                {
                     self.cut_off_margins.push_top(line, profile.delimiter);
                 }
-                if !profile.margins.1.is_zero() && index >= len - 1 - profile.margins.1 {
+                if !profile.margins.1.is_zero()
+                    && index >= len - 1 - profile.margins.1
+                {
                     self.cut_off_margins.push_bottom(line, profile.delimiter);
                 }
             }
@@ -291,7 +332,10 @@ impl CutOffMargins {
                     if str.len() < Self::MAX_STR_WIDTH {
                         str.to_owned()
                     } else {
-                        format!("{}...", &str[0..Self::MAX_STR_WIDTH].replace(" ", ""))
+                        format!(
+                            "{}...",
+                            &str[0..Self::MAX_STR_WIDTH].replace(" ", "")
+                        )
                     }
                 })
                 .collect(),
@@ -305,7 +349,10 @@ impl CutOffMargins {
                     if str.len() < Self::MAX_STR_WIDTH {
                         str.to_owned()
                     } else {
-                        format!("{}...", &str[0..Self::MAX_STR_WIDTH].replace(" ", ""))
+                        format!(
+                            "{}...",
+                            &str[0..Self::MAX_STR_WIDTH].replace(" ", "")
+                        )
                     }
                 })
                 .collect(),
@@ -331,7 +378,9 @@ impl CutOffMargins {
 
     fn width(&self) -> Option<usize> {
         match (&self.top, &self.bottom) {
-            (Some(vec), None) | (_, Some(vec)) => Some(vec.first().unwrap().len()),
+            (Some(vec), None) | (_, Some(vec)) => {
+                Some(vec.first().unwrap().len())
+            }
             _ => None,
         }
     }

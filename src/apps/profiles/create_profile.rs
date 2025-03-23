@@ -4,7 +4,9 @@ mod other_columns;
 
 use std::sync::Arc;
 
-use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin_name};
+use basics::{
+    default_tags, delimiter, margin_btm, margin_top, name, origin_name,
+};
 use egui::Ui;
 use egui_light_states::UiStates;
 use hermes::{
@@ -37,7 +39,10 @@ pub struct CreateProfile {
 }
 
 impl CreateProfile {
-    pub fn new(reciver: mpsc::Receiver<egui::DroppedFile>, factory: Factory) -> Self {
+    pub fn new(
+        reciver: mpsc::Receiver<egui::DroppedFile>,
+        factory: Factory,
+    ) -> Self {
         let mut profiles = factory
             .builder()
             .name("create_profile_profiles")
@@ -93,7 +98,8 @@ impl CreateProfile {
 
     pub fn edit(&mut self, profile: &Profile) {
         self.reset();
-        self.intermediate_profile_state = IntermediateProfileState::from_profile(profile);
+        self.intermediate_profile_state =
+            IntermediateProfileState::from_profile(profile);
     }
 
     fn reset(&mut self) {
@@ -134,7 +140,8 @@ impl CreateProfile {
     }
 
     fn update_builder(&mut self) {
-        let profile = ProfileBuilder::from_inter_state(&self.intermediate_profile_state);
+        let profile =
+            ProfileBuilder::from_inter_state(&self.intermediate_profile_state);
         if let Ok(profile) = profile {
             self.profile_builder = Arc::new(profile);
         }

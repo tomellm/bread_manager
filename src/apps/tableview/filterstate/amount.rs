@@ -47,19 +47,19 @@ impl TableFilter for AmountFilter {
         }
     }
     fn filter(&self) -> Option<DataFilter> {
-        self.0.as_ref().map(|amount_filter| {
-            match amount_filter {
-                AmountFilterType::Precise(amount) => {
-                    let amount = to_isize(*amount);
-                    box_dyn(move |record: &ExpenseRecord| record.amount().eq(&amount))
-                }
-                AmountFilterType::Between(lower, upper) => {
-                    let lower = to_isize(*lower);
-                    let upper = to_isize(*upper);
-                    box_dyn(move |record: &ExpenseRecord| {
-                        lower <= *record.amount() && record.amount() <= &upper
-                    })
-                }
+        self.0.as_ref().map(|amount_filter| match amount_filter {
+            AmountFilterType::Precise(amount) => {
+                let amount = to_isize(*amount);
+                box_dyn(move |record: &ExpenseRecord| {
+                    record.amount().eq(&amount)
+                })
+            }
+            AmountFilterType::Between(lower, upper) => {
+                let lower = to_isize(*lower);
+                let upper = to_isize(*upper);
+                box_dyn(move |record: &ExpenseRecord| {
+                    lower <= *record.amount() && record.amount() <= &upper
+                })
             }
         })
     }

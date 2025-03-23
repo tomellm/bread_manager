@@ -66,7 +66,10 @@ impl App for TableView {
                         self.records.execute(DbDataImport::delete_many());
                     }
 
-                    ui.label(format!("Curretly {} records.", self.records.data().len()));
+                    ui.label(format!(
+                        "Curretly {} records.",
+                        self.records.data().len()
+                    ));
 
                     if self.hide_filters && ui.button("filters").clicked() {
                         self.hide_filters = false;
@@ -86,13 +89,21 @@ impl App for TableView {
                     .resizable(true)
                     .show_inside(ui, |ui| {
                         ui.horizontal(|ui| {
-                            SidePanelState::values().into_iter().for_each(|val| {
-                                ui.add_enabled_ui(val != self.side_panel_state, |ui| {
-                                    if ui.button(format!("{val:?}")).clicked() {
-                                        self.side_panel_state = val;
-                                    }
-                                });
-                            });
+                            SidePanelState::values().into_iter().for_each(
+                                |val| {
+                                    ui.add_enabled_ui(
+                                        val != self.side_panel_state,
+                                        |ui| {
+                                            if ui
+                                                .button(format!("{val:?}"))
+                                                .clicked()
+                                            {
+                                                self.side_panel_state = val;
+                                            }
+                                        },
+                                    );
+                                },
+                            );
                             if ui.button(">>").clicked() {
                                 self.hide_filters = true;
                             }
@@ -100,12 +111,16 @@ impl App for TableView {
                         ui.separator();
 
                         match self.side_panel_state {
-                            SidePanelState::Filters => self.filter_state.display_filters(ui),
-                            SidePanelState::Actions => self.action_state.display_actions(
-                                &mut self.records,
-                                |r| self.filter_state.filter(r),
-                                ui,
-                            ),
+                            SidePanelState::Filters => {
+                                self.filter_state.display_filters(ui)
+                            }
+                            SidePanelState::Actions => {
+                                self.action_state.display_actions(
+                                    &mut self.records,
+                                    |r| self.filter_state.filter(r),
+                                    ui,
+                                )
+                            }
                         };
                     });
             }
@@ -114,9 +129,12 @@ impl App for TableView {
 }
 
 impl TableView {
-    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(
+        factory: Factory,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records = factory.builder().name("tableview_records").projector();
+            let mut records =
+                factory.builder().name("tableview_records").projector();
             records.stored_query(DbRecord::find_all_active());
             Self {
                 action_state: ActionState::new(records.actor()),

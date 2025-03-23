@@ -1,6 +1,8 @@
 use hermes::impl_to_active_model;
 use sea_orm::entity::prelude::*;
-use sea_orm::{ActiveModelBehavior, DeriveEntityModel, EntityOrSelect, EnumIter};
+use sea_orm::{
+    ActiveModelBehavior, DeriveEntityModel, EntityOrSelect, EnumIter,
+};
 use sqlx_projector::impl_to_database;
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
