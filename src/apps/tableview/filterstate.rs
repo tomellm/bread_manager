@@ -53,7 +53,8 @@ impl FilterState {
         if filters.is_empty() {
             self.filter = Arc::new(|_| true);
         } else {
-            self.filter = Arc::new(move |r| filters.iter().all(|filter| filter(r)));
+            self.filter =
+                Arc::new(move |r| filters.iter().all(|filter| filter(r)));
         }
     }
 
@@ -69,7 +70,9 @@ impl FilterState {
     }
 }
 
-fn box_dyn(func: impl Fn(&ExpenseRecord) -> bool + Send + Sync + 'static) -> DataFilter {
+fn box_dyn(
+    func: impl Fn(&ExpenseRecord) -> bool + Send + Sync + 'static,
+) -> DataFilter {
     Box::new(func) as DataFilter
 }
 

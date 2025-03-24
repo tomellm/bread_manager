@@ -36,7 +36,8 @@ impl From<ExpenseDate> for ParsableWrapper {
 
 impl Parser<NaiveDate> for ExpenseDate {
     fn parse_str(&self, str: &str) -> Result<NaiveDate, ProfileError> {
-        NaiveDate::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
+        NaiveDate::parse_from_str(str, &self.0)
+            .or(Err(ProfileError::date(str, &self.0)))
     }
     fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
         Ok(ExpenseData::ExpenseDate(self.parse_str(str)?))
@@ -54,7 +55,8 @@ impl From<ExpenseTime> for ParsableWrapper {
 
 impl Parser<NaiveTime> for ExpenseTime {
     fn parse_str(&self, str: &str) -> Result<NaiveTime, ProfileError> {
-        NaiveTime::parse_from_str(str, &self.0).or(Err(ProfileError::date(str, &self.0)))
+        NaiveTime::parse_from_str(str, &self.0)
+            .or(Err(ProfileError::date(str, &self.0)))
     }
     fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
         Ok(ExpenseData::ExpenseTime(self.parse_str(str)?))

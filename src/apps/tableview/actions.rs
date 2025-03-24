@@ -1,5 +1,8 @@
 use egui::Ui;
-use hermes::{actor::Actor, carrier::execute::ImplExecuteCarrier, container::data::ImplData};
+use hermes::{
+    actor::Actor, carrier::execute::ImplExecuteCarrier,
+    container::data::ImplData,
+};
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use sea_query::Expr;
 

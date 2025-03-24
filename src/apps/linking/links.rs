@@ -27,8 +27,10 @@ impl LinksView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut links = factory.builder().name("links_view_links").projector();
-            let mut records = factory.builder().name("links_view_records").projector();
+            let mut links =
+                factory.builder().name("links_view_links").projector();
+            let mut records =
+                factory.builder().name("links_view_records").projector();
 
             links.stored_query(DbLink::find_all_active());
             records.stored_query(DbRecord::find().select());
@@ -88,7 +90,8 @@ impl LinksView {
                             .show(ui, |ui| {
                                 ui.vertical_centered(|ui| {
                                     Label::new(
-                                        RichText::new(format!("{}", link.uuid)).color(text_color),
+                                        RichText::new(format!("{}", link.uuid))
+                                            .color(text_color),
                                     )
                                     .selectable(false)
                                     .ui(ui);
@@ -100,7 +103,7 @@ impl LinksView {
 
             if response.clicked() {
                 self.selected = Some(link.clone());
-                info!("{:?}, {:?}", link.negative, link.positive);
+                info!("{:?}, {:?}", link.leading, link.following);
             }
         }
     }
@@ -121,27 +124,26 @@ impl LinksView {
             ui.end_row();
 
             ui.label("Negative Side Uuid:");
-            ui.label(format!("{}", *link.negative));
+            ui.label(format!("{}", *link.leading));
             ui.end_row();
 
             ui.label("Positive Side Uuid:");
-            ui.label(format!("{}", *link.positive));
+            ui.label(format!("{}", *link.following));
             ui.end_row();
         });
 
-        let (negative, positive) =
-            self.records
-                .data()
-                .iter()
-                .fold((None, None), |mut matches, record| {
-                    if link.negative.eq(record.uuid()) {
-                        let _ = matches.0.insert(record);
-                    }
-                    if link.positive.eq(record.uuid()) {
-                        let _ = matches.1.insert(record);
-                    }
-                    matches
-                });
+        let (negative, positive) = self.records.data().iter().fold(
+            (None, None),
+            |mut matches, record| {
+                if link.leading.eq(record.uuid()) {
+                    let _ = matches.0.insert(record);
+                }
+                if link.following.eq(record.uuid()) {
+                    let _ = matches.1.insert(record);
+                }
+                matches
+            },
+        );
         super::view_records(negative, positive, ui);
     }
 }

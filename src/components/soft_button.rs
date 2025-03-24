@@ -6,7 +6,7 @@ pub fn soft_button(
     id_salt: impl Hash,
     text: impl Into<String>,
     ui: &mut Ui,
-    ) -> Response {
+) -> Response {
     ui.scope_builder(
         UiBuilder::new()
             .id_salt(id_salt)

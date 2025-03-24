@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use sqlx::{
-    query::Query, query_builder::Separated, sqlite::SqliteQueryResult, Database, Encode, Execute,
-    Pool, QueryBuilder, Sqlite, Type,
+    query::Query, query_builder::Separated, sqlite::SqliteQueryResult,
+    Database, Encode, Execute, Pool, QueryBuilder, Sqlite, Type,
 };
 use tracing::trace;
 
@@ -48,14 +48,21 @@ pub async fn transactional_execute_queries<'args, Value>(
     mut push_fn: impl FnMut(
         Query<'args, Sqlite, <Sqlite as Database>::Arguments<'args>>,
         Value,
-    ) -> Query<'args, Sqlite, <Sqlite as Database>::Arguments<'args>>,
+    ) -> Query<
+        'args,
+        Sqlite,
+        <Sqlite as Database>::Arguments<'args>,
+    >,
 ) -> Result<(), sqlx::Error> {
     let mut connection = pool.acquire().await?;
-    sqlx::query!("begin transaction;").execute(&mut *connection).await?;
+    sqlx::query!("begin transaction;")
+        .execute(&mut *connection)
+        .await?;
 
     for value in values {
         let builder = sqlx::query(query);
-        let query_result = push_fn(builder, value).execute(&mut *connection).await;
+        let query_result =
+            push_fn(builder, value).execute(&mut *connection).await;
         if query_result.is_err() {
             sqlx::query!("rollback").execute(&mut *connection).await?;
             return query_result.map(|_| ());
@@ -76,7 +83,8 @@ where
     I: Iterator<Item = T>,
     T: 'args + Encode<'args, Sqlite> + Send + Type<Sqlite>,
 {
-    let mut query_builder: QueryBuilder<'args, Sqlite> = QueryBuilder::new(query_front);
+    let mut query_builder: QueryBuilder<'args, Sqlite> =
+        QueryBuilder::new(query_front);
 
     items.enumerate().for_each(|(index, id)| {
         if index != 0 {

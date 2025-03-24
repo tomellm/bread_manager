@@ -31,7 +31,9 @@ impl TableFilter for UuidFilter {
     fn filter(&self) -> Option<DataFilter> {
         self.0.as_ref().map(|uuid_filter| {
             let uuid = uuid_filter.clone();
-            box_dyn(move |record: &ExpenseRecord| record.uuid().to_string().eq(&uuid))
+            box_dyn(move |record: &ExpenseRecord| {
+                record.uuid().to_string().eq(&uuid)
+            })
         })
     }
     fn filter_activation(&mut self, ui: &mut Ui) {

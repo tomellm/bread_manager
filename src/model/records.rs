@@ -11,7 +11,7 @@ use crate::db::records::DbRecord;
 
 use super::profiles::error::ProfileError;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ExpenseRecordUuid(pub Uuid);
 
 impl ExpenseRecordUuid {
@@ -59,12 +59,6 @@ pub enum ExpenseRecordState {
 impl Display for ExpenseRecordState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self)
-    }
-}
-
-impl From<ExpenseRecordState> for sea_query::Value {
-    fn from(value: ExpenseRecordState) -> Self {
-        value.to_string().into()
     }
 }
 
@@ -174,6 +168,10 @@ impl ExpenseRecord {
     }
     pub fn state(&self) -> ExpenseRecordState {
         self.state
+    }
+
+    pub fn has_same_uuid(&self, other: &Self) -> bool {
+        self.uuid().eq(other.uuid())
     }
 
     pub fn is_same_record(&self, other: &Self) -> bool {
@@ -315,15 +313,17 @@ impl ExpenseRecordBuilder {
     }
     pub fn build(&self) -> Result<ExpenseRecord, ProfileError> {
         match (self.amount, self.datetime, self.data_import) {
-            (Some(amount), Some(datetime), Some(data_import)) => Ok(ExpenseRecord::new(
-                amount,
-                datetime,
-                self.data.clone(),
-                self.default_tags.clone(),
-                self.origin.clone(),
-                self.description.clone().clone(),
-                data_import,
-            )),
+            (Some(amount), Some(datetime), Some(data_import)) => {
+                Ok(ExpenseRecord::new(
+                    amount,
+                    datetime,
+                    self.data.clone(),
+                    self.default_tags.clone(),
+                    self.origin.clone(),
+                    self.description.clone().clone(),
+                    data_import,
+                ))
+            }
             _ => Err(ProfileError::build(
                 self.amount,
                 self.datetime,
@@ -364,7 +364,8 @@ impl DescriptionContainer {
         }
     }
     pub fn push_current(&mut self, title: String, desc: String) {
-        let old_current = mem::replace(&mut self.current, Description::new(title, desc));
+        let old_current =
+            mem::replace(&mut self.current, Description::new(title, desc));
         self.history.push(old_current);
     }
     pub fn push_other(&mut self, title: String, desc: String) {
@@ -388,8 +389,9 @@ impl DescriptionContainer {
         let other = other.to_lowercase();
         let this = self.all_str().map(String::as_str).map(str::to_lowercase);
 
-        this.into_iter()
-            .any(|this_item| this_item.contains(&other) || other.contains(&this_item))
+        this.into_iter().any(|this_item| {
+            this_item.contains(&other) || other.contains(&this_item)
+        })
     }
 
     /// This method checks if this String overlaps with any part of any

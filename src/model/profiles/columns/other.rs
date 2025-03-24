@@ -4,7 +4,6 @@ use crate::model::{profiles::error::ProfileError, records::ExpenseData};
 
 use super::{ParsableWrapper, Parser};
 
-
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Description(pub String);
 
@@ -19,7 +18,10 @@ impl Parser<String> for Description {
         Ok(str.to_owned())
     }
     fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Description(self.0.clone(), self.parse_str(str).unwrap()))
+        Ok(ExpenseData::Description(
+            self.0.clone(),
+            self.parse_str(str).unwrap(),
+        ))
     }
 }
 
@@ -37,8 +39,9 @@ impl Parser<String> for Other {
         Ok(str.to_owned())
     }
     fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Other(self.0.clone(), self.parse_str(str).unwrap()))
+        Ok(ExpenseData::Other(
+            self.0.clone(),
+            self.parse_str(str).unwrap(),
+        ))
     }
 }
-
-

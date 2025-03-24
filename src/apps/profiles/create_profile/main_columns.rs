@@ -39,17 +39,29 @@ fn expense_col_selection(ui: &mut Ui, expense_col: &mut Option<ExpenseColumn>) {
     ui.horizontal(|ui| {
         if let Some(expense) = expense_col {
             match expense {
-                ExpenseColumn::Split((pos1, Income(inc_format)), (pos2, Expense(exp_format))) => {
+                ExpenseColumn::Split(
+                    (pos1, Income(inc_format)),
+                    (pos2, Expense(exp_format)),
+                ) => {
                     ui.vertical(|ui| {
                         drag_int(ui, pos1);
-                        number_format_combobox("left_format_combobox", inc_format, ui);
+                        number_format_combobox(
+                            "left_format_combobox",
+                            inc_format,
+                            ui,
+                        );
                     });
                     ui.vertical(|ui| {
                         drag_int(ui, pos2);
-                        number_format_combobox("right_format_combobox", exp_format, ui);
+                        number_format_combobox(
+                            "right_format_combobox",
+                            exp_format,
+                            ui,
+                        );
                     });
                 }
-                ExpenseColumn::Combined(pos, Movement(format)) | ExpenseColumn::OnlyExpense(pos, PosExpense(format)) => {
+                ExpenseColumn::Combined(pos, Movement(format))
+                | ExpenseColumn::OnlyExpense(pos, PosExpense(format)) => {
                     drag_int(ui, pos);
                     number_format_combobox("format_combobox", format, ui)
                 }
@@ -66,7 +78,11 @@ fn expense_col_selection(ui: &mut Ui, expense_col: &mut Option<ExpenseColumn>) {
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
             ui.set_min_width(60.0);
             ui.selectable_value(expense_col, None, "not yet");
-            ui.selectable_value(expense_col, Some(ExpenseColumn::defaul_split()), "Split");
+            ui.selectable_value(
+                expense_col,
+                Some(ExpenseColumn::defaul_split()),
+                "Split",
+            );
             ui.selectable_value(
                 expense_col,
                 Some(ExpenseColumn::default_combined()),
@@ -80,7 +96,10 @@ fn expense_col_selection(ui: &mut Ui, expense_col: &mut Option<ExpenseColumn>) {
         });
 }
 
-fn datetime_col_selection(ui: &mut Ui, datetime_col: &mut Option<DateTimeColumn>) {
+fn datetime_col_selection(
+    ui: &mut Ui,
+    datetime_col: &mut Option<DateTimeColumn>,
+) {
     ui.horizontal(|ui| {
         if let Some(datetime) = datetime_col {
             match datetime {
@@ -111,7 +130,11 @@ fn datetime_col_selection(ui: &mut Ui, datetime_col: &mut Option<DateTimeColumn>
             ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
             ui.set_min_width(60.0);
             ui.selectable_value(datetime_col, None, "not yet");
-            ui.selectable_value(datetime_col, Some(DateTimeColumn::new_date()), "Date");
+            ui.selectable_value(
+                datetime_col,
+                Some(DateTimeColumn::new_date()),
+                "Date",
+            );
             ui.selectable_value(
                 datetime_col,
                 Some(DateTimeColumn::new_datetime()),
@@ -125,7 +148,11 @@ fn datetime_col_selection(ui: &mut Ui, datetime_col: &mut Option<DateTimeColumn>
         });
 }
 
-fn number_format_combobox(id_salt: impl Hash, format: &mut NumberFormat, ui: &mut Ui) {
+fn number_format_combobox(
+    id_salt: impl Hash,
+    format: &mut NumberFormat,
+    ui: &mut Ui,
+) {
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text(format.to_string())
         .show_ui(ui, |ui| {

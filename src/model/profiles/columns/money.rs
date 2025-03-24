@@ -3,14 +3,13 @@ use std::{fmt::Display, str::FromStr};
 use num_traits::Float;
 use serde::{Deserialize, Serialize};
 
-
 use crate::model::{profiles::error::ProfileError, records::ExpenseData};
 
 use super::{ParsableWrapper, Parser};
 
-
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize, Default,
+)]
 pub enum NumberFormat {
     /// [.] as thousend separator and [,] as comma separator
     #[default]
@@ -20,7 +19,10 @@ pub enum NumberFormat {
 }
 
 impl NumberFormat {
-    pub fn parse<F: FromStr + Float>(&self, str: &str) -> Result<F, ProfileError> {
+    pub fn parse<F: FromStr + Float>(
+        &self,
+        str: &str,
+    ) -> Result<F, ProfileError> {
         if str.is_empty() {
             return Ok(F::zero());
         }
@@ -131,7 +133,6 @@ impl Parser<usize> for PosExpense {
         Ok(ExpenseData::Expense(self.parse_str(str)?))
     }
 }
-
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Movement(pub NumberFormat);

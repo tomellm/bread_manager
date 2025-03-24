@@ -38,28 +38,42 @@ impl TableFilter for DateFilter {
         if let Some(date_filter) = &mut self.0 {
             match date_filter {
                 DateFilterType::Precise(date) => {
-                    ui.add(DatePickerButton::new(date).id_salt("date_filter_precise"));
+                    ui.add(
+                        DatePickerButton::new(date)
+                            .id_salt("date_filter_precise"),
+                    );
                 }
                 DateFilterType::Between(lower, upper) => {
                     ui.label("lower");
-                    ui.add(DatePickerButton::new(lower).id_salt("date_filter_between_lower"));
+                    ui.add(
+                        DatePickerButton::new(lower)
+                            .id_salt("date_filter_between_lower"),
+                    );
                     ui.label("upper");
-                    ui.add(DatePickerButton::new(upper).id_salt("date_filter_between_upper"));
+                    ui.add(
+                        DatePickerButton::new(upper)
+                            .id_salt("date_filter_between_upper"),
+                    );
                 }
             }
         }
     }
     fn filter(&self) -> Option<DataFilter> {
-        self.0.as_ref().map(|date_filter| {
-            match date_filter.clone() {
+        self.0
+            .as_ref()
+            .map(|date_filter| match date_filter.clone() {
                 DateFilterType::Precise(date) => {
-                    box_dyn(move |record: &ExpenseRecord| record.datetime().date_naive().eq(&date))
+                    box_dyn(move |record: &ExpenseRecord| {
+                        record.datetime().date_naive().eq(&date)
+                    })
                 }
-                DateFilterType::Between(lower, upper) => box_dyn(move |record: &ExpenseRecord| {
-                    record.datetime().date_naive() >= lower && record.datetime().date_naive() <= upper
-                }),
-            }
-        })
+                DateFilterType::Between(lower, upper) => {
+                    box_dyn(move |record: &ExpenseRecord| {
+                        record.datetime().date_naive() >= lower
+                            && record.datetime().date_naive() <= upper
+                    })
+                }
+            })
     }
     fn filter_activation(&mut self, ui: &mut Ui) {
         if ui.button("precise").clicked() {
@@ -69,5 +83,4 @@ impl TableFilter for DateFilter {
             self.0 = Some(DateFilterType::default_between());
         }
     }
-    
 }

@@ -1,4 +1,6 @@
-use egui::{Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget};
+use egui::{
+    Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget,
+};
 use egui_light_states::{future_await::FutureAwait, UiStates};
 use hermes::{
     carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
@@ -10,7 +12,10 @@ use sea_query::Expr;
 
 use crate::{
     apps::utils::{drag_int, drag_zero_to_one},
-    components::pagination::PaginationControls,
+    components::{
+        button_future::ButtonWithFuture,
+        pagination::{PaginationControls, Paginator},
+    },
     db::{self, possible_links::DbPossibleLink},
     model::linker::{Linker, PossibleLink, PossibleLinkState},
 };
@@ -26,7 +31,9 @@ pub(super) struct PossibleLinksView {
 }
 
 impl PossibleLinksView {
-    pub fn init(factory: Factory) -> impl std::future::Future<Output = Self> + Send + 'static {
+    pub fn init(
+        factory: Factory,
+    ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut possible_links = factory
                 .builder()
@@ -51,11 +58,23 @@ impl PossibleLinksView {
         self.linker.state_update();
     }
 
+    pub(super) fn recalc_full(&mut self, ui: &mut Ui) {
+        const FUTURE_NAME: &str = "find_links_in_existing_records";
+        ui.button_future(
+            "recalc all links", 
+            &mut self.state, 
+            || self.linker.find_links_in_existing_records()
+        );
+    }
+
     pub(super) fn delete_all(&mut self, ui: &mut Ui) {
         if ui.button("delete all possible links").clicked() {
             self.possible_links.execute(
                 DbPossibleLink::update_many()
-                    .filter(db::possible_links::Column::State.eq(PossibleLinkState::Active))
+                    .filter(
+                        db::possible_links::Column::State
+                            .eq(PossibleLinkState::Active),
+                    )
                     .col_expr(
                         db::possible_links::Column::State,
                         Expr::value(PossibleLinkState::Deleted),
@@ -74,18 +93,12 @@ impl PossibleLinksView {
         ui.horizontal(|ui| {
             drag_int(ui, &mut self.offset_days);
             drag_zero_to_one(ui, &mut self.falloff_steepness);
-            if ui.button("recalk probability").clicked() {
-                let promise = self
-                    .linker
-                    .calculate_probability(self.falloff_steepness, self.offset_days as f64);
-                self.state
-                    .set_future("recalculate_probability")
-                    .set(promise);
-            }
-            self.state
-                .future_status::<()>("recalculate_probability")
-                .default()
-                .show(ui);
+            ui.button_future("recalk probability", &mut self.state, || {
+                self.linker.calculate_probability(
+                    self.falloff_steepness,
+                    self.offset_days as f64,
+                )
+            });
         });
         ui.separator();
 
@@ -97,14 +110,16 @@ impl PossibleLinksView {
             .possible_links
             .data
             .sorted()
-            .chunks(self.pagination.per_page)
-            .nth(self.pagination.page)
+            .paginate(&self.pagination)
             .unwrap()
         {
             let response = ui
                 .scope_builder(
                     UiBuilder::new()
-                        .id_salt(format!("possible_link_list_{}", possible_link.uuid))
+                        .id_salt(format!(
+                            "possible_link_list_{}",
+                            possible_link.uuid
+                        ))
                         .sense(Sense::click()),
                     |ui| {
                         ui.set_width(280.);
@@ -114,10 +129,14 @@ impl PossibleLinksView {
 
                         let mut rect = ui.available_rect_before_wrap();
                         rect.set_right(
-                            rect.right() - rect.width() * (1f32 - possible_link.probability as f32),
+                            rect.right()
+                                - rect.width()
+                                    * (1f32 - possible_link.probability as f32),
                         );
                         let frame = Frame::none()
-                            .fill(Color32::from_rgba_unmultiplied(255, 0, 0, 20))
+                            .fill(Color32::from_rgba_unmultiplied(
+                                255, 0, 0, 20,
+                            ))
                             .stroke(visuals.bg_stroke)
                             .inner_margin(ui.spacing().menu_margin)
                             .paint(rect);
@@ -134,8 +153,11 @@ impl PossibleLinksView {
                             .show(ui, |ui| {
                                 ui.vertical_centered(|ui| {
                                     Label::new(
-                                        RichText::new(format!("{}", possible_link.uuid))
-                                            .color(text_color),
+                                        RichText::new(format!(
+                                            "{}",
+                                            possible_link.uuid
+                                        ))
+                                        .color(text_color),
                                     )
                                     .selectable(false)
                                     .ui(ui);
@@ -166,12 +188,16 @@ impl PossibleLinksView {
             ui.label(format!("{}", link.uuid));
             ui.end_row();
 
-            ui.label("Negative Side Uuid:");
-            ui.label(format!("{}", *link.negative));
+            ui.label("Leading Side Uuid:");
+            ui.label(format!("{}", *link.leading));
             ui.end_row();
 
-            ui.label("Positive Side Uuid:");
-            ui.label(format!("{}", *link.positive));
+            ui.label("Following Side Uuid:");
+            ui.label(format!("{}", *link.following));
+            ui.end_row();
+
+            ui.label("Type of Link:");
+            ui.label(link.link_type.to_string());
             ui.end_row();
 
             ui.label("Probability of beeing correct:");
@@ -181,7 +207,7 @@ impl PossibleLinksView {
             ui.label("");
             ui.horizontal(|ui| {
                 if ui.button("save").clicked() {
-                    self.linker.create_link(link);
+                    self.linker.create_transfer_link(link);
                 }
                 if ui.button("delete").clicked() {
                     self.possible_links

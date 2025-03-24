@@ -36,7 +36,11 @@ impl RecordsTable {
         self.tags.header(ui);
         self.origin.header(ui);
     }
-    pub(crate) fn sorting_header(&self, records: &mut impl ImplData<ExpenseRecord>, ui: &mut Ui) {
+    pub(crate) fn sorting_header(
+        &self,
+        records: &mut impl ImplData<ExpenseRecord>,
+        ui: &mut Ui,
+    ) {
         self.datetime_created.sorting_header(records, ui);
         self.datetime.sorting_header(records, ui);
         self.uuid.sorting_header(records, ui);
@@ -80,14 +84,12 @@ impl RecordsTable {
                     self.sorting_header(records, ui);
                     ui.end_row();
 
-                    records
-                        .sorted()
-                        .into_iter()
-                        .filter(filter)
-                        .for_each(|record| {
+                    records.sorted().into_iter().filter(filter).for_each(
+                        |record| {
                             self.row(record, ui);
                             ui.end_row();
-                        });
+                        },
+                    );
                 });
         });
     }
@@ -96,12 +98,16 @@ impl RecordsTable {
 impl Default for RecordsTable {
     fn default() -> Self {
         Self {
-            datetime_created: TableColumn::inactive("datetime created", d_created),
+            datetime_created: TableColumn::inactive(
+                "datetime created",
+                d_created,
+            ),
             uuid: TableColumn::active("uuid", d_uuid).extract_fn(uuid),
             amount: TableColumn::active("amount", d_amount).extract_fn(amount),
             description: TableColumn::active("description", d_description),
             tags: TableColumn::active("tags", d_tags),
-            datetime: TableColumn::active("datetime", d_datetime).extract_fn(datetime),
+            datetime: TableColumn::active("datetime", d_datetime)
+                .extract_fn(datetime),
             origin: TableColumn::active("origin", d_origin).extract_fn(origin),
         }
     }

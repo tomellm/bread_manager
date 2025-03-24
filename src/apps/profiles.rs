@@ -69,7 +69,10 @@ impl App for Profiles {
                                 if ui.button("delete").clicked() {
                                     delete_action(
                                         DbProfile::update_many()
-                                            .filter(db::profiles::Column::Uuid.eq(profile.uuid))
+                                            .filter(
+                                                db::profiles::Column::Uuid
+                                                    .eq(profile.uuid),
+                                            )
                                             .col_expr(
                                                 db::profiles::Column::Deleted,
                                                 Expr::value(true),
@@ -103,7 +106,8 @@ impl Profiles {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut profiles = factory.builder().name("profiles_profiles").projector();
+            let mut profiles =
+                factory.builder().name("profiles_profiles").projector();
             profiles.stored_query(DbProfile::find_all_active());
             Self {
                 create_profile: CreateProfile::new(reciver, factory),

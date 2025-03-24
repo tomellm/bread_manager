@@ -28,48 +28,59 @@ pub(super) fn other_cols(
             ui.add_sized([175., 175.], |ui: &mut Ui| {
                 ui.group(|ui| {
                     ui.vertical_centered(|ui| {
-                        egui::ComboBox::from_id_salt(format!("other col {col_pos}"))
-                            .selected_text(format!("{col_type}"))
-                            .show_ui(ui, |ui| {
-                                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
-                                ui.selectable_value(col_type, ParsableWrapper::income(), "Income");
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::expense(),
-                                    "Expense",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::posexpense(),
-                                    "PosExpense",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::movement(),
-                                    "Movement",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::expensedatetime(),
-                                    "ExpenseDatetime",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::expensedate(),
-                                    "ExpenseDate",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::expensetime(),
-                                    "ExpenseTime",
-                                );
-                                ui.selectable_value(
-                                    col_type,
-                                    ParsableWrapper::description(),
-                                    "Description",
-                                );
-                                ui.selectable_value(col_type, ParsableWrapper::other(), "Other");
-                            });
+                        egui::ComboBox::from_id_salt(format!(
+                            "other col {col_pos}"
+                        ))
+                        .selected_text(format!("{col_type}"))
+                        .show_ui(ui, |ui| {
+                            ui.style_mut().wrap_mode =
+                                Some(egui::TextWrapMode::Wrap);
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::income(),
+                                "Income",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::expense(),
+                                "Expense",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::posexpense(),
+                                "PosExpense",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::movement(),
+                                "Movement",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::expensedatetime(),
+                                "ExpenseDatetime",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::expensedate(),
+                                "ExpenseDate",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::expensetime(),
+                                "ExpenseTime",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::description(),
+                                "Description",
+                            );
+                            ui.selectable_value(
+                                col_type,
+                                ParsableWrapper::other(),
+                                "Other",
+                            );
+                        });
                         ui.separator();
                         ui.add_sized([160., 100.], |ui: &mut Ui| {
                             ui.vertical(|ui| {
@@ -78,22 +89,33 @@ pub(super) fn other_cols(
                                     drag_int(ui, col_pos);
                                 });
                                 match col_type {
-                                    ParsableWrapper::Description(Description(s))
+                                    ParsableWrapper::Description(
+                                        Description(s),
+                                    )
                                     | ParsableWrapper::Other(Other(s))
-                                    | ParsableWrapper::ExpenseDateTime(ExpenseDateTime(s))
-                                    | ParsableWrapper::ExpenseDate(ExpenseDate(s))
-                                    | ParsableWrapper::ExpenseTime(ExpenseTime(s)) => text(ui, s),
+                                    | ParsableWrapper::ExpenseDateTime(
+                                        ExpenseDateTime(s),
+                                    )
+                                    | ParsableWrapper::ExpenseDate(
+                                        ExpenseDate(s),
+                                    )
+                                    | ParsableWrapper::ExpenseTime(
+                                        ExpenseTime(s),
+                                    ) => text(ui, s),
                                     _ => (),
                                 }
                             })
                             .response
                         });
                         ui.separator();
-                        ui.with_layout(Layout::right_to_left(egui::Align::Min), |ui| {
-                            if ui.button("remove").clicked() {
-                                retain = false;
-                            }
-                        });
+                        ui.with_layout(
+                            Layout::right_to_left(egui::Align::Min),
+                            |ui| {
+                                if ui.button("remove").clicked() {
+                                    retain = false;
+                                }
+                            },
+                        );
                     });
                 })
                 .response

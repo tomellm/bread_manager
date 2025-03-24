@@ -55,17 +55,22 @@ impl ExpenseColumn {
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
             ExpenseColumn::Split((pos1, _), (pos2, _)) => vec![*pos1, *pos2],
-            ExpenseColumn::Combined(pos, _) | ExpenseColumn::OnlyExpense(pos, _) => vec![*pos],
+            ExpenseColumn::Combined(pos, _)
+            | ExpenseColumn::OnlyExpense(pos, _) => vec![*pos],
         }
     }
     pub fn into_cols(self) -> Vec<(usize, ParsableWrapper)> {
         match self {
-            ExpenseColumn::Combined(pos, val) => vec![(pos, ParsableWrapper::Movement(val))],
+            ExpenseColumn::Combined(pos, val) => {
+                vec![(pos, ParsableWrapper::Movement(val))]
+            }
             ExpenseColumn::Split((pos1, val1), (pos2, val2)) => vec![
                 (pos1, ParsableWrapper::Income(val1)),
                 (pos2, ParsableWrapper::Expense(val2)),
             ],
-            ExpenseColumn::OnlyExpense(pos, val) => vec![(pos, ParsableWrapper::PosExpense(val))],
+            ExpenseColumn::OnlyExpense(pos, val) => {
+                vec![(pos, ParsableWrapper::PosExpense(val))]
+            }
         }
     }
 }
@@ -100,7 +105,12 @@ impl DateTimeColumn {
     pub fn new_datetime() -> Self {
         Self::DateTime(0, ExpenseDateTime(String::new()))
     }
-    pub fn date_time(position1: usize, format1: String, position2: usize, format2: String) -> Self {
+    pub fn date_time(
+        position1: usize,
+        format1: String,
+        position2: usize,
+        format2: String,
+    ) -> Self {
         Self::DateAndTime(
             (position1, ExpenseDate(format1)),
             (position2, ExpenseTime(format2)),
@@ -120,8 +130,12 @@ impl DateTimeColumn {
     }
     pub fn get_positions(&self) -> Vec<usize> {
         match self {
-            DateTimeColumn::DateTime(pos, _) | DateTimeColumn::Date(pos, _) => vec![*pos],
-            DateTimeColumn::DateAndTime((pos1, _), (pos2, _)) => vec![*pos1, *pos2],
+            DateTimeColumn::DateTime(pos, _) | DateTimeColumn::Date(pos, _) => {
+                vec![*pos]
+            }
+            DateTimeColumn::DateAndTime((pos1, _), (pos2, _)) => {
+                vec![*pos1, *pos2]
+            }
         }
     }
     pub fn into_cols(self) -> Vec<(usize, ParsableWrapper)> {
@@ -129,7 +143,9 @@ impl DateTimeColumn {
             DateTimeColumn::DateTime(pos, val) => {
                 vec![(pos, ParsableWrapper::ExpenseDateTime(val))]
             }
-            DateTimeColumn::Date(pos, val) => vec![(pos, ParsableWrapper::ExpenseDate(val))],
+            DateTimeColumn::Date(pos, val) => {
+                vec![(pos, ParsableWrapper::ExpenseDate(val))]
+            }
             DateTimeColumn::DateAndTime((pos1, val1), (pos2, val2)) => vec![
                 (pos1, ParsableWrapper::ExpenseDate(val1)),
                 (pos2, ParsableWrapper::ExpenseTime(val2)),
@@ -162,7 +178,10 @@ pub enum ParsableWrapper {
 }
 
 impl ParsableWrapper {
-    pub fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
+    pub fn to_expense_data(
+        &self,
+        str: &str,
+    ) -> Result<ExpenseData, ProfileError> {
         match &self {
             ParsableWrapper::Income(e) => e.to_expense_data(str),
             ParsableWrapper::Expense(e) => e.to_expense_data(str),

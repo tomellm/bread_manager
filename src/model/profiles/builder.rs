@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use super::{error::ProfileError, DateTimeColumn, ExpenseColumn, ParsableWrapper, Profile};
+use super::{
+    error::ProfileError, DateTimeColumn, ExpenseColumn, ParsableWrapper,
+    Profile,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct ProfileBuilder {
@@ -37,7 +40,10 @@ impl ProfileBuilder {
         self.datetime_col = Some(val);
         Ok(())
     }
-    pub fn other_cols(&mut self, vals: Vec<(usize, ParsableWrapper)>) -> Result<(), ()> {
+    pub fn other_cols(
+        &mut self,
+        vals: Vec<(usize, ParsableWrapper)>,
+    ) -> Result<(), ()> {
         self.add_many_pos(vals.iter().map(|t| t.0).collect::<Vec<_>>())?;
         self.other_cols = vals;
         Ok(())
@@ -70,7 +76,10 @@ impl ProfileBuilder {
                 .expense_col
                 .clone()
                 .and_then(|v| v.get_from_pos(pos))
-                .or(self.datetime_col.clone().and_then(|v| v.get_from_pos(pos))))
+                .or(self
+                    .datetime_col
+                    .clone()
+                    .and_then(|v| v.get_from_pos(pos))))
     }
     pub fn build(self) -> Result<Profile, ()> {
         match (
@@ -111,7 +120,9 @@ impl ProfileBuilder {
         }
         Ok(())
     }
-    pub fn from_inter_state(state: &IntermediateProfileState) -> Result<Self, ()> {
+    pub fn from_inter_state(
+        state: &IntermediateProfileState,
+    ) -> Result<Self, ()> {
         let mut builder = Self::default()
             .name(state.name.clone())
             .margins(state.margin_top, state.margin_btm);
@@ -120,7 +131,9 @@ impl ProfileBuilder {
             builder.origin_name(state.origin_name.clone());
         }
 
-        if let Some(delimiter) = state.delimiter.chars().collect::<Vec<_>>().first() {
+        if let Some(delimiter) =
+            state.delimiter.chars().collect::<Vec<_>>().first()
+        {
             builder = builder.delimiter(*delimiter);
         }
 
@@ -164,7 +177,9 @@ impl ProfileBuilder {
 
         for (pos, el) in other_cols {
             let Some(Ok(str)) = row.get(pos) else {
-                return Err(ProfileError::ColumnWidth(format!("{pos} is not in bounds")));
+                return Err(ProfileError::ColumnWidth(format!(
+                    "{pos} is not in bounds"
+                )));
             };
             let new_str = el
                 .to_expense_data(str.as_str())

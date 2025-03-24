@@ -29,7 +29,10 @@ where
         }
     }
 
-    pub(crate) fn inactive(name: &'static str, display: fn(&T, &mut Ui)) -> Self {
+    pub(crate) fn inactive(
+        name: &'static str,
+        display: fn(&T, &mut Ui),
+    ) -> Self {
         Self {
             name,
             active: false,
@@ -54,13 +57,18 @@ where
         }
     }
 
-    pub(crate) fn sorting_header(&self, records: &mut impl ImplData<T>, ui: &mut Ui) {
+    pub(crate) fn sorting_header(
+        &self,
+        records: &mut impl ImplData<T>,
+        ui: &mut Ui,
+    ) {
         if !self.active {
             return;
         }
 
         if let Some(extract_fn) = self.extract_fn {
-            let response = soft_button(format!("{}_sorting", self.name), self.name, ui);
+            let response =
+                soft_button(format!("{}_sorting", self.name), self.name, ui);
             if response.double_clicked() {
                 records.sort(move |a, b| extract_fn(b).cmp(extract_fn(a)));
             } else if response.clicked() {

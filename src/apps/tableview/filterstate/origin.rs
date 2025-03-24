@@ -4,8 +4,6 @@ use crate::model::records::ExpenseRecord;
 
 use super::{box_dyn, TableFilter};
 
-
-
 #[derive(Default)]
 pub struct OriginFilter(Option<String>);
 
@@ -27,7 +25,9 @@ impl TableFilter for OriginFilter {
     fn filter(&self) -> Option<super::DataFilter> {
         self.0.as_ref().map(|origin_filter| {
             let origin = origin_filter.clone();
-            box_dyn(move |record: &ExpenseRecord| record.origin().contains(&origin))
+            box_dyn(move |record: &ExpenseRecord| {
+                record.origin().contains(&origin)
+            })
         })
     }
     fn filter_activation(&mut self, ui: &mut egui::Ui) {
@@ -35,6 +35,4 @@ impl TableFilter for OriginFilter {
             self.0 = Some(String::default());
         }
     }
-
 }
-
