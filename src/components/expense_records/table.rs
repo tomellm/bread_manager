@@ -142,7 +142,11 @@ fn d_amount(record: &ExpenseRecord, ui: &mut Ui) {
 }
 
 fn d_description(record: &ExpenseRecord, ui: &mut Ui) {
-    ui.label(format!("{:?}", record.description()));
+    ui.label(
+        record
+            .description()
+            .unwrap_or(" -- es gibt keine Beschreibung -- "),
+    );
 }
 
 fn d_tags(record: &ExpenseRecord, ui: &mut Ui) {

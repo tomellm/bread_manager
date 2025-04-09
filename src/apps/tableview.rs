@@ -134,7 +134,7 @@ impl TableView {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut records =
-                factory.builder().name("tableview_records").projector();
+                factory.builder().name("TableView").projector();
             records.stored_query(DbRecord::find_all_active());
             Self {
                 action_state: ActionState::new(records.actor()),

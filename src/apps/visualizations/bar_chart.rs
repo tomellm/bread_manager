@@ -33,7 +33,7 @@ impl BarChartVis {
             factory.builder().name("bar_chart_vis_records").projector();
         async move {
             records.stored_query(DbRecord::find_all_active());
-            let (weekly, monthly) = Self::update_graphs(&vec![]);
+            let (weekly, monthly) = Self::update_graphs(&[]);
             Self {
                 selected: Charts::default(),
                 records,
@@ -53,7 +53,7 @@ impl BarChartVis {
         }
     }
 
-    fn update_graphs(records: &Vec<ExpenseRecord>) -> (Vec<Bar>, Vec<Bar>) {
+    fn update_graphs(records: &[ExpenseRecord]) -> (Vec<Bar>, Vec<Bar>) {
         if records.is_empty() {
             return (vec![], vec![]);
         }

@@ -30,16 +30,14 @@ pub fn amounts_empty(existing: &ExpenseRecord, new: &ExpenseRecord) -> bool {
 }
 
 pub fn records_that_are_not_transfers<'a>(
-    records: &'a impl ImplData<ExpenseRecord>,
-    links: &'a impl ImplData<Link>,
+    records: &'a [ExpenseRecord],
+    links: &'a [Link],
 ) -> Vec<&'a ExpenseRecord> {
     let transfer_links = links
-        .data()
         .iter()
         .filter(|link| link.link_type == LinkType::Transfer);
 
     records
-        .data()
         .iter()
         // remove all records that are already part of a link
         .filter(|record| {
@@ -93,7 +91,7 @@ pub fn calculate_probability(
             .collect::<HashMap<_, _>>();
 
         let uuid_and_vals = links
-            .into_iter()
+            .iter()
             .map(|link| {
                 let uuid = link.uuid;
                 let time_distance = probs.get(&link.uuid).unwrap();
@@ -123,10 +121,10 @@ pub fn calculate_probability(
 }
 
 pub fn merge_to_link_identities(
-    all_links: &impl ImplData<Link>,
-    all_poss_links: &impl ImplData<PossibleLink>
+    all_links: &[Link],
+    all_poss_links: &[PossibleLink]
 ) -> HashSet<LinkIdentity> { 
-    let link_uuids = all_links.data().iter().fold(
+    let link_uuids = all_links.iter().fold(
         HashSet::new(),
         |mut acc, link| {
             acc.insert(link.into());
@@ -134,7 +132,6 @@ pub fn merge_to_link_identities(
         },
     );
     all_poss_links
-        .data()
         .iter()
         .fold(link_uuids, |mut acc, link| {
             acc.insert(link.into());

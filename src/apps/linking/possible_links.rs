@@ -1,7 +1,7 @@
 use egui::{
     Color32, Frame, Grid, Label, RichText, Sense, Ui, UiBuilder, Widget,
 };
-use egui_light_states::{future_await::FutureAwait, UiStates};
+use egui_light_states::UiStates;
 use hermes::{
     carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
     container::{data::ImplData, projecting::ProjectingContainer},

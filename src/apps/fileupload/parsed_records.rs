@@ -322,7 +322,7 @@ impl ParsedRecords {
                 (
                     record.formatted_amount(),
                     record.datetime().to_string(),
-                    record.description().unwrap_or(&String::new()).clone(),
+                    record.description().unwrap_or("").to_string(),
                 )
             },
         );

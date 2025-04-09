@@ -4,10 +4,10 @@ mod transfer_links;
 
 use core_linking::{
     are_not_considered_overlapping, calculate_probability,
-    merge_to_link_identities, records_that_are_not_transfers, LinkIdentity,
+    merge_to_link_identities, records_that_are_not_transfers,
 };
-use hermes::container::data::Data;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::{fmt::Display, future::Future};
 use tracing::info;
 
@@ -214,10 +214,10 @@ impl Linker {
     ) -> Vec<PossibleLink> {
         Self::find_all_possible_links(
             new_records,
-            records_that_are_not_transfers(&self.records, &self.links)
+            records_that_are_not_transfers(self.records.data(), self.links.data())
                 .into_iter(),
-            &self.links,
-            &self.possible_links,
+            self.links.data(),
+            self.possible_links.data(),
         )
     }
 
@@ -227,9 +227,9 @@ impl Linker {
     ) -> impl Future<Output = ()> + Send + 'static {
         let mut actor = self.records.actor();
 
-        let records = Data::from(self.records.data().clone());
-        let links = Data::from(self.links.data().clone());
-        let possible_links = Data::from(self.possible_links.data().clone());
+        let records = Arc::clone(self.records.data());
+        let links = Arc::clone(self.links.data());
+        let possible_links = Arc::clone(self.possible_links.data());
 
         async move {
             let records = records_that_are_not_transfers(&records, &links);
@@ -255,8 +255,8 @@ impl Linker {
     pub fn find_all_possible_links<'a>(
         outer_records: impl Iterator<Item = &'a ExpenseRecord>,
         inner_records: impl Iterator<Item = &'a ExpenseRecord>,
-        all_links: &impl ImplData<Link>,
-        all_poss_links: &impl ImplData<PossibleLink>,
+        all_links: &[Link],
+        all_poss_links: &[PossibleLink],
     ) -> Vec<PossibleLink> {
         let outer = outer_records.into_iter().collect::<Vec<_>>();
         let inner = inner_records.into_iter().collect::<Vec<_>>();
