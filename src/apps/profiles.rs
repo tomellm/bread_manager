@@ -50,7 +50,7 @@ impl App for Profiles {
                         ui.label("default tags");
                         ui.label("edit button");
                         ui.end_row();
-                        for profile in profiles {
+                        for profile in profiles.iter() {
                             ui.label(profile.uuid.to_string());
                             ui.label(profile.name.clone());
                             ui.label(format!("{}", profile.margins.0));

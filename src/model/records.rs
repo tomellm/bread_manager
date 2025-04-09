@@ -148,7 +148,7 @@ impl ExpenseRecord {
     pub fn datetime(&self) -> &DateTime<Local> {
         &self.datetime
     }
-    pub fn description(&self) -> Option<&String> {
+    pub fn description(&self) -> Option<&str> {
         self.description.as_deref()
     }
     pub fn description_container(&self) -> &Option<DescriptionContainer> {
@@ -421,8 +421,8 @@ impl DescriptionContainer {
 }
 
 impl Deref for DescriptionContainer {
-    type Target = String;
+    type Target = str;
     fn deref(&self) -> &Self::Target {
-        &self.current.desc
+        self.current.desc.as_str()
     }
 }

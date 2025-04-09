@@ -1,13 +1,8 @@
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
-use sea_query::Expr;
-
 use crate::{
-    db::{
-        self,
-        possible_links::{Column, DbPossibleLink},
-    },
+    db::possible_links::{Column, DbPossibleLink},
     model::records::{ExpenseRecord, ExpenseRecordUuid},
 };
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryTrait};
 
 use super::{
     core_linking::amounts_empty, LinkType, PossibleLink, PossibleLinkState,

@@ -1,9 +1,8 @@
 use bincode as bc;
 use chrono::{DateTime, Local};
-use futures::executor::Enter;
 use hermes::impl_to_active_model;
 use sea_orm::{entity::prelude::*, EntityOrSelect, JoinType, QuerySelect};
-use sea_query::{Alias, ExprTrait};
+use sea_query::Alias;
 use sqlx_projector::projectors::{FromEntity, ToEntity};
 use uuid::Uuid;
 
@@ -77,7 +76,7 @@ impl FromEntity<ExpenseRecord> for Model {
             uuid: **entity.uuid(),
             amount: *entity.amount() as i64,
             datetime: entity.datetime().clone().timestamp(),
-            description: entity.description().cloned(),
+            description: entity.description().map(str::to_string),
             description_container: bc::serialize(
                 entity.description_container(),
             )

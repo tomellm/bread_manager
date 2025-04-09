@@ -4,6 +4,7 @@ mod profiles;
 mod tableview;
 pub(crate) mod utils;
 mod visualizations;
+mod recordview;
 
 use std::{env, time::Instant};
 
@@ -12,6 +13,7 @@ use egui::global_theme_preference_switch;
 use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 use linking::Linking;
+use recordview::RecordView;
 use sea_orm::{ConnectOptions, Database};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -31,11 +33,12 @@ pub struct Fps {
 
 pub struct State {
     messenger: Messenger,
-    file_upload: LoadingScreen<FileUpload>,
-    table_view: LoadingScreen<TableView>,
-    profiles: LoadingScreen<Profiles>,
     visualizations: LoadingScreen<Visualizations>,
+    table_view: LoadingScreen<TableView>,
+    record_view: LoadingScreen<RecordView>,
     linking: LoadingScreen<Linking>,
+    file_upload: LoadingScreen<FileUpload>,
+    profiles: LoadingScreen<Profiles>,
     selected_anchor: Anchor,
     fps: Fps,
 }
@@ -51,10 +54,11 @@ pub struct BreadApp {
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum Anchor {
     Visualizations,
-    FileUpload,
     TableView,
-    Profiles,
+    RecordView,
     Linking,
+    FileUpload,
+    Profiles,
 }
 
 impl BreadApp {
@@ -88,6 +92,16 @@ impl BreadApp {
                 &mut self.state.table_view as &mut dyn eframe::App,
             ),
             (
+                "Records View",
+                Anchor::RecordView,
+                &mut self.state.record_view as &mut dyn eframe::App,
+            ),
+            (
+                "Linking",
+                Anchor::Linking,
+                &mut self.state.linking as &mut dyn eframe::App,
+            ),
+            (
                 "File Upload",
                 Anchor::FileUpload,
                 &mut self.state.file_upload as &mut dyn eframe::App,
@@ -96,11 +110,6 @@ impl BreadApp {
                 "Profiles",
                 Anchor::Profiles,
                 &mut self.state.profiles as &mut dyn eframe::App,
-            ),
-            (
-                "Linking",
-                Anchor::Linking,
-                &mut self.state.linking as &mut dyn eframe::App,
             ),
         ];
 
@@ -248,7 +257,6 @@ impl BreadApp {
 
 impl App for BreadApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        //self.state.db.state_update();
         self.state.fps.update_fps();
         self.update_callback_ctx = Some(ctx.clone());
         self.state.messenger.state_update();
@@ -273,18 +281,19 @@ impl State {
             let database_url =
                 env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let mut connection_options = ConnectOptions::new(database_url);
-            connection_options.sqlx_logging(true);
+            connection_options.sqlx_logging(false);
             let db = Database::connect(connection_options).await.unwrap();
 
             let messenger = Messenger::new(db).await;
 
             let factory = messenger.factory();
             Self {
-                file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
-                profiles: Profiles::init(rx_p, messenger.factory()).into(),
-                table_view: TableView::init(messenger.factory()).into(),
                 visualizations: Visualizations::init(&factory).into(),
+                table_view: TableView::init(messenger.factory()).into(),
+                record_view: RecordView::init(messenger.factory()).into(),
                 linking: Linking::init(messenger.factory()).into(),
+                file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
+                profiles: Profiles::init(rx_p, factory).into(),
                 selected_anchor: Anchor::Visualizations,
                 fps: Fps::default(),
                 messenger,

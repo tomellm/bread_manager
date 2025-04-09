@@ -2,7 +2,6 @@
 #![allow(dead_code)]
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
-#![feature(extract_if)]
 #![feature(iter_array_chunks)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
