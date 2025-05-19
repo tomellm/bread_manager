@@ -3,7 +3,13 @@ use std::{fmt::Display, str::FromStr};
 use num_traits::Float;
 use serde::{Deserialize, Serialize};
 
-use crate::model::{profiles::error::ProfileError, records::ExpenseData};
+use crate::model::{
+    profiles::error::ProfileError,
+    transactions::{
+        group::GroupUuid, movement::ModelMovement,
+        properties::TransactionProperties,
+    },
+};
 
 use super::{ParsableWrapper, Parser};
 
@@ -40,7 +46,7 @@ impl NumberFormat {
 
 impl Display for NumberFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -65,12 +71,18 @@ impl From<NumberFormat> for Income {
     }
 }
 
-impl Parser<usize> for Income {
-    fn parse_str(&self, str: &str) -> Result<usize, ProfileError> {
-        Ok((self.0.parse::<f64>(str)? * 100.0) as usize)
+impl Parser<i32> for Income {
+    fn parse_str(&self, str: &str) -> Result<i32, ProfileError> {
+        Ok((self.0.parse::<f64>(str)? * 100.0) as i32)
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Income(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let amount = self.parse_str(str)?;
+        Ok(ModelMovement::init(amount, group_uuid).into())
     }
 }
 
@@ -95,12 +107,18 @@ impl From<NumberFormat> for Expense {
     }
 }
 
-impl Parser<usize> for Expense {
-    fn parse_str(&self, str: &str) -> Result<usize, ProfileError> {
-        Ok((self.0.parse::<f64>(str)? * -100.0) as usize)
+impl Parser<i32> for Expense {
+    fn parse_str(&self, str: &str) -> Result<i32, ProfileError> {
+        Ok((self.0.parse::<f64>(str)? * 100.0) as i32)
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Expense(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let amount = self.parse_str(str)?;
+        Ok(ModelMovement::init(amount, group_uuid).into())
     }
 }
 
@@ -125,12 +143,18 @@ impl From<NumberFormat> for PosExpense {
     }
 }
 
-impl Parser<usize> for PosExpense {
-    fn parse_str(&self, str: &str) -> Result<usize, ProfileError> {
-        Ok((self.0.parse::<f64>(str)? * 100.0) as usize)
+impl Parser<i32> for PosExpense {
+    fn parse_str(&self, str: &str) -> Result<i32, ProfileError> {
+        Ok((self.0.parse::<f64>(str)? * -100.0) as i32)
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Expense(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let amount = self.parse_str(str)?;
+        Ok(ModelMovement::init(amount, group_uuid).into())
     }
 }
 
@@ -155,11 +179,17 @@ impl From<NumberFormat> for Movement {
     }
 }
 
-impl Parser<isize> for Movement {
-    fn parse_str(&self, str: &str) -> Result<isize, ProfileError> {
-        Ok((self.0.parse::<f64>(str)? * 100.0) as isize)
+impl Parser<i32> for Movement {
+    fn parse_str(&self, str: &str) -> Result<i32, ProfileError> {
+        Ok((self.0.parse::<f64>(str)? * 100.0) as i32)
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Movement(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let amount = self.parse_str(str)?;
+        Ok(ModelMovement::init(amount, group_uuid).into())
     }
 }

@@ -1,14 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
-#![allow(dead_code)]
 #![feature(unboxed_closures)]
 #![feature(fn_traits)]
 #![feature(iter_array_chunks)]
+#![feature(result_flattening)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::manual_async_fn)]
+#![deny(clippy::unconditional_recursion)]
 
 mod apps;
 mod components;
@@ -24,6 +25,7 @@ use utils::LoadingScreen;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
+    //console_subscriber::init();
     let _ = dotenv::dotenv();
 
     //let log_file = OpenOptions::new()

@@ -2,7 +2,7 @@ use chrono::NaiveDate;
 use egui::Ui;
 use egui_extras::DatePickerButton;
 
-use crate::model::records::ExpenseRecord;
+use crate::model::transactions::Transaction;
 
 use super::{box_dyn, DataFilter, TableFilter};
 
@@ -63,14 +63,14 @@ impl TableFilter for DateFilter {
             .as_ref()
             .map(|date_filter| match date_filter.clone() {
                 DateFilterType::Precise(date) => {
-                    box_dyn(move |record: &ExpenseRecord| {
-                        record.datetime().date_naive().eq(&date)
+                    box_dyn(move |record: &Transaction| {
+                        record.datetime.date.eq(&date)
                     })
                 }
                 DateFilterType::Between(lower, upper) => {
-                    box_dyn(move |record: &ExpenseRecord| {
-                        record.datetime().date_naive() >= lower
-                            && record.datetime().date_naive() <= upper
+                    box_dyn(move |record: &Transaction| {
+                        record.datetime.date >= lower
+                            && record.datetime.date <= upper
                     })
                 }
             })

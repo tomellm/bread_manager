@@ -1,15 +1,14 @@
-use std::{cmp::Ordering, ops::Sub};
+use std::{cmp::Ordering, ops::{Deref, Sub}};
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
 use egui::Ui;
 use egui_plot::{Bar, BarChart, Plot};
 use hermes::{
-    carrier::query::ImplQueryCarrier,
-    container::{data::ImplData, projecting::ProjectingContainer},
+    container::{data::ImplData, manual},
     factory::Factory,
 };
 
-use crate::{db::records::DbRecord, model::records::ExpenseRecord};
+use crate::{db::query::transaction_query::TransactionQuery, model::transactions::Transaction};
 
 #[derive(Default)]
 enum Charts {
@@ -20,7 +19,7 @@ enum Charts {
 
 pub(super) struct BarChartVis {
     selected: Charts,
-    records: ProjectingContainer<ExpenseRecord, DbRecord>,
+    transactions: manual::Container<Transaction>,
     weekly: Vec<Bar>,
     monthly: Vec<Bar>,
 }
@@ -29,14 +28,14 @@ impl BarChartVis {
     pub fn new(
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut records =
-            factory.builder().name("bar_chart_vis_records").projector();
+        let mut transactions =
+            factory.builder().name("bar_chart_vis_records").manual();
         async move {
-            records.stored_query(DbRecord::find_all_active());
+            transactions.stored_query(TransactionQuery::all);
             let (weekly, monthly) = Self::update_graphs(&[]);
             Self {
                 selected: Charts::default(),
-                records,
+                transactions,
                 weekly,
                 monthly,
             }
@@ -44,29 +43,29 @@ impl BarChartVis {
     }
 
     pub fn update(&mut self) {
-        self.records.state_update(true);
-        if self.records.has_changed() {
+        self.transactions.state_update(true);
+        if self.transactions.has_changed() {
             let (weekly, monthly) =
-                Self::update_graphs(self.records.set_viewed().data());
+                Self::update_graphs(self.transactions.set_viewed().data().deref());
             self.weekly = weekly;
             self.monthly = monthly;
         }
     }
 
-    fn update_graphs(records: &[ExpenseRecord]) -> (Vec<Bar>, Vec<Bar>) {
-        if records.is_empty() {
+    fn update_graphs(transactions: &[Transaction]) -> (Vec<Bar>, Vec<Bar>) {
+        if transactions.is_empty() {
             return (vec![], vec![]);
         }
 
-        let min = records
+        let min = transactions
             .iter()
-            .min_by(|a, b| a.datetime().cmp(b.datetime()))
+            .min_by(|a, b| a.datetime.cmp_datetime(&b.datetime))
             .expect("No min Record found but should be present")
             .datetime();
 
-        let max = records
+        let max = transactions
             .iter()
-            .max_by(|a, b| a.datetime().cmp(b.datetime()))
+            .max_by(|a, b| a.datetime.cmp_datetime(&b.datetime))
             .expect("No max Record found but should be present")
             .datetime();
 
@@ -94,15 +93,15 @@ impl BarChartVis {
 
         let is_in_week = is_in_week_fn(min);
 
-        for record in records {
+        for transac in transactions {
             for (week_index_in_days, amount) in &mut weekly_amounts {
-                if is_in_week(*week_index_in_days, record.datetime()) {
-                    *amount += record.amount_euro_f64();
+                if is_in_week(*week_index_in_days, transac.datetime()) {
+                    *amount += transac.amount();
                 }
             }
             for (month, amount) in &mut monthly_amounts {
-                if is_in_month(month, record.datetime()) {
-                    *amount += record.amount_euro_f64();
+                if is_in_month(month, transac.datetime()) {
+                    *amount += transac.amount();
                 }
             }
         }
@@ -144,7 +143,7 @@ impl BarChartVis {
             }
         });
 
-        ui.label(format!("Curretly {} records.", self.records.data().len()));
+        ui.label(format!("Curretly {} records.", self.transactions.data().len()));
         match self.selected {
             Charts::Weekly => {
                 Plot::new("weekly_plot")

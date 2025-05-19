@@ -1,12 +1,18 @@
 use std::collections::HashSet;
 
+use crate::{
+    db::InitUuid,
+    model::{origins::Origin, tags::Tag, transactions::group::GroupUuid},
+};
+
 use super::{
     error::ProfileError, DateTimeColumn, ExpenseColumn, ParsableWrapper,
     Profile,
 };
 
+// ToDo merge with the other profile builder
 #[derive(Debug, Clone, Default)]
-pub struct ProfileBuilder {
+pub struct CreateProfileBuilder {
     name: Option<String>,
     col_positions: HashSet<usize>,
     expense_col: Option<ExpenseColumn>,
@@ -14,11 +20,11 @@ pub struct ProfileBuilder {
     other_cols: Vec<(usize, ParsableWrapper)>,
     margins: Option<(usize, usize)>,
     delimiter: Option<char>,
-    default_tags: Vec<String>,
-    origin_name: Option<String>,
+    default_tags: Vec<Tag>,
+    origin_name: Option<Origin>,
 }
 
-impl ProfileBuilder {
+impl CreateProfileBuilder {
     pub fn from_marg_del(top: usize, btm: usize, del: char) -> Self {
         Self {
             margins: Some((top, btm)),
@@ -56,12 +62,12 @@ impl ProfileBuilder {
         self.delimiter = Some(delimiter);
         self
     }
-    pub fn default_tags(mut self, default_tags: Vec<String>) -> Self {
+    pub fn default_tags(mut self, default_tags: Vec<Tag>) -> Self {
         self.default_tags = default_tags;
         self
     }
-    pub fn origin_name(&mut self, origin_name: String) {
-        self.origin_name = Some(origin_name);
+    pub fn origin(&mut self, origin: Origin) {
+        self.origin_name = Some(origin);
     }
     pub fn get_from_pos(&self, pos: usize) -> Option<ParsableWrapper> {
         if !self.col_positions.contains(&pos) {
@@ -72,14 +78,15 @@ impl ProfileBuilder {
             .iter()
             .find(|(col_pos, _)| pos.eq(col_pos))
             .map(|(_, wrapper)| wrapper.clone())
-            .or(self
-                .expense_col
-                .clone()
-                .and_then(|v| v.get_from_pos(pos))
-                .or(self
-                    .datetime_col
+            .or_else(|| {
+                self.expense_col
                     .clone()
-                    .and_then(|v| v.get_from_pos(pos))))
+                    .and_then(|v| v.get_from_pos(pos))
+                    .or(self
+                        .datetime_col
+                        .clone()
+                        .and_then(|v| v.get_from_pos(pos)))
+            })
     }
     pub fn build(self) -> Result<Profile, ()> {
         match (
@@ -127,8 +134,8 @@ impl ProfileBuilder {
             .name(state.name.clone())
             .margins(state.margin_top, state.margin_btm);
 
-        if !state.origin_name.is_empty() {
-            builder.origin_name(state.origin_name.clone());
+        if let Some(origin) = &state.origin {
+            builder.origin(origin.clone());
         }
 
         if let Some(delimiter) =
@@ -154,6 +161,8 @@ impl ProfileBuilder {
         row: String,
         total_len: usize,
     ) -> Result<IntermediateParse, ProfileError> {
+        let group_uuid = GroupUuid::init();
+
         if let Some((top, btm)) = self.margins {
             if index < top || index >= (total_len - btm) {
                 return Ok(IntermediateParse::None);
@@ -182,9 +191,10 @@ impl ProfileBuilder {
                 )));
             };
             let new_str = el
-                .to_expense_data(str.as_str())
-                .map(|val| val.to_string())
+                .to_property(group_uuid, str.as_str())
+                .map(|val| format!("{val:?}"))
                 .map_err(|err| format!("{err:?}"));
+
             let _ = row.remove(pos);
             row.insert(pos, new_str);
         }
@@ -209,8 +219,8 @@ pub struct IntermediateProfileState {
     pub expense_col: Option<ExpenseColumn>,
     pub datetime_col: Option<DateTimeColumn>,
     pub other_cols: Vec<(usize, ParsableWrapper)>,
-    pub default_tags: Vec<String>,
-    pub origin_name: String,
+    pub default_tags: Vec<Tag>,
+    pub origin: Option<Origin>,
 }
 
 impl IntermediateProfileState {
@@ -228,7 +238,7 @@ impl IntermediateProfileState {
                 .map(|(a, b)| (*a, b.clone()))
                 .collect(),
             default_tags: profile.default_tags.clone(),
-            origin_name: profile.origin_name.clone(),
+            origin: Some(profile.origin.clone()),
         }
     }
 }

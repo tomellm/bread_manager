@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::model::{profiles::error::ProfileError, records::ExpenseData};
+use crate::model::{
+    profiles::error::ProfileError,
+    transactions::{group::GroupUuid, properties::TransactionProperties},
+};
 
 use super::{ParsableWrapper, Parser};
 
@@ -17,11 +20,13 @@ impl Parser<String> for Description {
     fn parse_str(&self, str: &str) -> Result<String, ProfileError> {
         Ok(str.to_owned())
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Description(
-            self.0.clone(),
-            self.parse_str(str).unwrap(),
-        ))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        todo!()
     }
 }
 
@@ -38,10 +43,12 @@ impl Parser<String> for Other {
     fn parse_str(&self, str: &str) -> Result<String, ProfileError> {
         Ok(str.to_owned())
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::Other(
-            self.0.clone(),
-            self.parse_str(str).unwrap(),
-        ))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        todo!()
     }
 }

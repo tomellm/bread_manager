@@ -1,6 +1,5 @@
+use crate::model::transactions::Transaction;
 use egui::Ui;
-
-use crate::model::records::ExpenseRecord;
 
 use super::{box_dyn, DataFilter, TableFilter};
 
@@ -49,16 +48,14 @@ impl TableFilter for AmountFilter {
     fn filter(&self) -> Option<DataFilter> {
         self.0.as_ref().map(|amount_filter| match amount_filter {
             AmountFilterType::Precise(amount) => {
-                let amount = to_isize(*amount);
-                box_dyn(move |record: &ExpenseRecord| {
-                    record.amount().eq(&amount)
-                })
+                let amount = *amount;
+                box_dyn(move |record: &Transaction| record.amount().eq(&amount))
             }
             AmountFilterType::Between(lower, upper) => {
-                let lower = to_isize(*lower);
-                let upper = to_isize(*upper);
-                box_dyn(move |record: &ExpenseRecord| {
-                    lower <= *record.amount() && record.amount() <= &upper
+                let lower = *lower;
+                let upper = *upper;
+                box_dyn(move |record: &Transaction| {
+                    record.amount() >= lower && record.amount() <= upper
                 })
             }
         })
@@ -71,8 +68,4 @@ impl TableFilter for AmountFilter {
             self.0 = Some(AmountFilterType::default_between());
         }
     }
-}
-
-fn to_isize(amount: f64) -> isize {
-    (amount * 100.) as isize
 }

@@ -1,39 +1,36 @@
 use crate::{
     components::expense_records::table::RecordsTable,
-    db::{
-        self, data_import::DbDataImport, possible_links::DbPossibleLink,
-        records::DbRecord,
+    db::query::{
+        data_import_query::DataImportQuery, transaction_query::TransactionQuery,
     },
     model::{
-        data_import::DataImport, linker::Linker, profiles::ParseResult,
-        records::ExpenseRecord,
+        data_import::{row::ImportRow, DataImport},
+        profiles::Profile,
+        transactions::Transaction,
     },
     utils::PromiseUtilities,
 };
 use egui::{Grid, ScrollArea, Spinner, Ui};
 use egui_light_states::UiStates;
 use hermes::{
-    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
-    container::projecting::ProjectingContainer,
+    container::{data::ImplData, manual},
     factory::Factory,
-    ToActiveModel,
 };
 use itertools::Itertools;
-use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise};
-use sea_orm::{ColumnTrait, EntityOrSelect, EntityTrait, QueryFilter};
-use std::{collections::HashMap, fs, mem};
+use lazy_async_promise::ImmediateValuePromise;
+use std::{fs, mem, sync::Arc};
 use tracing::info;
-use uuid::Uuid;
 
 use super::{files_to_parse::FileToParse, ParsingFileState};
 
 pub(super) struct ParsedRecords {
-    records: ProjectingContainer<ExpenseRecord, DbRecord>,
+    transactions: manual::Container<Transaction>,
+    imports: manual::Container<DataImport>,
 
     import_state: ImportParsingState,
     selected_overlay: usize,
 
-    linker: Linker,
+    //linker: Linker,
     columns_info: RecordsTable,
 
     ui: UiStates,
@@ -45,14 +42,18 @@ impl ParsedRecords {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records =
-                factory.builder().name("parse_records_records").projector();
-
-            records.stored_query(DbRecord::find().select());
+            let transactions = factory
+                .builder()
+                .name("parse_records_transactions")
+                .manual();
+            let mut imports =
+                factory.builder().name("parse_records_imports").manual();
+            imports.stored_query(DataImportQuery::all);
 
             Self {
-                records,
-                linker: Linker::init(factory).await,
+                transactions,
+                imports,
+                //linker: Linker::init(factory).await,
                 import_state: ImportParsingState::None,
                 selected_overlay: 0,
                 columns_info: RecordsTable::default(),
@@ -69,25 +70,29 @@ impl ParsedRecords {
     ) {
         self.import_state.try_resolve();
 
-        self.records.state_update(true);
-        self.linker.state_update();
+        self.transactions.state_update(false);
+        self.imports.state_update(true);
+        //self.linker.state_update();
 
         if parsing_file.has_new_file() && self.import_state.ready_for_new() {
             let file_to_parse = parsing_file.start_parsing();
-            self.parse_file(file_to_parse);
+            self.find_overlaps(file_to_parse);
         }
 
         ui.vertical_centered(|ui| match &mut self.import_state {
-            ImportParsingState::Parsing(_) => {
+            ImportParsingState::None => {
+                ui.label(PARSED_RECORDS_EMPTY_TEXT);
+            }
+            ImportParsingState::Parsing(_)
+            | ImportParsingState::FindingOverlaps(_) => {
                 ui.add(Spinner::new());
             }
-            ImportParsingState::Finished(import_result) => {
-                if import_result.overlaps.is_empty() {
+            ImportParsingState::OverlapsFound(overlaps) => {
+                if overlaps.overlaps.is_empty() {
                     ui.vertical(|ui| {
                         ui.label("There are no overlaps to resolve");
-                        if ui.button("save parsed values").clicked() {
-                            self.save_parse();
-                            self.import_state.clear();
+                        if ui.button("parse file").clicked() {
+                            self.start_parse();
                             parsing_file.finished_parsing();
                         }
                     });
@@ -100,11 +105,10 @@ impl ParsedRecords {
                         });
                         ui.label(format!(
                             "There are a total of {} overlaps!",
-                            import_result.overlaps.len()
+                            overlaps.overlaps.len()
                         ));
                         ui.add_enabled_ui(
-                            self.selected_overlay
-                                < import_result.overlaps.len() - 1,
+                            self.selected_overlay < overlaps.overlaps.len() - 1,
                             |ui| {
                                 if ui.button(">").clicked() {
                                     self.selected_overlay += 1;
@@ -115,29 +119,23 @@ impl ParsedRecords {
 
                     let mut remove_this_overlap = false;
                     let mut there_was_overlap = false;
-                    match import_result.overlaps.get(self.selected_overlay) {
-                        Some(overlap) => {
-                            let mut check_overlapping = false;
-                            let mut uncheck_all = false;
-                            ui.horizontal(|ui| {
-                                check_overlapping = ui
-                                    .button("check all overlapping")
-                                    .clicked();
-                                uncheck_all =
-                                    ui.button("uncheck all").clicked();
-                                remove_this_overlap =
-                                    ui.button("remove this overlap").clicked();
-                                if ui.button("remove all checked").clicked() {
-                                    import_result.rows = import_result
-                                        .rows
-                                        .drain(..)
-                                        .filter(|row| !row.0)
-                                        .collect_vec()
-                                }
-                            });
+                    let mut check_overlapping = false;
+                    let mut uncheck_all = false;
 
-                            let max_len = overlap.records.len()
-                                + import_result.rows.len();
+                    if !overlaps.is_overlap_cleared() {
+                        Self::overlap_control_buttons(
+                            &mut check_overlapping,
+                            &mut uncheck_all,
+                            &mut remove_this_overlap,
+                            overlaps,
+                            ui,
+                        );
+                    }
+
+                    match overlaps.overlaps.get(self.selected_overlay) {
+                        Some(overlap) => {
+                            let max_len =
+                                overlap.import.rows.len() + overlaps.rows.len();
 
                             ScrollArea::new(true).show(ui, |ui| {
                                 Grid::new("overlap_grid").show(ui, |ui| {
@@ -145,18 +143,24 @@ impl ParsedRecords {
                                         let overlap_record = (index
                                             >= overlap.first_match)
                                             .then(|| {
-                                                overlap.records.get(
+                                                overlap.import.rows.get(
                                                     index - overlap.first_match,
                                                 )
                                             })
                                             .flatten();
-                                        Self::display_record_row(
-                                            overlap_record,
-                                            ui,
+                                        ui.label(
+                                            overlap_record
+                                                .map(|row| {
+                                                    clamp_str(
+                                                        row.row_content
+                                                            .as_str(),
+                                                    )
+                                                })
+                                                .unwrap_or_default(),
                                         );
 
                                         let mut import_record =
-                                            import_result.rows.get_mut(index);
+                                            overlaps.rows.get_mut(index);
                                         match import_record.as_mut() {
                                             Some(rec) => {
                                                 if overlap_record.is_some()
@@ -171,11 +175,17 @@ impl ParsedRecords {
                                             }
                                             None => ui.label(""),
                                         };
-                                        Self::display_record_row(
+                                        ui.label(
                                             import_record
                                                 .as_ref()
-                                                .map(|rec| &rec.1),
-                                            ui,
+                                                .map(|row| {
+                                                    clamp_str(
+                                                        row.1
+                                                            .row_content
+                                                            .as_str(),
+                                                    )
+                                                })
+                                                .unwrap_or_default(),
                                         );
                                         ui.end_row();
 
@@ -198,15 +208,21 @@ impl ParsedRecords {
                         }
                     }
                     if !there_was_overlap || remove_this_overlap {
-                        import_result.remove_overlap(self.selected_overlay);
+                        overlaps.remove_overlap(self.selected_overlay);
                     }
                 }
             }
-            _ => (),
+            ImportParsingState::Finished(transactions, _data_import) => {
+                ui.heading("Final Stats");
+                ui.label(format!("Num of Transactions: {}", transactions.len()));
+                if ui.button("save").clicked() {
+                    self.save_parse();
+                }
+            },
         });
     }
 
-    fn parse_file(&mut self, file: FileToParse) {
+    fn find_overlaps(&mut self, file: FileToParse) {
         let FileToParse {
             file,
             profile: Some(profile),
@@ -219,51 +235,33 @@ impl ParsedRecords {
             );
         };
 
-        let query = self.records.direct_proj_query(
-            DbRecord::find()
-                .filter(
-                    db::records::Column::Origin.eq(profile.origin_name.clone()),
-                )
-                .select(),
-        );
+        let all_imports = Arc::clone(self.imports.data());
 
         let future = ImmediateValuePromise::new(async move {
             let file = file.path.unwrap();
-            let str_file = fs::read_to_string(file).unwrap();
-            let mut parse_result = profile.parse_file(&str_file).unwrap();
-            parse_result.rows.sort_by(ExpenseRecord::sorting_fn());
 
-            let mut all_records_map = query
-                .await
-                .unwrap()
-                .into_iter()
-                .chunk_by(|rec| {
-                    assert!(rec.origin().eq(&profile.origin_name));
-                    (*rec.data_import(), rec.origin().clone())
-                })
-                .into_iter()
-                .map(|(key, recs)| {
-                    let mut records = recs.collect::<Vec<_>>();
-                    records.sort_by(ExpenseRecord::sorting_fn());
-                    (key, records)
-                })
-                .collect::<HashMap<_, _>>();
+            let file_str = fs::read_to_string(&file).unwrap();
+            let import_rows = file_str
+                .lines()
+                .enumerate()
+                .map(|(index, line)| ImportRow::init(line.to_string(), index))
+                .collect_vec();
 
-            let imported_rows = &parse_result.rows;
-            let overlaps = all_records_map
-                .iter_mut()
-                .filter_map(|((uuid, origin), records)| {
-                    assert!(origin.eq(imported_rows[0].origin()));
+            let new_import = DataImport::init(profile.uuid, &file_str, file);
 
+            let overlaps = all_imports
+                .iter()
+                .filter_map(|import| {
                     let mut first_match = None;
-                    let match_count = *records
+                    let sorted_counts = import
+                        .rows
                         .iter()
-                        .counts_by(|rec| {
-                            for (index, imported_rec) in
-                                imported_rows.iter().enumerate()
+                        .sorted_by_key(|row| row.row_index)
+                        .counts_by(|row| {
+                            for (index, new_row) in
+                                new_import.rows.iter().enumerate()
                             {
-                                let is_same = imported_rec.is_same_record(rec);
-                                if is_same {
+                                if row.row_content.eq(&new_row.row_content) {
                                     if first_match.is_none() {
                                         first_match = Some(index);
                                     }
@@ -271,105 +269,125 @@ impl ParsedRecords {
                                 }
                             }
                             false
-                        })
-                        .get(&true)
-                        .unwrap_or(&0);
+                        });
+
+                    let match_count = sorted_counts.get(&true).unwrap_or(&0);
                     match match_count {
                         0 => None,
                         _ => Some(ImportOverlap::new(
-                            *uuid,
-                            match_count,
-                            records,
+                            import.clone(),
+                            *match_count,
                             first_match.unwrap(),
                         )),
                     }
                 })
-                .collect::<Vec<_>>();
+                .collect_vec();
 
-            Ok(ImportResultWithOverlap::new(parse_result, overlaps))
+            Ok(ImportResultWithOverlap::new(
+                new_import,
+                import_rows,
+                profile,
+                overlaps,
+            ))
         });
-        self.import_state.set_parsing(future);
+        self.import_state.set_overlaps(future);
+    }
+
+    fn start_parse(&mut self) {
+        let ImportParsingState::OverlapsFound(overlaps) =
+            mem::replace(&mut self.import_state, ImportParsingState::None)
+        else {
+            unreachable!()
+        };
+        self.import_state.set_parsing(
+            async move {
+                let ImportResultWithOverlap {
+                    import, profile, ..
+                } = overlaps;
+
+                // ToDo: ignore the columns that are clicked to ignore
+                let parse_result = profile.parse_file(import).unwrap();
+                (parse_result.rows, parse_result.import)
+            }
+            .into(),
+        );
     }
 
     fn save_parse(&mut self) {
-        let ImportParsingState::Finished(import_result) = &self.import_state
+        let ImportParsingState::Finished(transacts, import) =
+            mem::replace(&mut self.import_state, ImportParsingState::None)
         else {
             unreachable!();
         };
 
-        let links = self.linker.find_links_from_new_records(
-            import_result.rows.iter().map(|rec| &rec.1),
-        );
-        self.records.execute_many(|builder| {
-            builder.execute(DbDataImport::insert(
-                import_result.import.dml_clone(),
-            ));
-            builder.execute(DbRecord::insert_many(
-                import_result.rows.iter().map(|rec| rec.1.dml_clone()),
-            ));
-            if !links.is_empty() {
-                builder.execute(DbPossibleLink::insert_many(
-                    links.into_iter().map(ToActiveModel::dml),
-                ));
-            }
-        });
+        self.transactions.insert_many(transacts);
+        self.imports.insert(import);
     }
 
-    fn display_record_row(record: Option<&ExpenseRecord>, ui: &mut Ui) {
-        let (amount, datetime, description) = record.map_or(
-            (String::default(), String::default(), String::default()),
-            |record| {
-                (
-                    record.formatted_amount(),
-                    record.datetime().to_string(),
-                    record.description().unwrap_or("").to_string(),
-                )
-            },
-        );
-        fn clamp_str(str: String) -> String {
-            match str.len() <= 30 {
-                true => str.clone(),
-                false => str[0..30].to_string(),
+    fn overlap_control_buttons(
+        check_overlapping: &mut bool,
+        uncheck_all: &mut bool,
+        remove_this_overlap: &mut bool,
+        overlaps: &mut ImportResultWithOverlap,
+        ui: &mut Ui,
+    ) {
+        ui.horizontal(|ui| {
+            *check_overlapping = ui.button("check all overlapping").clicked();
+            *uncheck_all = ui.button("uncheck all").clicked();
+            *remove_this_overlap = ui.button("remove this overlap").clicked();
+            if ui.button("remove all checked").clicked() {
+                overlaps.rows =
+                    overlaps.rows.drain(..).filter(|row| !row.0).collect_vec()
             }
-        }
-        ui.label(clamp_str(amount));
-        ui.label(clamp_str(datetime));
-        ui.label(clamp_str(description));
+        });
     }
 }
 
 pub enum ImportParsingState {
     None,
-    Parsing(ImmediateValuePromise<ImportResultWithOverlap>),
-    Finished(ImportResultWithOverlap),
+    FindingOverlaps(ImmediateValuePromise<ImportResultWithOverlap>),
+    OverlapsFound(ImportResultWithOverlap),
+    Parsing(ImmediateValuePromise<(Vec<Transaction>, DataImport)>),
+    Finished(Vec<Transaction>, DataImport),
 }
 
 impl ImportParsingState {
     fn ready_for_new(&self) -> bool {
         matches!(self, ImportParsingState::None)
     }
-    fn set_parsing(
+    fn set_overlaps(
         &mut self,
         future: ImmediateValuePromise<ImportResultWithOverlap>,
     ) {
         assert!(matches!(self, Self::None));
+        let _ = mem::replace(self, ImportParsingState::FindingOverlaps(future));
+    }
+
+    fn set_parsing(
+        &mut self,
+        future: ImmediateValuePromise<(Vec<Transaction>, DataImport)>,
+    ) {
+        assert!(matches!(self, Self::OverlapsFound(_)));
         let _ = mem::replace(self, ImportParsingState::Parsing(future));
     }
     fn try_resolve(&mut self) {
-        let resolved_value = if let ImportParsingState::Parsing(promise) = self
-        {
-            if promise.poll_and_check_finished() {
-                promise.take_value()
-            } else {
-                None
-            }
+        if let Self::FindingOverlaps(finding) = self {
+            finding
+                .poll_and_check_finished()
+                .then(|| finding.take_expect())
         } else {
             None
-        };
-
-        if let Some(val) = resolved_value {
-            let _ = mem::replace(self, Self::Finished(val));
         }
+        .map(|value| mem::replace(self, Self::OverlapsFound(value)));
+
+        if let Self::Parsing(parsing) = self {
+            parsing
+                .poll_and_check_finished()
+                .then(|| parsing.take_expect())
+        } else {
+            None
+        }
+        .map(|value| mem::replace(self, Self::Finished(value.0, value.1)));
     }
     fn clear(&mut self) {
         let _ = mem::replace(self, ImportParsingState::None);
@@ -377,18 +395,23 @@ impl ImportParsingState {
 }
 
 pub struct ImportResultWithOverlap {
-    rows: Vec<(bool, ExpenseRecord)>,
     import: DataImport,
+    rows: Vec<(bool, ImportRow)>,
+    profile: Profile,
     overlaps: Vec<ImportOverlap>,
-    overlap_cleared: bool,
 }
 
 impl ImportResultWithOverlap {
-    pub fn new(import: ParseResult, overlaps: Vec<ImportOverlap>) -> Self {
+    pub fn new(
+        import: DataImport,
+        rows: Vec<ImportRow>,
+        profile: Profile,
+        overlaps: Vec<ImportOverlap>,
+    ) -> Self {
         Self {
-            rows: import.rows.into_iter().map(|rec| (false, rec)).collect(),
-            import: import.import,
-            overlap_cleared: overlaps.is_empty(),
+            import,
+            rows: rows.into_iter().map(|rec| (false, rec)).collect(),
+            profile,
             overlaps,
         }
     }
@@ -396,30 +419,37 @@ impl ImportResultWithOverlap {
     pub fn remove_overlap(&mut self, index: usize) {
         info!("this ran");
         self.overlaps.remove(index);
-        self.overlap_cleared = self.overlaps.is_empty();
+    }
+
+    pub fn is_overlap_cleared(&self) -> bool {
+        self.overlaps.is_empty()
     }
 }
 
 pub struct ImportOverlap {
-    existing_import: Uuid,
-    count: usize,
-    records: Vec<ExpenseRecord>,
+    import: DataImport,
+    match_count: usize,
     first_match: usize,
 }
 
 impl ImportOverlap {
     pub fn new(
-        existing_import: Uuid,
-        count: usize,
-        records: &[ExpenseRecord],
+        import: DataImport,
+        match_count: usize,
         first_match: usize,
     ) -> Self {
         Self {
-            existing_import,
-            count,
-            records: records.to_vec(),
+            import,
+            match_count,
             first_match,
         }
+    }
+}
+
+fn clamp_str(str: &str) -> &str {
+    match str.len() <= 30 {
+        true => str,
+        false => &str[0..30],
     }
 }
 

@@ -1,6 +1,6 @@
 use egui::{TextEdit, Ui};
 
-use crate::model::records::ExpenseRecord;
+use crate::model::transactions::Transaction;
 
 use super::{box_dyn, DataFilter, TableFilter};
 
@@ -31,8 +31,8 @@ impl TableFilter for UuidFilter {
     fn filter(&self) -> Option<DataFilter> {
         self.0.as_ref().map(|uuid_filter| {
             let uuid = uuid_filter.clone();
-            box_dyn(move |record: &ExpenseRecord| {
-                record.uuid().to_string().eq(&uuid)
+            box_dyn(move |record: &Transaction| {
+                record.uuid.to_string().eq(&uuid)
             })
         })
     }

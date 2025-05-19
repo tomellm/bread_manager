@@ -10,7 +10,7 @@ use tracing::trace;
 
 use crate::{
     apps::utils::blank_option_display,
-    model::profiles::builder::{IntermediateParse, ProfileBuilder},
+    model::profiles::builder::{IntermediateParse, CreateProfileBuilder},
     utils::{CompressDisplayResult, CompressResult},
 };
 
@@ -32,7 +32,7 @@ impl ProfilePreview {
     pub fn profile_preview(
         &mut self,
         ui: &mut Ui,
-        builder: &Arc<ProfileBuilder>,
+        builder: &Arc<CreateProfileBuilder>,
     ) -> Response {
         self.recive_files(builder);
 
@@ -96,14 +96,14 @@ impl ProfilePreview {
         self.parsed_testing_file = None;
     }
 
-    fn recive_files(&mut self, builder: &Arc<ProfileBuilder>) {
+    fn recive_files(&mut self, builder: &Arc<CreateProfileBuilder>) {
         while let Ok(file) = self.reciver.try_recv() {
             self.testing_file = Arc::new(Some(file));
             self.update_parse_test(builder);
         }
     }
 
-    pub fn update_parse_test(&mut self, builder: &Arc<ProfileBuilder>) {
+    pub fn update_parse_test(&mut self, builder: &Arc<CreateProfileBuilder>) {
         if self.testing_file.is_none() {
             self.parsed_testing_file = None;
             return;

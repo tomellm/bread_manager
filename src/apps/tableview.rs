@@ -7,20 +7,18 @@ use egui::{CentralPanel, SidePanel};
 use egui_light_states::UiStates;
 use filterstate::FilterState;
 use hermes::{
-    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
-    container::{data::ImplData, projecting::ProjectingContainer},
+    carrier::execute::ImplExecuteCarrier,
+    container::{data::ImplData, manual},
     factory::Factory,
 };
-use sea_orm::EntityTrait;
 
 use crate::{
     components::expense_records::table::RecordsTable,
-    db::{data_import::DbDataImport, records::DbRecord},
-    model::records::ExpenseRecord,
+    model::transactions::Transaction,
 };
 
 pub struct TableView {
-    records: ProjectingContainer<ExpenseRecord, DbRecord>,
+    transacts: manual::Container<Transaction>,
     columns_info: RecordsTable,
 
     filter_state: FilterState,
@@ -46,11 +44,11 @@ impl SidePanelState {
 
 impl App for TableView {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.records.state_update(true);
+        self.transacts.state_update(true);
 
         CentralPanel::default().show(ctx, |ui| {
             CentralPanel::default().show_inside(ui, |ui| {
-                if self.records.data().is_empty() {
+                if self.transacts.data().is_empty() {
                     ui.vertical_centered(|ui| {
                         ui.add_space(40.);
                         ui.label(NO_RECORDS_EMPTY_TEXT);
@@ -62,13 +60,13 @@ impl App for TableView {
                 ui.horizontal(|ui| {
                     ui.label("table view");
                     if ui.button("delete all").clicked() {
-                        self.records.execute(DbRecord::delete_many());
-                        self.records.execute(DbDataImport::delete_many());
+                        //self.records.execute(DbRecord::delete_many());
+                        //self.records.execute(DbDataImport::delete_many());
                     }
 
                     ui.label(format!(
                         "Curretly {} records.",
-                        self.records.data().len()
+                        self.transacts.data().len()
                     ));
 
                     if self.hide_filters && ui.button("filters").clicked() {
@@ -79,12 +77,12 @@ impl App for TableView {
                 self.columns_info.toggles(ui);
 
                 self.columns_info.show_filtered(
-                    &mut self.records,
+                    &mut self.transacts,
                     |r| self.filter_state.filter(r),
                     ui,
                 );
             });
-            if !self.records.data().is_empty() && !self.hide_filters {
+            if !self.transacts.data().is_empty() && !self.hide_filters {
                 SidePanel::right("filter_selection")
                     .resizable(true)
                     .show_inside(ui, |ui| {
@@ -116,7 +114,7 @@ impl App for TableView {
                             }
                             SidePanelState::Actions => {
                                 self.action_state.display_actions(
-                                    &mut self.records,
+                                    &mut self.transacts,
                                     |r| self.filter_state.filter(r),
                                     ui,
                                 )
@@ -133,12 +131,11 @@ impl TableView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records =
-                factory.builder().name("TableView").projector();
-            records.stored_query(DbRecord::find_all_active());
+            let records = factory.builder().name("TableView").manual();
+            //records.stored_query(DbRecord::find_all_active());
             Self {
                 action_state: ActionState::new(records.actor()),
-                records,
+                transacts: records,
                 columns_info: RecordsTable::default(),
                 filter_state: FilterState::default(),
                 hide_filters: true,

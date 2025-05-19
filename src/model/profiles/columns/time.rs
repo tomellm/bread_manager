@@ -1,7 +1,13 @@
 use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 
-use crate::model::{profiles::error::ProfileError, records::ExpenseData};
+use crate::model::{
+    profiles::error::ProfileError,
+    transactions::{
+        datetime::ModelDatetime, group::GroupUuid,
+        properties::TransactionProperties,
+    },
+};
 
 use super::{ParsableWrapper, Parser};
 
@@ -20,8 +26,14 @@ impl Parser<DateTime<Local>> for ExpenseDateTime {
             .map(|dt| dt.and_local_timezone(Local::now().timezone()).unwrap())
             .or(Err(ProfileError::date(str, &self.0)))
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseDateTime(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let datetime = self.parse_str(str)?;
+        Ok(ModelDatetime::init_datetime(datetime, group_uuid).into())
     }
 }
 
@@ -39,8 +51,14 @@ impl Parser<NaiveDate> for ExpenseDate {
         NaiveDate::parse_from_str(str, &self.0)
             .or(Err(ProfileError::date(str, &self.0)))
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseDate(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        let date = self.parse_str(str)?;
+        Ok(ModelDatetime::init(date, None, 3600, group_uuid).into())
     }
 }
 
@@ -58,7 +76,13 @@ impl Parser<NaiveTime> for ExpenseTime {
         NaiveTime::parse_from_str(str, &self.0)
             .or(Err(ProfileError::date(str, &self.0)))
     }
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError> {
-        Ok(ExpenseData::ExpenseTime(self.parse_str(str)?))
+
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError> {
+        // ToDo-[Thomas] - parse other time column as a special
+        todo!()
     }
 }

@@ -5,8 +5,7 @@ use egui::{
     PopupCloseBehavior, RichText, Ui, Widget,
 };
 use hermes::{
-    carrier::query::ImplQueryCarrier,
-    container::{data::ImplData, projecting::ProjectingContainer},
+    container::{data::ImplData, manual},
     factory::Factory,
 };
 use num_traits::Zero;
@@ -14,13 +13,13 @@ use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::{db::profiles::DbProfile, model::profiles::Profile};
+use crate::model::profiles::Profile;
 
 use super::ParsingFileState;
 
 pub(super) struct FilesToParse {
     reciver: mpsc::Receiver<DroppedFile>,
-    profiles: ProjectingContainer<Profile, DbProfile>,
+    profiles: manual::Container<Profile>,
     files: Vec<FileToParse>,
 }
 
@@ -29,12 +28,12 @@ impl FilesToParse {
         reciver: mpsc::Receiver<DroppedFile>,
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut profiles = factory
+        let profiles = factory
             .builder()
             .name("files_to_parse_profiles")
-            .projector();
+            .manual();
         async move {
-            profiles.stored_query(DbProfile::find_all_active());
+            //profiles.stored_query(DbProfile::find_all_active());
             Self {
                 reciver,
                 profiles,

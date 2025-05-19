@@ -52,33 +52,33 @@ pub(super) fn default_tags(
     ui: &mut Ui,
     IntermediateProfileState { default_tags, .. }: &mut IntermediateProfileState,
 ) {
-    ui.horizontal(|ui| {
-        if ui.button("add default tag").clicked() {
-            default_tags.push(String::new());
-        }
-    });
-    ui.add_space(10.);
-    ui.horizontal_wrapped(|ui| {
-        default_tags.retain_mut(|tag| {
-            let mut delete: bool = true;
-            ui.add_sized([100., 25.], |ui: &mut Ui| {
-                let res = ui.add(egui::TextEdit::singleline(tag));
-                if ui.button("remove").clicked() {
-                    delete = false;
-                }
-                res
-            });
-            delete
-        });
-    });
+    //ui.horizontal(|ui| {
+    //    if ui.button("add default tag").clicked() {
+    //        default_tags.push(String::new());
+    //    }
+    //});
+    //ui.add_space(10.);
+    //ui.horizontal_wrapped(|ui| {
+    //    default_tags.retain_mut(|tag| {
+    //        let mut delete: bool = true;
+    //        ui.add_sized([100., 25.], |ui: &mut Ui| {
+    //            let res = ui.add(egui::TextEdit::singleline(tag));
+    //            if ui.button("remove").clicked() {
+    //                delete = false;
+    //            }
+    //            res
+    //        });
+    //        delete
+    //    });
+    //});
 }
 
 pub(super) fn origin_name(
     ui: &mut Ui,
-    IntermediateProfileState { origin_name, .. }: &mut IntermediateProfileState,
+    IntermediateProfileState { origin, .. }: &mut IntermediateProfileState,
 ) {
-    ui.group(|ui| {
-        ui.label("origin name");
-        ui.add(egui::TextEdit::singleline(origin_name));
-    });
+    //ui.group(|ui| {
+    //    ui.label("origin name");
+    //    ui.add(egui::TextEdit::singleline(origin));
+    //});
 }
