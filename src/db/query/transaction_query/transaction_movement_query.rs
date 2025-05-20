@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use super::super::entities::{movement, transaction_movement};
+use crate::db::entities::{movement, transaction_movement};
 
 #[derive(FromQueryResult)]
 pub(in crate::db) struct MovementOfTransaction {

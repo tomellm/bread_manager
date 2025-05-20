@@ -18,7 +18,7 @@ impl ActionState {
         filter: impl FnMut(&&Transaction) -> bool + Copy,
         ui: &mut Ui,
     ) {
-        let uuids = || transacts.data().iter().filter(filter).map(|t| t.uuid);
+        let _uuids = || transacts.data().iter().filter(filter).map(|t| t.uuid);
 
         ui.label("Select a action to apply to the filtered expense records.");
         ui.separator();

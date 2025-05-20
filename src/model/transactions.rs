@@ -1,7 +1,10 @@
+pub mod content_description;
 pub mod datetime;
 pub mod group;
 pub mod movement;
 pub mod properties;
+pub mod special_content;
+pub mod text_content;
 
 use std::cmp::Ordering;
 
@@ -10,7 +13,6 @@ use datetime::Datetime;
 use movement::Movement;
 use properties::TransactionProperties;
 use sea_orm::entity::prelude::*;
-use uuid::Uuid;
 
 use crate::uuid_impls;
 

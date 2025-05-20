@@ -2,13 +2,17 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::transactions::{
+    special_content::SpecialContentUuid, TransactionUuid,
+};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "transaction_special")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
-    pub transaction_uuid: String,
+    pub transaction_uuid: TransactionUuid,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub special_uuid: String,
+    pub special_uuid: SpecialContentUuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

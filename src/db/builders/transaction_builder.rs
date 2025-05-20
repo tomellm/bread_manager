@@ -8,7 +8,7 @@ use uuid::Uuid;
 use crate::{
     db::{
         entities, parse_datetime_str,
-        query::{
+        query::transaction_query::{
             transaction_datetime_query::DatetimeOfTransaction,
             transaction_movement_query::MovementOfTransaction,
         },

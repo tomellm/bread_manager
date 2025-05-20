@@ -1,5 +1,3 @@
-use uuid::Uuid;
-
 use crate::{db::InitUuid, uuid_impls};
 
 use super::{group::GroupUuid, properties::OriginType};

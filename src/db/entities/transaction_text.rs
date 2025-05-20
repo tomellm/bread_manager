@@ -2,15 +2,18 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::model::transactions::properties::TransactionRelType;
+use crate::model::transactions::{
+    properties::TransactionRelType, text_content::TextContentUuid,
+    TransactionUuid,
+};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "transaction_text")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
-    pub transaction_uuid: String,
+    pub transaction_uuid: TransactionUuid,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub text_uuid: String,
+    pub text_uuid: TextContentUuid,
     pub rel_type: TransactionRelType,
 }
 

@@ -2,13 +2,13 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::db::DbUuid;
+use crate::model::transactions::content_description::ContentDescriptionUuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "content_description")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: DbUuid,
+    pub uuid: ContentDescriptionUuid,
     #[sea_orm(column_type = "Text")]
     pub description: String,
     pub datetime_created: String,

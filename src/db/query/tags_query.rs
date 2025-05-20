@@ -1,7 +1,18 @@
-use crate::{db::entities::prelude::*, model::tags::ModelTag};
-use hermes::{ContainsTables, TablesCollector};
+use crate::{
+    db::entities::{self, prelude::*},
+    model::tags::{ModelTag, Tag, TagUuid},
+};
+use hermes::{
+    carrier::{
+        execute::ImplExecuteCarrier, manual_query::ImplManualQueryCarrier,
+        query::ExecutedQuery,
+    },
+    container::manual,
+    ContainsTables, TablesCollector,
+};
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect,
+    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, FromQueryResult,
+    IntoActiveModel, QuerySelect, QueryTrait,
 };
 use uuid::Uuid;
 
@@ -15,6 +26,61 @@ pub(super) struct RelatedTag {
     pub description: String,
 }
 
+pub trait TagsQuery {
+    fn delete_query(to_delete: TagUuid) -> impl QueryTrait + Send + 'static {
+        Tags::delete_by_id(to_delete)
+    }
+
+    fn delete(&mut self, to_delete: TagUuid);
+
+    fn insert(&mut self, to_insert: ModelTag);
+
+    fn all(&mut self);
+}
+
+impl TagsQuery for manual::Container<Tag> {
+    fn delete(&mut self, to_delete: TagUuid) {
+        self.execute(Self::delete_query(to_delete));
+    }
+
+    fn insert(
+        &mut self,
+        Tag {
+            uuid,
+            tag,
+            description,
+        }: ModelTag,
+    ) {
+        self.execute(Tags::insert(
+            entities::tags::Model {
+                uuid,
+                tag,
+                description,
+            }
+            .into_active_model(),
+        ));
+    }
+
+    fn all(&mut self) {
+        self.manual_query(|db, mut collector| async move {
+            let tags = all_tags(&db, &mut collector).await;
+            ExecutedQuery::new_collector(collector, tags)
+        });
+    }
+}
+
+pub(super) async fn all_tags(
+    db: &DatabaseConnection,
+    collector: &mut TablesCollector,
+) -> Result<Vec<Tag>, DbErr> {
+    Tags::find()
+        .select()
+        .and_find_tables(collector)
+        .into_model()
+        .all(db)
+        .await
+}
+
 pub(super) async fn all_profile_tags(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
@@ -25,7 +91,7 @@ pub(super) async fn all_profile_tags(
         .column(tags::Column::Uuid)
         .column(tags::Column::Tag)
         .column(tags::Column::Description)
-        .left_join(Profile)
+        .right_join(Profile)
         .and_find_tables(collector)
         .into_model()
         .all(db)
@@ -42,7 +108,7 @@ pub(super) async fn all_transaction_tags(
         .column(tags::Column::Uuid)
         .column(tags::Column::Tag)
         .column(tags::Column::Description)
-        .left_join(Profile)
+        .right_join(Transaction)
         .and_find_tables(collector)
         .into_model()
         .all(db)

@@ -98,7 +98,7 @@ macro_rules! uuid_impls {
             ::serde::Deserialize,
             ::sea_orm::DeriveValueType,
         )]
-        #[sea_orm(value_type = "String")]
+        //#[sea_orm(value_type = "String")]
         pub struct $type(::uuid::Uuid);
 
         impl ::std::ops::Deref for $type {
@@ -115,11 +115,11 @@ macro_rules! uuid_impls {
             }
         }
 
-        impl ::sea_query::Nullable for $type {
-            fn null() -> ::sea_orm::Value {
-                ::sea_orm::Value::String(None)
-            }
-        }
+        //impl ::sea_query::Nullable for $type {
+        //    fn null() -> ::sea_orm::Value {
+        //        ::sea_orm::Value::String(None)
+        //    }
+        //}
 
         impl TryFrom<&str> for $type {
             type Error = ::sea_orm::DbErr;

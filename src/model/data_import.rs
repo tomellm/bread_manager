@@ -8,7 +8,6 @@ use std::{
 
 use chrono::{DateTime, Local};
 use row::ImportRow;
-use uuid::Uuid;
 
 use crate::{db::InitUuid, uuid_impls};
 

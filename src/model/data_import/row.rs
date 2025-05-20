@@ -1,5 +1,3 @@
-use uuid::Uuid;
-
 use crate::{db::InitUuid, model::transactions::group::GroupUuid, uuid_impls};
 
 use super::row_item::ImportRowItem;
@@ -13,7 +11,6 @@ pub struct ImportRow {
     pub row_content: String,
     pub row_index: usize,
     pub items: Vec<ImportRowItem>,
-    // ToDo - add group uuid?
 }
 
 impl ImportRow {

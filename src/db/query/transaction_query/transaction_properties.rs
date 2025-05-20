@@ -4,28 +4,43 @@ use crate::{
     db::{
         datetime_to_str,
         entities::{self, prelude::*},
-        query::{
-            transaction_datetime_query::datetime_from_model,
-            transaction_movement_query::movement_from_model,
-            transaction_query::EntityTrait,
-        },
+        query::transaction_query::EntityTrait,
         VecIntoActiveModel,
     },
     model::transactions::{
         datetime::ModelDatetime,
         movement::ModelMovement,
         properties::{TransactionProperties, TransactionRelType},
+        special_content::ModelSpecialContent,
+        text_content::ModelTextContent,
         ModelTransaction, TransactionUuid,
     },
+};
+
+use super::{
+    transaction_datetime_query::datetime_from_model,
+    transaction_movement_query::movement_from_model,
+    transaction_special_query::special_from_model,
+    transaction_text_query::text_from_model,
 };
 
 #[derive(Default)]
 pub struct TransactionEntityContainer {
     pub transactions: Vec<entities::transaction::Model>,
+
     pub movements: Vec<entities::movement::Model>,
     pub transaction_movements: Vec<entities::transaction_movement::Model>,
+
     pub datetimes: Vec<entities::datetime::Model>,
     pub transaction_datetimes: Vec<entities::transaction_datetime::Model>,
+
+    pub text_content: Vec<entities::text_content::Model>,
+    pub transaction_text: Vec<entities::transaction_text::Model>,
+
+    pub special_content: Vec<entities::special_content::Model>,
+    pub transaction_special: Vec<entities::transaction_special::Model>,
+
+    pub content_description: Vec<entities::content_description::Model>,
 }
 
 impl TransactionEntityContainer {
@@ -46,6 +61,21 @@ impl TransactionEntityContainer {
                 ))
                 .execute(TransactionDatetime::insert_many(
                     self.transaction_datetimes.into_active_model_vec(),
+                ))
+                .execute(TextContent::insert_many(
+                    self.text_content.into_active_model_vec(),
+                ))
+                .execute(TransactionText::insert_many(
+                    self.transaction_text.into_active_model_vec(),
+                ))
+                .execute(SpecialContent::insert_many(
+                    self.special_content.into_active_model_vec(),
+                ))
+                .execute(TransactionSpecial::insert_many(
+                    self.transaction_special.into_active_model_vec(),
+                ))
+                .execute(ContentDescription::insert_many(
+                    self.content_description.into_active_model_vec(),
                 ));
         });
     }
@@ -95,6 +125,14 @@ impl TransactionEntityContainer {
                 TransactionRelType::Additional,
                 movement,
             ),
+            TransactionProperties::Text(text_content) => self.add_text(
+                transac_uuid,
+                TransactionRelType::Additional,
+                text_content,
+            ),
+            TransactionProperties::Special(special_content) => {
+                self.add_special(transac_uuid, special_content)
+            }
         }
     }
     fn add_movement(
@@ -117,5 +155,28 @@ impl TransactionEntityContainer {
         let models = datetime_from_model(transac_uuid, rel_type, datetime);
         self.datetimes.push(models.0);
         self.transaction_datetimes.push(models.1);
+    }
+
+    fn add_text(
+        &mut self,
+        transac_uuid: TransactionUuid,
+        rel_type: TransactionRelType,
+        text_content: ModelTextContent,
+    ) {
+        let models = text_from_model(transac_uuid, rel_type, text_content);
+        self.text_content.push(models.0);
+        self.transaction_text.push(models.1);
+        self.content_description.push(models.2);
+    }
+
+    fn add_special(
+        &mut self,
+        transac_uuid: TransactionUuid,
+        special_content: ModelSpecialContent,
+    ) {
+        let models = special_from_model(transac_uuid, special_content);
+        self.special_content.push(models.0);
+        self.transaction_special.push(models.1);
+        self.content_description.push(models.2);
     }
 }

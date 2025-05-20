@@ -1,4 +1,7 @@
-use std::{cmp::Ordering, ops::{Deref, Sub}};
+use std::{
+    cmp::Ordering,
+    ops::{Deref, Sub},
+};
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
 use egui::Ui;
@@ -8,7 +11,10 @@ use hermes::{
     factory::Factory,
 };
 
-use crate::{db::query::transaction_query::TransactionQuery, model::transactions::Transaction};
+use crate::{
+    db::query::transaction_query::TransactionQuery,
+    model::transactions::Transaction,
+};
 
 #[derive(Default)]
 enum Charts {
@@ -45,8 +51,9 @@ impl BarChartVis {
     pub fn update(&mut self) {
         self.transactions.state_update(true);
         if self.transactions.has_changed() {
-            let (weekly, monthly) =
-                Self::update_graphs(self.transactions.set_viewed().data().deref());
+            let (weekly, monthly) = Self::update_graphs(
+                self.transactions.set_viewed().data().deref(),
+            );
             self.weekly = weekly;
             self.monthly = monthly;
         }
@@ -143,20 +150,29 @@ impl BarChartVis {
             }
         });
 
-        ui.label(format!("Curretly {} records.", self.transactions.data().len()));
+        ui.label(format!(
+            "Curretly {} records.",
+            self.transactions.data().len()
+        ));
         match self.selected {
             Charts::Weekly => {
                 Plot::new("weekly_plot")
                     .view_aspect(2.0)
                     .show(ui, |plot_ui| {
-                        plot_ui.bar_chart(BarChart::new(self.weekly.clone()))
+                        plot_ui.bar_chart(BarChart::new(
+                            "weekly_plot",
+                            self.weekly.clone(),
+                        ))
                     });
             }
             Charts::Monthly => {
                 Plot::new("monthly_plot").view_aspect(2.0).show(
                     ui,
                     |plot_ui| {
-                        plot_ui.bar_chart(BarChart::new(self.monthly.clone()))
+                        plot_ui.bar_chart(BarChart::new(
+                            "monthly_plot",
+                            self.monthly.clone(),
+                        ))
                     },
                 );
             }

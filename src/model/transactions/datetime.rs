@@ -1,7 +1,6 @@
 use std::cmp::Ordering;
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveTime};
-use uuid::Uuid;
 
 use crate::{db::InitUuid, uuid_impls};
 

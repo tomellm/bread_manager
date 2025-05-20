@@ -1,4 +1,8 @@
+pub(crate) mod transaction_datetime_query;
+pub(crate) mod transaction_movement_query;
 pub(crate) mod transaction_properties;
+pub(crate) mod transaction_text_query;
+pub mod transaction_special_query;
 
 use hermes::{
     carrier::{manual_query::ImplManualQueryCarrier, query::ExecutedQuery},
@@ -7,17 +11,15 @@ use hermes::{
 };
 use itertools::Itertools;
 use sea_orm::{DatabaseConnection, DbErr, EntityOrSelect, EntityTrait};
+use transaction_datetime_query::all_datetimes;
+use transaction_movement_query::all_movements;
 use transaction_properties::TransactionEntityContainer;
 
 use crate::model::transactions::ModelTransaction;
 
-use super::{
-    super::{
-        builders::transaction_builder::{ToTransacHashMap, TransactionBuilder},
-        entities::prelude::*,
-    },
-    transaction_datetime_query::all_datetimes,
-    transaction_movement_query::all_movements,
+use super::super::{
+    builders::transaction_builder::{ToTransacHashMap, TransactionBuilder},
+    entities::prelude::*,
 };
 
 pub trait TransactionQuery {
@@ -63,7 +65,6 @@ impl TransactionQuery for manual::Container<ModelTransaction> {
     fn insert_many(&mut self, transacts: Vec<ModelTransaction>) {
         self.insert_many_queries(transacts).insert_everything(self);
     }
-
 }
 
 pub(super) async fn all_transactions(

@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Local};
 use hermes::{
-    carrier::{execute::ImplExecuteCarrier, manual_query::ImplManualQueryCarrier, query::ExecutedQuery},
+    carrier::{
+        execute::ImplExecuteCarrier, manual_query::ImplManualQueryCarrier,
+        query::ExecutedQuery,
+    },
     container::manual,
     ContainsTables, TablesCollector,
 };
@@ -13,10 +16,7 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{
-        combine_types, datetime_to_str,
-        entities::{datetime, prelude::*},
-    },
+    db::{combine_types, datetime_to_str, entities::prelude::*},
     model::{
         origins::{ModelOrigin, OriginUuid},
         profiles::{

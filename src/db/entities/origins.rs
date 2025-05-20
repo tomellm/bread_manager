@@ -2,11 +2,13 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::origins::OriginUuid;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "origins")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: String,
+    pub uuid: OriginUuid,
     pub name: String,
     #[sea_orm(column_type = "Text")]
     pub description: String,

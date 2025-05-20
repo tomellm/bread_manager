@@ -2,15 +2,20 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::transactions::{
+    content_description::ContentDescriptionUuid, group::GroupUuid,
+    text_content::TextContentUuid,
+};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "text_content")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: String,
-    pub description_uuid: String,
+    pub uuid: TextContentUuid,
+    pub description_uuid: ContentDescriptionUuid,
     #[sea_orm(column_type = "Text")]
     pub content: String,
-    pub group_uuid: String,
+    pub group_uuid: GroupUuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

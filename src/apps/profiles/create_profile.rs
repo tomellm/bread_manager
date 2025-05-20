@@ -4,9 +4,7 @@ mod other_columns;
 
 use std::sync::Arc;
 
-use basics::{
-    default_tags, delimiter, margin_btm, margin_top, name, origin_name,
-};
+use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin};
 use egui::Ui;
 use hermes::{container::manual, factory::Factory};
 use main_columns::{datetime_col, expense_col};
@@ -14,10 +12,21 @@ use other_columns::other_cols;
 use tokio::sync::mpsc;
 
 use crate::{
-    db::query::profile_query::ProfileQuery,
-    model::profiles::{
-        builder::{CreateProfileBuilder, IntermediateProfileState},
-        Profile,
+    components::{
+        origins::origins_dialog::SelectOriginState,
+        tags::tags_dialog::SelectTagsState,
+    },
+    db::query::{
+        origins_query::OriginsQuery, profile_query::ProfileQuery,
+        tags_query::TagsQuery,
+    },
+    model::{
+        origins::Origin,
+        profiles::{
+            builder::{CreateProfileBuilder, IntermediateProfileState},
+            Profile,
+        },
+        tags::Tag,
     },
 };
 
@@ -28,6 +37,10 @@ pub struct CreateProfile {
     profile_builder: Arc<CreateProfileBuilder>,
     intermediate_profile_state: IntermediateProfileState,
     profiles: manual::Container<Profile>,
+    origins: manual::Container<Origin>,
+    tags: manual::Container<Tag>,
+    select_origins_state: SelectOriginState,
+    select_tags_state: SelectTagsState,
 }
 
 impl CreateProfile {
@@ -39,15 +52,30 @@ impl CreateProfile {
             factory.builder().name("create_profile_profiles").manual();
         profiles.stored_query(ProfileQuery::all);
 
+        let mut origins =
+            factory.builder().name("create_profile_origins").manual();
+        origins.stored_query(OriginsQuery::all);
+
+        let mut tags = factory.builder().name("create_profile_tags").manual();
+        tags.stored_query(TagsQuery::all);
+
         Self {
             preview: ProfilePreview::new(reciver),
             profile_builder: Arc::new(CreateProfileBuilder::default()),
             intermediate_profile_state: IntermediateProfileState::default(),
             profiles,
+            select_origins_state: SelectOriginState::default(),
+            select_tags_state: SelectTagsState::default(),
+            origins,
+            tags,
         }
     }
 
     pub fn ui_update(&mut self, ui: &mut Ui) {
+        self.profiles.state_update(true);
+        self.origins.state_update(true);
+        self.tags.state_update(true);
+
         ui.horizontal(|ui| {
             ui.heading("Create Profiles:");
             if ui.button("reset").clicked() {
@@ -102,14 +130,27 @@ impl CreateProfile {
             intermediate_profile_state: state,
             ..
         } = self;
-        name(ui, state);
+        ui.horizontal(|ui| {
+            name(ui, state);
+            origin(
+                ui,
+                &mut self.select_origins_state,
+                &mut state.origin,
+                &mut self.origins,
+            );
+        });
         ui.horizontal(|ui| {
             delimiter(ui, state);
             margin_top(ui, state);
             margin_btm(ui, state);
         });
         ui.vertical_centered(|ui| {
-            default_tags(ui, state);
+            default_tags(
+                ui,
+                &mut self.select_tags_state,
+                &mut state.default_tags,
+                &mut self.tags,
+            );
         });
         ui.add_space(10.);
         ui.separator();
@@ -117,7 +158,6 @@ impl CreateProfile {
         ui.horizontal(|ui| {
             expense_col(ui, state);
             datetime_col(ui, state);
-            origin_name(ui, state)
         });
         ui.add_space(10.);
         ui.separator();

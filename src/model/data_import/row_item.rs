@@ -1,12 +1,11 @@
 use std::mem;
 
-use uuid::Uuid;
-
 use crate::{
     db::InitUuid,
     model::transactions::{
         datetime::DatetimeUuid, movement::MovementUuid,
-        properties::TransactionProperties,
+        properties::TransactionProperties, special_content::SpecialContentUuid,
+        text_content::TextContentUuid,
     },
     uuid_impls,
 };
@@ -59,6 +58,18 @@ impl ImportRowItem {
             ContentRef::Datetime(datetime),
         );
     }
+    pub fn set_text_ref(&mut self, text_content: TextContentUuid) {
+        let _ = mem::replace(
+            &mut self.parsed_content_ref,
+            ContentRef::Text(text_content),
+        );
+    }
+    pub fn set_special_ref(&mut self, special_content: SpecialContentUuid) {
+        let _ = mem::replace(
+            &mut self.parsed_content_ref,
+            ContentRef::Special(special_content),
+        );
+    }
 
     pub fn set_property_ref(&mut self, prop: &TransactionProperties) {
         match prop {
@@ -68,6 +79,12 @@ impl ImportRowItem {
             TransactionProperties::Movement(movement) => {
                 self.set_movement_ref(movement.uuid)
             }
+            TransactionProperties::Text(text_content) => {
+                self.set_text_ref(text_content.uuid)
+            }
+            TransactionProperties::Special(special_content) => {
+                self.set_special_ref(special_content.uuid)
+            }
         }
     }
 }
@@ -76,7 +93,7 @@ impl ImportRowItem {
 pub enum ContentRef {
     Datetime(DatetimeUuid),
     Movement(MovementUuid),
-    Text(String),
-    Special(String),
+    Text(TextContentUuid),
+    Special(SpecialContentUuid),
     None,
 }

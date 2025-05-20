@@ -2,11 +2,13 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::tags::TagUuid;
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "tags")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: String,
+    pub uuid: TagUuid,
     pub tag: String,
     #[sea_orm(column_type = "Text")]
     pub description: String,
