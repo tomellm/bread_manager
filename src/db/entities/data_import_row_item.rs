@@ -4,7 +4,10 @@ use sea_orm::entity::prelude::*;
 
 use crate::model::{
     data_import::{row::ImportRowUuid, row_item::RowItemUuid},
-    transactions::{datetime::DatetimeUuid, movement::MovementUuid},
+    transactions::{
+        datetime::DatetimeUuid, movement::MovementUuid,
+        special_content::SpecialContentUuid, text_content::TextContentUuid,
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
@@ -18,8 +21,8 @@ pub struct Model {
     pub content: String,
     pub datetime_uuid: Option<DatetimeUuid>,
     pub movement_uuid: Option<MovementUuid>,
-    pub text_uuid: Option<String>,
-    pub special_uuid: Option<String>,
+    pub text_uuid: Option<TextContentUuid>,
+    pub special_uuid: Option<SpecialContentUuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
