@@ -40,6 +40,8 @@ pub enum Relation {
         on_delete = "Restrict"
     )]
     Origins,
+    #[sea_orm(has_many = "super::profile_content_descriptions::Entity")]
+    ProfileContentDescriptions,
     #[sea_orm(has_one = "super::profile_tags::Entity")]
     ProfileTags,
 }
@@ -56,9 +58,28 @@ impl Related<super::origins::Entity> for Entity {
     }
 }
 
+impl Related<super::profile_content_descriptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProfileContentDescriptions.def()
+    }
+}
+
 impl Related<super::profile_tags::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::ProfileTags.def()
+    }
+}
+
+impl Related<super::content_description::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::profile_content_descriptions::Relation::ContentDescription.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::profile_content_descriptions::Relation::Profile
+                .def()
+                .rev(),
+        )
     }
 }
 

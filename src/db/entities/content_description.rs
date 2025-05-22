@@ -16,10 +16,18 @@ pub struct Model {
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(has_one = "super::profile_content_descriptions::Entity")]
+    ProfileContentDescriptions,
     #[sea_orm(has_many = "super::special_content::Entity")]
     SpecialContent,
     #[sea_orm(has_many = "super::text_content::Entity")]
     TextContent,
+}
+
+impl Related<super::profile_content_descriptions::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::ProfileContentDescriptions.def()
+    }
 }
 
 impl Related<super::special_content::Entity> for Entity {
@@ -31,6 +39,19 @@ impl Related<super::special_content::Entity> for Entity {
 impl Related<super::text_content::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::TextContent.def()
+    }
+}
+
+impl Related<super::profile::Entity> for Entity {
+    fn to() -> RelationDef {
+        super::profile_content_descriptions::Relation::Profile.def()
+    }
+    fn via() -> Option<RelationDef> {
+        Some(
+            super::profile_content_descriptions::Relation::ContentDescription
+                .def()
+                .rev(),
+        )
     }
 }
 

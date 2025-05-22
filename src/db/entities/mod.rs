@@ -13,6 +13,7 @@ pub mod origins;
 pub mod possible_transaction_link;
 pub mod possible_transaction_link_create_group;
 pub mod profile;
+pub mod profile_content_descriptions;
 pub mod profile_tags;
 pub mod special_content;
 pub mod tags;

@@ -14,6 +14,7 @@ pub struct Model {
     pub uuid: ImportRowUuid,
     pub origin_import: DataImportUuid,
     pub group_uuid: Option<GroupUuid>,
+    #[sea_orm(column_type = "Text")]
     pub row_content: String,
     pub row_index: i32,
 }
