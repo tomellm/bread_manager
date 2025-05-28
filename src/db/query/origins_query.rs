@@ -31,7 +31,7 @@ pub trait OriginsQuery {
                 description,
             }
             .into_active_model(),
-        )
+        ).do_nothing()
     }
 
     fn insert(&mut self, to_insert: ModelOrigin);

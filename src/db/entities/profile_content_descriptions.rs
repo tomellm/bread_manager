@@ -2,13 +2,18 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::{
+    profiles::ProfileUuid,
+    transactions::content_description::ContentDescriptionUuid,
+};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "profile_content_descriptions")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
-    pub content_uuid: String,
+    pub content_uuid: ContentDescriptionUuid,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub profile_uuid: String,
+    pub profile_uuid: ProfileUuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

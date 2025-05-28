@@ -51,14 +51,17 @@ impl TagsQuery for manual::Container<Tag> {
             description,
         }: ModelTag,
     ) {
-        self.execute(Tags::insert(
-            entities::tags::Model {
-                uuid,
-                tag,
-                description,
-            }
-            .into_active_model(),
-        ));
+        self.execute(
+            Tags::insert(
+                entities::tags::Model {
+                    uuid,
+                    tag,
+                    description,
+                }
+                .into_active_model(),
+            )
+            .do_nothing(),
+        );
     }
 
     fn all(&mut self) {

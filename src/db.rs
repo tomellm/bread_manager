@@ -152,10 +152,17 @@ pub fn combine_types<O, OId, I>(
 where
     OId: Eq + Hash,
 {
-    let mut groups = inner.into_iter().fold(HashMap::new(), |mut map, i| {
-        map.entry(outer_id_from_inner(&i)).or_insert(vec![]).push(i);
-        map
-    });
+    if inner.is_empty() {
+        return outer;
+    }
+
+    let mut groups =
+        inner
+            .into_iter()
+            .fold(HashMap::<OId, Vec<I>>::new(), |mut map, i| {
+                map.entry(outer_id_from_inner(&i)).or_default().push(i);
+                map
+            });
 
     let outer = outer
         .into_iter()

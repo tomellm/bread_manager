@@ -2,7 +2,12 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::model::transactions::content_description::ContentDescriptionUuid;
+use crate::{
+    db::parse_datetime_str,
+    model::transactions::content_description::{
+        ContentDescriptionUuid, ModelContentDescription,
+    },
+};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "content_description")]
@@ -56,3 +61,19 @@ impl Related<super::profile::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+
+impl From<Model> for ModelContentDescription {
+    fn from(
+        Model {
+            uuid,
+            description,
+            datetime_created,
+        }: Model,
+    ) -> Self {
+        ModelContentDescription {
+            uuid,
+            description,
+            datetime_created: parse_datetime_str(&datetime_created),
+        }
+    }
+}

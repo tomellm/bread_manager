@@ -1,5 +1,6 @@
 // for query dir
 //
+pub mod content_description_query;
 pub mod data_import_query;
 pub mod origins_query;
 pub mod profile_query;

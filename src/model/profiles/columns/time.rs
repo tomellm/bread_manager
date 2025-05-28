@@ -79,8 +79,8 @@ impl Parser<NaiveTime> for ExpenseTime {
 
     fn to_property(
         &self,
-        group_uuid: GroupUuid,
-        str: &str,
+        _group_uuid: GroupUuid,
+        _str: &str,
     ) -> Result<TransactionProperties, ProfileError> {
         // ToDo-[Thomas] - parse other time column as a special
         todo!()

@@ -15,11 +15,10 @@ pub struct TextContent {
 impl TextContent {
     pub fn init(
         content: String,
-        description: String,
+        description: ContentDescription,
         group_uuid: GroupUuid,
     ) -> Self {
-        let desc = ContentDescription::init(description);
-        Self::new(TextContentUuid::init(), content, desc, group_uuid)
+        Self::new(TextContentUuid::init(), content, description, group_uuid)
     }
 
     pub fn new(

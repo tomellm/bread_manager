@@ -7,10 +7,8 @@ use hermes::{
 };
 
 use crate::{
-    apps::utils::text,
-    components::clamp_str,
-    db::query::tags_query::TagsQuery,
-    model::tags::{Tag, TagUuid},
+    apps::utils::text, components::clamp_str, db::query::tags_query::TagsQuery,
+    model::tags::Tag,
 };
 
 #[derive(Default)]
@@ -82,7 +80,7 @@ impl SelectTagsDialog for Ui {
 }
 
 fn tags_scrollarea(
-    state: &mut SelectTagsState,
+    _state: &mut SelectTagsState,
     selected_tags: &mut Vec<Tag>,
     tags: &mut manual::Container<Tag>,
     ui: &mut Ui,

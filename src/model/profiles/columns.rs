@@ -3,7 +3,7 @@ pub mod other;
 pub mod time;
 
 use money::{Expense, Income, Movement, NumberFormat, PosExpense};
-use other::{Description, Other};
+use other::{Description, Special};
 use serde::{Deserialize, Serialize};
 use time::{ExpenseDate, ExpenseDateTime, ExpenseTime};
 
@@ -252,7 +252,9 @@ impl std::fmt::Display for DateTimeColumn {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub type ModelParsableWrapper = ParsableWrapper;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsableWrapper {
     Income(Income),
     Expense(Expense),
@@ -262,7 +264,7 @@ pub enum ParsableWrapper {
     ExpenseDate(ExpenseDate),
     ExpenseTime(ExpenseTime),
     Description(Description),
-    Other(Other),
+    Special(Special),
 }
 
 impl ParsableWrapper {
@@ -296,7 +298,9 @@ impl ParsableWrapper {
             ParsableWrapper::Description(description) => {
                 description.to_property(group_uuid, str)
             }
-            ParsableWrapper::Other(other) => other.to_property(group_uuid, str),
+            ParsableWrapper::Special(other) => {
+                other.to_property(group_uuid, str)
+            }
         }
     }
     pub fn income() -> Self {
@@ -321,10 +325,10 @@ impl ParsableWrapper {
         Self::ExpenseTime(ExpenseTime::default())
     }
     pub fn description() -> Self {
-        Self::Description(Description::default())
+        Self::Description(Description::default_init())
     }
     pub fn other() -> Self {
-        Self::Other(Other::default())
+        Self::Special(Special::default_init())
     }
 
     fn is_datetime_type(&self) -> bool {
@@ -358,7 +362,7 @@ impl std::fmt::Display for ParsableWrapper {
             ParsableWrapper::ExpenseDate(_) => write!(f, "ExpenseDate"),
             ParsableWrapper::ExpenseTime(_) => write!(f, "ExpenseTime"),
             ParsableWrapper::Description(_) => write!(f, "Description"),
-            ParsableWrapper::Other(_) => write!(f, "Other"),
+            ParsableWrapper::Special(_) => write!(f, "Other"),
         }
     }
 }

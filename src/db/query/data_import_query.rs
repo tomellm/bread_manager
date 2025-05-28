@@ -17,12 +17,14 @@ use models_to_row_items::EntitiesToInsert;
 use num_traits::Zero;
 use row_query::all_rows;
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, Insert,
+    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, QueryTrait,
 };
 
 use crate::{
     db::{
-        combine_types, entities::{self, prelude::*}, parse_datetime_str, VecIntoActiveModel
+        combine_types,
+        entities::{self, prelude::*},
+        parse_datetime_str, VecIntoActiveModel,
     },
     model::data_import::{row::ModelImportRow, ModelDataImport},
 };
@@ -35,17 +37,20 @@ pub trait DataImportQuery {
     fn insert_queries(
         import: Vec<ModelDataImport>,
     ) -> (
-        Insert<entities::data_import::ActiveModel>,
-        Insert<entities::data_import_row::ActiveModel>,
-        Insert<entities::data_import_row_item::ActiveModel>,
+        impl QueryTrait + Send + 'static,
+        impl QueryTrait + Send + 'static,
+        impl QueryTrait + Send + 'static,
     ) {
         let to_insert = EntitiesToInsert::from(import);
         (
-            DataImport::insert_many(to_insert.imports.into_active_model_vec()),
-            DataImportRow::insert_many(to_insert.rows.into_active_model_vec()),
+            DataImport::insert_many(to_insert.imports.into_active_model_vec())
+                .do_nothing(),
+            DataImportRow::insert_many(to_insert.rows.into_active_model_vec())
+                .do_nothing(),
             DataImportRowItem::insert_many(
                 to_insert.items.into_active_model_vec(),
-            ),
+            )
+            .do_nothing(),
         )
     }
 }
@@ -75,7 +80,7 @@ pub(super) async fn all_imports(
         .and_find_tables(collector)
         .all(db)
         .await?
-       .into_iter()
+        .into_iter()
         .map(to_model_import)
         .collect_vec();
 

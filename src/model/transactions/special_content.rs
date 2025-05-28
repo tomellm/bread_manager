@@ -1,4 +1,5 @@
 use sea_orm::{DeriveActiveEnum, EnumIter};
+use serde::{Deserialize, Serialize};
 
 use crate::{db::InitUuid, uuid_impls};
 use sea_orm::entity::prelude::*;
@@ -16,7 +17,18 @@ pub struct SpecialContent {
     pub group_uuid: GroupUuid,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, DeriveActiveEnum, EnumIter)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    DeriveActiveEnum,
+    EnumIter,
+    Default,
+    Serialize,
+    Deserialize,
+)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(255))")]
 pub enum SpecialType {
     #[sea_orm(string_value = "CurrencyExchangeRate")]
@@ -34,21 +46,36 @@ pub enum SpecialType {
     #[sea_orm(string_value = "CompletedDate")]
     CompletedDate,
     #[sea_orm(string_value = "Unknown")]
+    #[default]
     Unknown,
+}
+
+impl SpecialType {
+    pub fn values() -> [Self; 8] {
+        [
+            Self::CurrencyExchangeRate,
+            Self::OriginalCurrency,
+            Self::ExchangeCommision,
+            Self::TransactionState,
+            Self::TransactionType,
+            Self::AccountBalance,
+            Self::CompletedDate,
+            Self::Unknown,
+        ]
+    }
 }
 
 impl SpecialContent {
     pub fn init(
         content: String,
-        description: String,
+        description: ContentDescription,
         content_type: SpecialType,
         group_uuid: GroupUuid,
     ) -> Self {
-        let desc = ContentDescription::init(description);
         Self::new(
             SpecialContentUuid::init(),
             content,
-            desc,
+            description,
             content_type,
             group_uuid,
         )

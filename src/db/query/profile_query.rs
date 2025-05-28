@@ -16,19 +16,27 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{combine_types, datetime_to_str, entities::prelude::*},
+    db::{
+        combine_types, datetime_to_str,
+        entities::{prelude::*, profile::ParsableWrapper, profile_tags},
+        VecIntoActiveModel,
+    },
     model::{
         origins::{ModelOrigin, OriginUuid},
         profiles::{
-            columns::{DateTimeColumn, ExpenseColumn, ParsableWrapper},
+            columns::{
+                self, DateTimeColumn, ExpenseColumn, ModelParsableWrapper,
+            },
             ModelProfile, ProfileUuid, State,
         },
         tags::ModelTag,
+        transactions::content_description::ModelContentDescription,
     },
 };
 
 use super::{
     super::{entities, parse_datetime_str},
+    content_description_query::{all_profile_descriptions, ProfileDescription},
     tags_query::all_profile_tags,
 };
 
@@ -53,8 +61,19 @@ pub trait ProfileQuery {
 
     fn insert_query(
         to_insert: ModelProfile,
-    ) -> impl QueryTrait + Send + 'static {
-        Profile::insert(profile_from_model(to_insert).into_active_model())
+    ) -> (
+        impl QueryTrait + Send + 'static,
+        impl QueryTrait + Send + 'static,
+        impl QueryTrait + Send + 'static,
+    ) {
+        let (profile, descs, profile_descs) = profile_from_model(to_insert);
+        (
+            Profile::insert(profile.into_active_model()).do_nothing(),
+            ContentDescription::insert_many(descs.into_active_model_vec()).do_nothing(),
+            ProfileContentDescriptions::insert_many(
+                profile_descs.into_active_model_vec(),
+            ).do_nothing(),
+        )
     }
 
     fn insert(&mut self, to_insert: ModelProfile);
@@ -91,6 +110,20 @@ pub(super) async fn all_profiles(
         .map(ProfileBuilder::new)
         .collect_vec();
 
+    let descs = all_profile_descriptions(db, collector).await?;
+
+    let builders = combine_types(
+        builders,
+        descs,
+        |p| p.uuid,
+        |d| d.profile_uuid,
+        |builder, desc| {
+            builder.desc_containers(
+                desc.into_iter().map(ProfileDescription::into).collect(),
+            );
+        },
+    );
+
     let profile_tags = all_profile_tags(db, collector).await?;
 
     let builders = combine_types(
@@ -119,9 +152,11 @@ impl ProfileQuery for manual::Container<ModelProfile> {
     }
 
     fn insert(&mut self, to_insert: ModelProfile) {
-        let query = Self::insert_query(to_insert);
+        let (profs, descs, prof_descs) = Self::insert_query(to_insert);
         // ToDo, origins and tags also need to be inserted here
-        self.execute(query);
+        self.execute_many(|transac| {
+            transac.execute(profs).execute(descs).execute(prof_descs);
+        });
     }
 }
 
@@ -138,6 +173,7 @@ pub struct ProfileBuilder {
     origin: ModelOrigin,
     state: State,
     datetime_created: DateTime<Local>,
+    desc_containers: Option<Vec<ModelContentDescription>>,
 }
 
 impl ProfileBuilder {
@@ -147,6 +183,12 @@ impl ProfileBuilder {
             profile.origin_name,
             profile.origin_description,
         );
+
+        let other_data =
+            serde_json::from_str::<HashMap<usize, ParsableWrapper>>(
+                &profile.other_data,
+            )
+            .unwrap();
 
         Self {
             uuid: profile.uuid,
@@ -158,13 +200,21 @@ impl ProfileBuilder {
             delimiter: profile.delimiter.chars().nth(0).unwrap(),
             amount: serde_json::from_str(&profile.amount).unwrap(),
             datetime: serde_json::from_str(&profile.datetime).unwrap(),
-            other_data: serde_json::from_str(&profile.other_data).unwrap(),
+            other_data,
             width: profile.width.try_into().unwrap(),
             default_tags: vec![],
             origin,
             state: profile.state,
             datetime_created: parse_datetime_str(&profile.datetime_created),
+            desc_containers: None,
         }
+    }
+
+    pub fn desc_containers(
+        &mut self,
+        desc_containers: Vec<ModelContentDescription>,
+    ) {
+        self.desc_containers.insert(desc_containers);
     }
 
     pub fn build(self) -> ModelProfile {
@@ -175,7 +225,10 @@ impl ProfileBuilder {
             delimiter: self.delimiter,
             amount: self.amount,
             datetime: self.datetime,
-            other_data: self.other_data,
+            other_data: parsable_wrappers_to_model(
+                self.other_data,
+                self.desc_containers.unwrap(),
+            ),
             width: self.width,
             default_tags: self.default_tags,
             origin: self.origin,
@@ -218,19 +271,132 @@ fn profile_from_model(
         state,
         datetime_created,
     }: ModelProfile,
-) -> entities::profile::Model {
-    entities::profile::Model {
+) -> (
+    entities::profile::Model,
+    Vec<entities::content_description::Model>,
+    Vec<entities::profile_content_descriptions::Model>,
+) {
+    // ToDo: move serialization from this function to
+    // here and serialize the whole hashmap instead of
+    // just the single wrapper
+    let (other_data, descs, profile_descs) =
+        parsable_wrappers_from_model(uuid, other_data);
+
+    (
+        entities::profile::Model {
+            uuid,
+            name,
+            top_margin: margins.0 as i32,
+            bottom_margin: margins.1 as i32,
+            delimiter: delimiter.into(),
+            amount: serde_json::ser::to_string(&amount).unwrap(),
+            datetime: serde_json::ser::to_string(&datetime).unwrap(),
+            other_data,
+            width: width as i32,
+            origin_uuid: origin.uuid,
+            state,
+            datetime_created: datetime_to_str(datetime_created),
+        },
+        descs,
+        profile_descs,
+    )
+}
+
+fn parsable_wrappers_to_model(
+    map: HashMap<usize, ParsableWrapper>,
+    descs: Vec<ModelContentDescription>,
+) -> HashMap<usize, ModelParsableWrapper> {
+    let mut descs = descs
+        .into_iter()
+        .into_group_map_by(|desc| desc.uuid)
+        .into_iter()
+        .map(|(pos, mut w)| {
+            assert!(w.len() == 1);
+            (pos, w.remove(0))
+        })
+        .collect::<HashMap<_, _>>();
+
+    map.into_iter()
+        .map(|(pos, wrap)| {
+            let desc = wrap.need_desc().map(|uuid| descs.remove(uuid).unwrap());
+            (pos, (wrap, desc).into())
+        })
+        .collect()
+}
+
+fn parsable_wrappers_from_model(
+    profile_uuid: ProfileUuid,
+    model: HashMap<usize, ModelParsableWrapper>,
+) -> (
+    String,
+    Vec<entities::content_description::Model>,
+    Vec<entities::profile_content_descriptions::Model>,
+) {
+    let (hash_map, descs, prof_descs) = model.into_iter().fold(
+        (HashMap::new(), vec![], vec![]),
+        |(mut map, mut descs, mut prof_descs), w| {
+            let (ent, opt) = parsable_wrapper_from_model(profile_uuid, w.1);
+            if let Some((desc, prof_desc)) = opt {
+                descs.push(desc);
+                prof_descs.push(prof_desc);
+            }
+            map.insert(w.0, ent);
+            (map, descs, prof_descs)
+        },
+    );
+
+    (
+        serde_json::ser::to_string(&hash_map).unwrap(),
+        descs,
+        prof_descs,
+    )
+}
+
+fn parsable_wrapper_from_model(
+    profile_uuid: ProfileUuid,
+    model: ModelParsableWrapper,
+) -> (
+    ParsableWrapper,
+    Option<(
+        entities::content_description::Model,
+        entities::profile_content_descriptions::Model,
+    )>,
+) {
+    let container = match &model {
+        ModelParsableWrapper::Description(columns::other::Description(
+            desc,
+        ))
+        | ModelParsableWrapper::Special(columns::other::Special(_, desc)) => {
+            Some(description_from_model(profile_uuid, desc.clone()))
+        }
+        _ => None,
+    };
+    (
+        ParsableWrapper::from(model),
+        container,
+    )
+}
+
+fn description_from_model(
+    profile_uuid: ProfileUuid,
+    ModelContentDescription {
         uuid,
-        name,
-        top_margin: margins.0 as i32,
-        bottom_margin: margins.1 as i32,
-        delimiter: delimiter.into(),
-        amount: serde_json::ser::to_string(&amount).unwrap(),
-        datetime: serde_json::ser::to_string(&datetime).unwrap(),
-        other_data: serde_json::ser::to_string(&other_data).unwrap(),
-        width: width as i32,
-        origin_uuid: origin.uuid,
-        state,
-        datetime_created: datetime_to_str(datetime_created),
-    }
+        description,
+        datetime_created,
+    }: ModelContentDescription,
+) -> (
+    entities::content_description::Model,
+    entities::profile_content_descriptions::Model,
+) {
+    (
+        entities::content_description::Model {
+            uuid,
+            description,
+            datetime_created: datetime_to_str(datetime_created),
+        },
+        entities::profile_content_descriptions::Model {
+            content_uuid: uuid,
+            profile_uuid,
+        },
+    )
 }

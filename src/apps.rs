@@ -1,15 +1,19 @@
 mod fileupload;
 mod linking;
 mod profiles;
+mod recordview;
 mod tableview;
 pub(crate) mod utils;
 mod visualizations;
-mod recordview;
 
-use std::{env, time::Instant};
+use std::{
+    env,
+    str::FromStr,
+    time::{Duration, Instant},
+};
 
 use eframe::{egui, App};
-use egui::global_theme_preference_switch;
+use egui::{global_theme_preference_switch, TextBuffer};
 use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 //use linking::Linking;
@@ -281,7 +285,20 @@ impl State {
             let database_url =
                 env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let mut connection_options = ConnectOptions::new(database_url);
-            connection_options.sqlx_logging(false);
+            //.connect_timeout(Duration::MAX)
+            //.idle_timeout(Duration::MAX)
+            //.acquire_timeout(Duration::MAX);
+
+            if let Ok(var) = env::var("SQLX_LOGGING") {
+                if let Ok(level) = log::LevelFilter::from_str(var.as_str()) {
+                    connection_options
+                        .sqlx_logging(true)
+                        .sqlx_logging_level(level);
+                } else {
+                    connection_options.sqlx_logging(false);
+                }
+            }
+
             let db = Database::connect(connection_options).await.unwrap();
 
             let messenger = Messenger::new(db).await;
