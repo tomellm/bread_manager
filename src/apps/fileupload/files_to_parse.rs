@@ -13,7 +13,7 @@ use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;
 
-use crate::model::profiles::Profile;
+use crate::{db::query::profile_query::ProfileQuery, model::profiles::Profile};
 
 use super::ParsingFileState;
 
@@ -28,12 +28,11 @@ impl FilesToParse {
         reciver: mpsc::Receiver<DroppedFile>,
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let profiles = factory
-            .builder()
-            .name("files_to_parse_profiles")
-            .manual();
+        let mut profiles = factory.builder().file(file!()).manual();
+
         async move {
-            //profiles.stored_query(DbProfile::find_all_active());
+            profiles.stored_query(ProfileQuery::all_active);
+
             Self {
                 reciver,
                 profiles,
@@ -238,12 +237,6 @@ impl FilesToParse {
         to_remove
     }
 
-    pub fn extract_ready_files(
-        &mut self,
-    ) -> impl Iterator<Item = FileToParse> + '_ {
-        self.files.extract_if(.., |f| f.profile.is_some())
-    }
-
     pub fn recive_files(&mut self) {
         while let Ok(file) = self.reciver.try_recv() {
             info!(
@@ -252,10 +245,6 @@ impl FilesToParse {
             );
             self.files.push(file.into());
         }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.files.is_empty()
     }
 }
 
@@ -365,14 +354,6 @@ impl CutOffMargins {
 
     fn is_set(&self) -> bool {
         self.top.is_some() || self.bottom.is_some()
-    }
-
-    fn is_empty(&self) -> Option<bool> {
-        match (&self.top, &self.bottom) {
-            (Some(vec), None) | (None, Some(vec)) => Some(vec.is_empty()),
-            (Some(a), Some(b)) => Some(a.is_empty() && b.is_empty()),
-            _ => None,
-        }
     }
 
     fn width(&self) -> Option<usize> {

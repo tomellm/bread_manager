@@ -14,13 +14,17 @@
 mod apps;
 mod components;
 mod db;
+pub mod infra;
 mod model;
 mod utils;
 
 use apps::BreadApp;
 use eframe::NativeOptions;
 use egui::ViewportBuilder;
-use tracing_subscriber::{prelude::*, EnvFilter};
+use infra::sqlx_layer::SqlxLayer;
+use tracing_subscriber::{
+    filter::filter_fn, fmt, prelude::*, EnvFilter, Registry,
+};
 use utils::LoadingScreen;
 
 #[tokio::main]
@@ -39,11 +43,23 @@ async fn main() -> eframe::Result<()> {
     //    .event_format(json())
     //    .with_writer(Arc::new(log_file));
 
-    let stdout_log = tracing_subscriber::fmt::layer();
-    tracing_subscriber::registry()
-        .with(
-            stdout_log.with_filter(EnvFilter::from_env("LOG_FILTER")), //.and_then(log),
-        )
+    //let stdout_log = tracing_subscriber::fmt::layer();
+    //tracing_subscriber::registry()
+    //
+    //    .init();
+
+    let sqlx_layer = SqlxLayer;
+
+    let fmt_subscriber = fmt::layer()
+        .with_target(true)
+        .with_level(true)
+        .with_filter(EnvFilter::from_env("LOG_FILTER"))
+        // remove original sqlx::query events from log output
+        .with_filter(filter_fn(|metadata| metadata.target() != "sqlx::query"));
+
+    Registry::default()
+        .with(fmt_subscriber)
+        .with(sqlx_layer)
         .init();
 
     let options = NativeOptions {

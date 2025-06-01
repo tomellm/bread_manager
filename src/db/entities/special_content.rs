@@ -2,10 +2,12 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::model::transactions::{
-    content_description::ContentDescriptionUuid,
+use crate::model::{
     group::GroupUuid,
-    special_content::{SpecialContentUuid, SpecialType},
+    transactions::{
+        content_description::ContentDescriptionUuid,
+        special_content::{SpecialContentUuid, SpecialType},
+    },
 };
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]

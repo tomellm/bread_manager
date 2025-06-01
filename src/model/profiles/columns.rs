@@ -2,16 +2,20 @@ pub mod money;
 pub mod other;
 pub mod time;
 
+use std::mem;
+
 use money::{Expense, Income, Movement, NumberFormat, PosExpense};
 use other::{Description, Special};
 use serde::{Deserialize, Serialize};
 use time::{ExpenseDate, ExpenseDateTime, ExpenseTime};
+use tracing::info;
 
 use crate::model::{
     data_import::row_item::ImportRowItem,
+    group::GroupUuid,
     transactions::{
+        content_description::ContentDescription,
         datetime::{Datetime, ModelDatetime},
-        group::GroupUuid,
         movement::ModelMovement,
         properties::TransactionProperties,
     },
@@ -268,6 +272,21 @@ pub enum ParsableWrapper {
 }
 
 impl ParsableWrapper {
+    pub fn init_from(value: &Self) -> Self {
+        let mut new_val = value.clone();
+        match &mut new_val {
+            Self::Description(Description(desc))
+            | Self::Special(Special(_, desc)) => {
+                let new_desc =
+                    ContentDescription::init(desc.description.clone());
+                let _ = mem::replace(desc, new_desc);
+            }
+            _ => (),
+        }
+
+        new_val
+    }
+
     pub fn to_property(
         &self,
         group_uuid: GroupUuid,
@@ -298,8 +317,8 @@ impl ParsableWrapper {
             ParsableWrapper::Description(description) => {
                 description.to_property(group_uuid, str)
             }
-            ParsableWrapper::Special(other) => {
-                other.to_property(group_uuid, str)
+            ParsableWrapper::Special(special) => {
+                special.to_property(group_uuid, str)
             }
         }
     }

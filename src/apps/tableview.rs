@@ -131,7 +131,7 @@ impl TableView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let records = factory.builder().name("TableView").manual();
+            let records = factory.builder().file(file!()).manual();
             //records.stored_query(DbRecord::find_all_active());
             Self {
                 action_state: ActionState::new(records.actor()),

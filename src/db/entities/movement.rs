@@ -2,8 +2,9 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::model::transactions::{
-    group::GroupUuid, movement::MovementUuid, properties::OriginType,
+use crate::model::{
+    group::GroupUuid,
+    transactions::{movement::MovementUuid, properties::OriginType},
 };
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]

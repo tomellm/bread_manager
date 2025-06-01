@@ -1,5 +1,4 @@
 use egui::{Layout, Ui};
-use sea_orm::ActiveEnum;
 
 use crate::{
     apps::utils::{drag_int, text},

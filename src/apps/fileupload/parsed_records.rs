@@ -1,11 +1,13 @@
 use crate::{
     components::expense_records::table::RecordsTable,
     db::query::{
-        data_import_query::DataImportQuery, transaction_query::TransactionQuery,
+        data_import_query::DataImportQuery, group_query::GroupsQuery,
+        transaction_query::TransactionQuery,
     },
     model::{
         data_import::{row::ImportRow, DataImport},
-        profiles::Profile,
+        group::{Group, ModelGroup},
+        profiles::{ParseResult, Profile},
         transactions::Transaction,
     },
     utils::PromiseUtilities,
@@ -13,6 +15,7 @@ use crate::{
 use egui::{Grid, ScrollArea, Spinner, Ui};
 use egui_light_states::UiStates;
 use hermes::{
+    carrier::execute::ImplExecuteCarrier,
     container::{data::ImplData, manual},
     factory::Factory,
 };
@@ -31,10 +34,10 @@ pub(super) struct ParsedRecords {
     selected_overlay: usize,
 
     //linker: Linker,
-    columns_info: RecordsTable,
-
-    ui: UiStates,
-    table: RecordsTable,
+    //columns_info: RecordsTable,
+    //
+    //ui: UiStates,
+    //table: RecordsTable,
 }
 
 impl ParsedRecords {
@@ -42,12 +45,8 @@ impl ParsedRecords {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let transactions = factory
-                .builder()
-                .name("parse_records_transactions")
-                .manual();
-            let mut imports =
-                factory.builder().name("parse_records_imports").manual();
+            let transactions = factory.builder().file(file!()).manual();
+            let mut imports = factory.builder().file(file!()).manual();
             imports.stored_query(DataImportQuery::all);
 
             Self {
@@ -56,9 +55,9 @@ impl ParsedRecords {
                 //linker: Linker::init(factory).await,
                 import_state: ImportParsingState::None,
                 selected_overlay: 0,
-                columns_info: RecordsTable::default(),
-                ui: UiStates::default(),
-                table: RecordsTable::default(),
+                //columns_info: RecordsTable::default(),
+                //ui: UiStates::default(),
+                //table: RecordsTable::default(),
             }
         }
     }
@@ -212,13 +211,21 @@ impl ParsedRecords {
                     }
                 }
             }
-            ImportParsingState::Finished(transactions, _data_import) => {
+            ImportParsingState::Finished(transactions, data_import, groups) => {
                 ui.heading("Final Stats");
-                ui.label(format!("Num of Transactions: {}", transactions.len()));
+                ui.label(format!(
+                    "Num of Transactions: {}",
+                    transactions.len()
+                ));
+                ui.label(format!(
+                    "Num of Rows in DataImport: {}",
+                    data_import.rows.len()
+                ));
+                ui.label(format!("Number of Groups: {}", groups.len()));
                 if ui.button("save").clicked() {
                     self.save_parse();
                 }
-            },
+            }
         });
     }
 
@@ -302,26 +309,46 @@ impl ParsedRecords {
         self.import_state.set_parsing(
             async move {
                 let ImportResultWithOverlap {
-                    import, profile, ..
+                    mut import,
+                    profile,
+                    rows,
+                    ..
                 } = overlaps;
 
                 // ToDo: ignore the columns that are clicked to ignore
-                let parse_result = profile.parse_file(import).unwrap();
-                (parse_result.rows, parse_result.import)
+                import.rows = rows.into_iter().map(|t| t.1).collect();
+                let ParseResult {
+                    rows,
+                    groups,
+                    import,
+                } = profile.parse_file(import).unwrap();
+                (rows, import, groups)
             }
             .into(),
         );
     }
 
     fn save_parse(&mut self) {
-        let ImportParsingState::Finished(transacts, import) =
+        let ImportParsingState::Finished(transacts, import, groups) =
             mem::replace(&mut self.import_state, ImportParsingState::None)
         else {
             unreachable!();
         };
 
-        self.transactions.insert_many(transacts);
-        self.imports.insert(import);
+        let tr_q =
+            manual::Container::<Transaction>::insert_many_queries(transacts);
+        let (diq_1, diq_2, diq_3) =
+            manual::Container::<DataImport>::insert_queries(vec![import]);
+
+        self.transactions.execute_many(|transac| {
+            transac.execute(
+                manual::Container::<ModelGroup>::insert_many_query(groups),
+            );
+            tr_q.add_all_to_transaction(transac)
+                .execute(diq_1)
+                .execute(diq_2)
+                .execute(diq_3);
+        });
     }
 
     fn overlap_control_buttons(
@@ -347,8 +374,8 @@ pub enum ImportParsingState {
     None,
     FindingOverlaps(ImmediateValuePromise<ImportResultWithOverlap>),
     OverlapsFound(ImportResultWithOverlap),
-    Parsing(ImmediateValuePromise<(Vec<Transaction>, DataImport)>),
-    Finished(Vec<Transaction>, DataImport),
+    Parsing(ImmediateValuePromise<(Vec<Transaction>, DataImport, Vec<Group>)>),
+    Finished(Vec<Transaction>, DataImport, Vec<Group>),
 }
 
 impl ImportParsingState {
@@ -365,9 +392,12 @@ impl ImportParsingState {
 
     fn set_parsing(
         &mut self,
-        future: ImmediateValuePromise<(Vec<Transaction>, DataImport)>,
+        future: ImmediateValuePromise<(
+            Vec<Transaction>,
+            DataImport,
+            Vec<Group>,
+        )>,
     ) {
-        assert!(matches!(self, Self::OverlapsFound(_)));
         let _ = mem::replace(self, ImportParsingState::Parsing(future));
     }
     fn try_resolve(&mut self) {
@@ -387,7 +417,9 @@ impl ImportParsingState {
         } else {
             None
         }
-        .map(|value| mem::replace(self, Self::Finished(value.0, value.1)));
+        .map(|value| {
+            mem::replace(self, Self::Finished(value.0, value.1, value.2))
+        });
     }
     fn clear(&mut self) {
         let _ = mem::replace(self, ImportParsingState::None);

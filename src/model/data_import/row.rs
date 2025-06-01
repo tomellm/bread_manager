@@ -1,4 +1,4 @@
-use crate::{db::InitUuid, model::transactions::group::GroupUuid, uuid_impls};
+use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 
 use super::row_item::ImportRowItem;
 

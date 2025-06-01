@@ -5,19 +5,18 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{
-        datetime_to_str,
-        entities::{self, content_description, prelude::*, special_content},
-    },
-    model::transactions::{
-        content_description::{
-            ContentDescriptionUuid, ModelContentDescription,
-        },
+    db::entities::{self, content_description, prelude::*, special_content},
+    model::{
         group::GroupUuid,
-        special_content::{
-            ModelSpecialContent, SpecialContentUuid, SpecialType,
+        transactions::{
+            content_description::{
+                ContentDescriptionUuid, ModelContentDescription,
+            },
+            special_content::{
+                ModelSpecialContent, SpecialContentUuid, SpecialType,
+            },
+            TransactionUuid,
         },
-        TransactionUuid,
     },
 };
 
@@ -32,11 +31,12 @@ pub(in crate::db) struct SpecialOfTransaction {
     datetime_created: DateTime<Local>,
 }
 
-pub(super) async fn all_datetimes(
+#[allow(dead_code)]
+pub(super) async fn all_specials(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
 ) -> Result<Vec<SpecialOfTransaction>, DbErr> {
-    TextContent::find()
+    SpecialContent::find()
         .select_only()
         .column(special_content::Column::Uuid)
         .column(special_content::Column::Content)
@@ -86,8 +86,7 @@ pub fn special_from_model(
         description:
             ModelContentDescription {
                 uuid: description_uuid,
-                description: description_text,
-                datetime_created,
+                ..
             },
         content_type: special_type,
         group_uuid,
@@ -95,9 +94,8 @@ pub fn special_from_model(
 ) -> (
     entities::special_content::Model,
     entities::transaction_special::Model,
-    entities::content_description::Model,
 ) {
-    (
+    dbg!((
         entities::special_content::Model {
             uuid,
             description_uuid,
@@ -109,10 +107,5 @@ pub fn special_from_model(
             transaction_uuid,
             special_uuid: uuid,
         },
-        entities::content_description::Model {
-            uuid: description_uuid,
-            description: description_text,
-            datetime_created: datetime_to_str(datetime_created),
-        },
-    )
+    ))
 }

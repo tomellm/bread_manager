@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 
 use hermes::{ContainsTables, TablesCollector};
-use itertools::Itertools;
 use sea_orm::{
     DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QuerySelect,
 };

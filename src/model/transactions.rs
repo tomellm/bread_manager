@@ -1,6 +1,5 @@
 pub mod content_description;
 pub mod datetime;
-pub mod group;
 pub mod movement;
 pub mod properties;
 pub mod special_content;

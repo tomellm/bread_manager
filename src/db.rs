@@ -2,7 +2,6 @@ use std::{collections::HashMap, hash::Hash};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
 use itertools::Itertools;
-use num_traits::Zero;
 use sea_orm::{ActiveModelTrait, IntoActiveModel};
 use uuid::Uuid;
 
@@ -164,7 +163,7 @@ where
                 map
             });
 
-    let outer = outer
+    outer
         .into_iter()
         .map(|mut o| {
             let o_id = outer_id(&o);
@@ -173,8 +172,5 @@ where
             }
             o
         })
-        .collect_vec();
-
-    assert!(groups.len().is_zero());
-    outer
+        .collect_vec()
 }

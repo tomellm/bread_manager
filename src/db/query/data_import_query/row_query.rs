@@ -7,14 +7,11 @@ use crate::{
         combine_types,
         entities::{self, prelude::DataImportRow},
     },
-    model::{
-        data_import::{
-            row::{ImportRowUuid, ModelImportRow},
-            row_item::ModelImportRowItem,
-            DataImportUuid,
-        },
-        transactions::group::GroupUuid,
-    },
+    model::{data_import::{
+        row::{ImportRowUuid, ModelImportRow},
+        row_item::ModelImportRowItem,
+        DataImportUuid,
+    }, group::GroupUuid},
 };
 
 use super::row_items_query::all_row_items;

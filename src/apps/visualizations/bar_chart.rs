@@ -35,7 +35,7 @@ impl BarChartVis {
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         let mut transactions =
-            factory.builder().name("bar_chart_vis_records").manual();
+            factory.builder().file(file!()).manual();
         async move {
             transactions.stored_query(TransactionQuery::all);
             let (weekly, monthly) = Self::update_graphs(&[]);

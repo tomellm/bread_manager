@@ -1,4 +1,5 @@
-use hermes::carrier::execute::ImplExecuteCarrier;
+use hermes::carrier::execute::{ImplExecuteCarrier, TransactionBuilder};
+use tracing::info;
 
 use crate::{
     db::{
@@ -39,74 +40,69 @@ pub struct TransactionEntityContainer {
 
     pub special_content: Vec<entities::special_content::Model>,
     pub transaction_special: Vec<entities::transaction_special::Model>,
-
-    pub content_description: Vec<entities::content_description::Model>,
 }
 
 impl TransactionEntityContainer {
+    pub fn add_all_to_transaction<'builder, 'executor>(
+        self,
+        builder: &'builder mut TransactionBuilder<'executor>,
+    ) -> &'builder mut TransactionBuilder<'executor> {
+        builder
+            .execute(
+                Transaction::insert_many(
+                    self.transactions.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                Movement::insert_many(self.movements.into_active_model_vec())
+                    .do_nothing(),
+            )
+            .execute(
+                TransactionMovement::insert_many(
+                    self.transaction_movements.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                Datetime::insert_many(self.datetimes.into_active_model_vec())
+                    .do_nothing(),
+            )
+            .execute(
+                TransactionDatetime::insert_many(
+                    self.transaction_datetimes.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                TextContent::insert_many(
+                    self.text_content.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                TransactionText::insert_many(
+                    self.transaction_text.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                SpecialContent::insert_many(
+                    self.special_content.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+            .execute(
+                TransactionSpecial::insert_many(
+                    self.transaction_special.into_active_model_vec(),
+                )
+                .do_nothing(),
+            )
+    }
+
     pub fn insert_everything(self, exec: &mut impl ImplExecuteCarrier) {
         exec.execute_many(|builder| {
-            builder
-                .execute(
-                    Transaction::insert_many(
-                        self.transactions.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    Movement::insert_many(
-                        self.movements.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    TransactionMovement::insert_many(
-                        self.transaction_movements.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    Datetime::insert_many(
-                        self.datetimes.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    TransactionDatetime::insert_many(
-                        self.transaction_datetimes.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    TextContent::insert_many(
-                        self.text_content.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    TransactionText::insert_many(
-                        self.transaction_text.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    SpecialContent::insert_many(
-                        self.special_content.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    TransactionSpecial::insert_many(
-                        self.transaction_special.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                )
-                .execute(
-                    ContentDescription::insert_many(
-                        self.content_description.into_active_model_vec(),
-                    )
-                    .do_nothing(),
-                );
+            self.add_all_to_transaction(builder);
         });
     }
 
@@ -196,7 +192,6 @@ impl TransactionEntityContainer {
         let models = text_from_model(transac_uuid, rel_type, text_content);
         self.text_content.push(models.0);
         self.transaction_text.push(models.1);
-        self.content_description.push(models.2);
     }
 
     fn add_special(
@@ -207,6 +202,5 @@ impl TransactionEntityContainer {
         let models = special_from_model(transac_uuid, special_content);
         self.special_content.push(models.0);
         self.transaction_special.push(models.1);
-        self.content_description.push(models.2);
     }
 }

@@ -4,12 +4,19 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{entities::{self, prelude::*}, naive_date_to_str, naive_time_to_str},
-    model::transactions::{
-        datetime::{DatetimeUuid, ModelDatetime},
+    db::{
+        entities::{self, prelude::*},
+        naive_date_to_str, naive_time_to_str,
+    },
+    model::{
         group::GroupUuid,
-        properties::{OriginType, TransactionProperties, TransactionRelType},
-        TransactionUuid,
+        transactions::{
+            datetime::{DatetimeUuid, ModelDatetime},
+            properties::{
+                OriginType, TransactionProperties, TransactionRelType,
+            },
+            TransactionUuid,
+        },
     },
 };
 

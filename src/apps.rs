@@ -6,14 +6,10 @@ mod tableview;
 pub(crate) mod utils;
 mod visualizations;
 
-use std::{
-    env,
-    str::FromStr,
-    time::{Duration, Instant},
-};
+use std::{env, str::FromStr, time::Instant};
 
 use eframe::{egui, App};
-use egui::{global_theme_preference_switch, TextBuffer};
+use egui::global_theme_preference_switch;
 use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 //use linking::Linking;

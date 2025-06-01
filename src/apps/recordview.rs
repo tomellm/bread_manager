@@ -28,7 +28,7 @@ impl RecordView {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let transact =
-                factory.builder().name("record_view_records").manual();
+                factory.builder().file(file!()).manual();
             //records.stored_query(DbRecord::find().select());
             Self {
                 transact,

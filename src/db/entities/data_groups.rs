@@ -2,13 +2,13 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::db::DbUuid;
+use crate::{db::DbUuid, model::group::GroupUuid};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "data_groups")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: DbUuid,
+    pub uuid: GroupUuid,
     pub datetime_created: String,
     // ToDo - add how this was created
 }

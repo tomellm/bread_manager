@@ -1,8 +1,8 @@
 use crate::model::{
+    group::GroupUuid,
     profiles::error::ProfileError,
     transactions::{
         content_description::ContentDescription,
-        group::GroupUuid,
         properties::TransactionProperties,
         special_content::{SpecialContent, SpecialType},
         text_content::TextContent,

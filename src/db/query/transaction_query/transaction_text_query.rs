@@ -5,15 +5,20 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{datetime_to_str, entities::{self, content_description, prelude::*, text_content}},
-    model::transactions::{
-        content_description::{
-            ContentDescriptionUuid, ModelContentDescription,
-        },
+    db::{
+        datetime_to_str,
+        entities::{self, content_description, prelude::*, text_content},
+    },
+    model::{
         group::GroupUuid,
-        properties::TransactionRelType,
-        text_content::{ModelTextContent, TextContentUuid},
-        TransactionUuid,
+        transactions::{
+            content_description::{
+                ContentDescriptionUuid, ModelContentDescription,
+            },
+            properties::TransactionRelType,
+            text_content::{ModelTextContent, TextContentUuid},
+            TransactionUuid,
+        },
     },
 };
 
@@ -79,15 +84,13 @@ pub fn text_from_model(
         description:
             ModelContentDescription {
                 uuid: description_uuid,
-                description: description_text,
-                datetime_created,
+                ..
             },
         group_uuid,
     }: ModelTextContent,
 ) -> (
     entities::text_content::Model,
     entities::transaction_text::Model,
-    entities::content_description::Model,
 ) {
     (
         entities::text_content::Model {
@@ -100,11 +103,6 @@ pub fn text_from_model(
             transaction_uuid,
             text_uuid: uuid,
             rel_type,
-        },
-        entities::content_description::Model {
-            uuid: description_uuid,
-            description: description_text,
-            datetime_created: datetime_to_str(datetime_created),
         },
     )
 }

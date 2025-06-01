@@ -5,11 +5,15 @@ use sea_orm::{
 
 use crate::{
     db::entities::{self, prelude::*},
-    model::transactions::{
+    model::{
         group::GroupUuid,
-        movement::{ModelMovement, MovementUuid},
-        properties::{OriginType, TransactionProperties, TransactionRelType},
-        TransactionUuid,
+        transactions::{
+            movement::{ModelMovement, MovementUuid},
+            properties::{
+                OriginType, TransactionProperties, TransactionRelType,
+            },
+            TransactionUuid,
+        },
     },
 };
 

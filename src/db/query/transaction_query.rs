@@ -26,7 +26,6 @@ pub trait TransactionQuery {
     fn all(&mut self);
 
     fn insert_queries(
-        &mut self,
         transact: ModelTransaction,
     ) -> TransactionEntityContainer {
         let mut container = TransactionEntityContainer::default();
@@ -35,7 +34,6 @@ pub trait TransactionQuery {
     }
 
     fn insert_many_queries(
-        &mut self,
         transacts: Vec<ModelTransaction>,
     ) -> TransactionEntityContainer {
         transacts.into_iter().fold(
@@ -47,7 +45,9 @@ pub trait TransactionQuery {
         )
     }
 
+    #[allow(dead_code)]
     fn insert(&mut self, transact: ModelTransaction);
+    #[allow(dead_code)]
     fn insert_many(&mut self, transacts: Vec<ModelTransaction>);
 }
 impl TransactionQuery for manual::Container<ModelTransaction> {
@@ -59,11 +59,11 @@ impl TransactionQuery for manual::Container<ModelTransaction> {
     }
 
     fn insert(&mut self, transact: ModelTransaction) {
-        self.insert_queries(transact).insert_everything(self);
+        Self::insert_queries(transact).insert_everything(self);
     }
 
     fn insert_many(&mut self, transacts: Vec<ModelTransaction>) {
-        self.insert_many_queries(transacts).insert_everything(self);
+        Self::insert_many_queries(transacts).insert_everything(self);
     }
 }
 

@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    db::{builders::transaction_builder::TransactionBuilder, InitUuid},
-    model::data_import::DataImport,
+    db::builders::transaction_builder::TransactionBuilder,
+    model::{data_import::DataImport, group::Group},
     uuid_impls,
 };
 
@@ -21,7 +21,7 @@ use super::{
     data_import::{row::ImportRow, row_item::ImportRowItem},
     origins::Origin,
     tags::Tag,
-    transactions::{group::GroupUuid, Transaction},
+    transactions::Transaction,
 };
 
 pub type ModelProfile = Profile;
@@ -52,16 +52,6 @@ pub enum State {
     #[sea_orm(string_value = "Deleted")]
     Deleted,
 }
-
-type DbProfileParts = (
-    (usize, usize),
-    char,
-    ExpenseColumn,
-    DateTimeColumn,
-    HashMap<usize, ParsableWrapper>,
-    usize,
-    Vec<String>,
-);
 
 impl Profile {
     #[allow(clippy::too_many_arguments)]
@@ -99,39 +89,33 @@ impl Profile {
             default_tags: default_tags.into_iter().unique().collect_vec(),
             origin,
             state: State::Active,
-            datetime_created: Local::now().into(),
+            datetime_created: Local::now(),
         }
     }
+
     pub fn parse_file(
         &self,
         mut import: DataImport,
     ) -> Result<ParseResult, ProfileError> {
-        assert!(import.rows.first().is_some());
-        assert!(import.rows.first().unwrap().items.first().is_some());
-        assert!(!import
-            .rows
-            .first()
-            .unwrap()
-            .items
-            .first()
-            .unwrap()
-            .content
-            .is_empty());
+        assert!(!import.rows.is_empty());
+        assert!(!import.rows.first().unwrap().row_content.is_empty());
 
-        let (transactions, mut profile_errors) =
-            import.rows.iter_mut().enumerate().fold(
-                (vec![], vec![]),
-                |(mut trxs, mut errs), (index, mut row)| {
-                    //TODO: dont forget to check that this is correct
-                    if index >= self.margins.0 && index < self.margins.1 {
-                        match self.parse_row(&mut row) {
-                            Ok(trx) => trxs.push(trx),
-                            Err(err) => errs.push(err),
-                        }
-                    }
-                    (trxs, errs)
-                },
-            );
+        let num_rows = import.rows.len();
+        let (transactions, mut profile_errors) = import
+            .rows
+            .iter_mut()
+            .enumerate()
+            .filter(|(index, _)| {
+                *index >= self.margins.0 && *index < (num_rows - self.margins.1)
+            })
+            .fold((vec![], vec![]), |(mut trxs, mut errs), (_, row)| {
+                //TODO: dont forget to check that this is correct
+                match self.parse_row(row) {
+                    Ok(trx) => trxs.push(trx),
+                    Err(err) => errs.push(err),
+                }
+                (trxs, errs)
+            });
 
         if !profile_errors.is_empty() {
             Err(profile_errors.remove(0))
@@ -143,9 +127,10 @@ impl Profile {
     fn parse_row(
         &self,
         row: &mut ImportRow,
-    ) -> Result<Transaction, ProfileError> {
+    ) -> Result<(Transaction, Group), ProfileError> {
+        assert!(row.items.is_empty());
         // ToDo actually creat whole group here
-        let group_uuid = GroupUuid::init();
+        let group = Group::init();
 
         let mut row_items = row
             .row_content
@@ -165,11 +150,11 @@ impl Profile {
                 |pos: usize| -> ImportRowItem { row_items.remove(pos) };
 
             let movement =
-                self.amount.parse_str(group_uuid, &mut get_from_vec)?;
+                self.amount.parse_str(group.uuid, &mut get_from_vec)?;
             let _ = transac_builder.movement.insert(movement.0);
 
             let datetime =
-                self.datetime.parse_str(group_uuid, &mut get_from_vec)?;
+                self.datetime.parse_str(group.uuid, &mut get_from_vec)?;
             let _ = transac_builder.datetime.insert(datetime.0);
 
             row.items.extend(movement.1);
@@ -178,15 +163,16 @@ impl Profile {
 
         let (props, items) = row_items
             .into_iter()
-            .enumerate()
-            .filter_map(|(index, item)| {
-                self.other_data.get(&index).map(|parser| (item, parser))
+            .filter_map(|item| {
+                self.other_data
+                    .get(&item.item_index)
+                    .map(|parser| (item, parser))
             })
             .fold(
                 (vec![], vec![]),
                 |(mut props, mut items), (mut item, parser)| {
                     let property =
-                        parser.to_property(group_uuid, &item.content).unwrap();
+                        parser.to_property(group.uuid, &item.content).unwrap();
                     item.set_property_ref(&property);
                     props.push(property);
                     items.push(item);
@@ -195,34 +181,36 @@ impl Profile {
             );
 
         transac_builder.properties.extend(props);
-        row.items.extend(items);
+        row.items = items;
 
         transac_builder.feed_tags(self.default_tags.clone());
 
-        row.group_uuid = Some(group_uuid);
+        row.group_uuid = Some(group.uuid);
 
-        Ok(transac_builder.build())
-    }
-
-    fn split_row(&self, row: &str) -> Vec<String> {
-        row.split(self.delimiter).map(str::to_owned).collect()
-    }
-
-    fn cut_margins<'a>(&self, mut rows: Vec<&'a str>) -> Vec<&'a str> {
-        rows.drain(0..self.margins.0);
-        let lines_len = rows.len();
-        rows.drain((lines_len - self.margins.1)..lines_len);
-        rows
+        Ok((transac_builder.build(), group))
     }
 }
 
 pub struct ParseResult {
     pub(crate) rows: Vec<Transaction>,
+    pub(crate) groups: Vec<Group>,
     pub(crate) import: DataImport,
 }
 
 impl ParseResult {
-    pub fn new(rows: Vec<Transaction>, import: DataImport) -> Self {
-        Self { rows, import }
+    pub fn new(parses: Vec<(Transaction, Group)>, import: DataImport) -> Self {
+        let (rows, groups) = parses.into_iter().fold(
+            (vec![], vec![]),
+            |(mut t, mut g), touple| {
+                t.push(touple.0);
+                g.push(touple.1);
+                (t, g)
+            },
+        );
+        Self {
+            rows,
+            import,
+            groups,
+        }
     }
 }

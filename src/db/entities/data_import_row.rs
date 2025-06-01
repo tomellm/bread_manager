@@ -4,7 +4,7 @@ use sea_orm::entity::prelude::*;
 
 use crate::model::{
     data_import::{row::ImportRowUuid, DataImportUuid},
-    transactions::group::GroupUuid,
+    group::GroupUuid,
 };
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]

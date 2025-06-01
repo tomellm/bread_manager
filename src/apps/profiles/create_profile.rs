@@ -48,15 +48,13 @@ impl CreateProfile {
         reciver: mpsc::Receiver<egui::DroppedFile>,
         factory: Factory,
     ) -> Self {
-        let mut profiles =
-            factory.builder().name("create_profile_profiles").manual();
+        let mut profiles = factory.builder().file(file!()).manual();
         profiles.stored_query(ProfileQuery::all);
 
-        let mut origins =
-            factory.builder().name("create_profile_origins").manual();
+        let mut origins = factory.builder().file(file!()).manual();
         origins.stored_query(OriginsQuery::all);
 
-        let mut tags = factory.builder().name("create_profile_tags").manual();
+        let mut tags = factory.builder().file(file!()).manual();
         tags.stored_query(TagsQuery::all);
 
         Self {

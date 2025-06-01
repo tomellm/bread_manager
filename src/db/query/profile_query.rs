@@ -12,13 +12,13 @@ use hermes::{
 use itertools::Itertools;
 use sea_orm::{
     ColumnTrait, DatabaseConnection, DbErr, EntityTrait, FromQueryResult,
-    IntoActiveModel, QueryFilter, QuerySelect, QueryTrait,
+    IntoActiveModel, QueryFilter, QuerySelect, QueryTrait, Select,
 };
 
 use crate::{
     db::{
         combine_types, datetime_to_str,
-        entities::{prelude::*, profile::ParsableWrapper, profile_tags},
+        entities::{prelude::*, profile::ParsableWrapper},
         VecIntoActiveModel,
     },
     model::{
@@ -37,11 +37,13 @@ use crate::{
 use super::{
     super::{entities, parse_datetime_str},
     content_description_query::{all_profile_descriptions, ProfileDescription},
-    tags_query::all_profile_tags,
+    tags_query::{all_profile_tags, profile_tags_from_models},
 };
 
 pub trait ProfileQuery {
     fn all(&mut self);
+
+    fn all_active(&mut self);
 
     fn deleted_query(
         to_delete: &ProfileUuid,
@@ -50,6 +52,8 @@ pub trait ProfileQuery {
             .filter(entities::profile::Column::Uuid.eq(**to_delete))
             .col_expr(entities::profile::Column::State, State::Deleted.into())
     }
+
+    fn delete(&mut self, to_delete: &ProfileUuid);
 
     fn deleted_many_query(
         to_delete: impl IntoIterator<Item = ProfileUuid>,
@@ -65,14 +69,19 @@ pub trait ProfileQuery {
         impl QueryTrait + Send + 'static,
         impl QueryTrait + Send + 'static,
         impl QueryTrait + Send + 'static,
+        impl QueryTrait + Send + 'static,
     ) {
-        let (profile, descs, profile_descs) = profile_from_model(to_insert);
+        let (profile, descs, profile_descs, tags) =
+            profile_from_model(to_insert);
         (
             Profile::insert(profile.into_active_model()).do_nothing(),
-            ContentDescription::insert_many(descs.into_active_model_vec()).do_nothing(),
+            ContentDescription::insert_many(descs.into_active_model_vec())
+                .do_nothing(),
             ProfileContentDescriptions::insert_many(
                 profile_descs.into_active_model_vec(),
-            ).do_nothing(),
+            )
+            .do_nothing(),
+            ProfileTags::insert_many(tags.into_active_model_vec()).do_nothing(),
         )
     }
 
@@ -83,7 +92,25 @@ pub(super) async fn all_profiles(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
 ) -> Result<Vec<ModelProfile>, DbErr> {
-    let builders = Profile::find()
+    all_profiles_core(db, collector, None).await
+}
+
+pub(super) async fn all_profiles_filtered(
+    db: &DatabaseConnection,
+    collector: &mut TablesCollector,
+    filters: impl Fn(Select<Profile>) -> Select<Profile> + Send + 'static,
+) -> Result<Vec<ModelProfile>, DbErr> {
+    all_profiles_core(db, collector, Some(Box::new(filters))).await
+}
+
+async fn all_profiles_core(
+    db: &DatabaseConnection,
+    collector: &mut TablesCollector,
+    filters: Option<
+        Box<dyn Fn(Select<Profile>) -> Select<Profile> + Send + 'static>,
+    >,
+) -> Result<Vec<ModelProfile>, DbErr> {
+    let base_query = Profile::find()
         .select_only()
         .columns([
             entities::profile::Column::Uuid,
@@ -101,7 +128,14 @@ pub(super) async fn all_profiles(
         ])
         .column_as(entities::origins::Column::Name, "origin_name")
         .column_as(entities::origins::Column::Description, "origin_description")
-        .left_join(Origins)
+        .left_join(Origins);
+
+    let filtered_query = match filters {
+        Some(filters) => filters(base_query),
+        None => base_query,
+    };
+
+    let builders = filtered_query
         .and_find_tables(collector)
         .into_model::<ProfileWithOrigin>()
         .all(db)
@@ -151,12 +185,36 @@ impl ProfileQuery for manual::Container<ModelProfile> {
         });
     }
 
+    fn all_active(&mut self) {
+        self.manual_query(|db, mut collector| async move {
+            let profiles = all_profiles_filtered(
+                &db,
+                &mut collector,
+                |query: Select<Profile>| {
+                    query.filter(
+                        entities::profile::Column::State.eq(State::Active),
+                    )
+                },
+            )
+            .await;
+            ExecutedQuery::new_collector(collector, profiles)
+        });
+    }
+
     fn insert(&mut self, to_insert: ModelProfile) {
-        let (profs, descs, prof_descs) = Self::insert_query(to_insert);
+        let (profs, descs, prof_descs, tags) = Self::insert_query(to_insert);
         // ToDo, origins and tags also need to be inserted here
         self.execute_many(|transac| {
-            transac.execute(profs).execute(descs).execute(prof_descs);
+            transac
+                .execute(profs)
+                .execute(descs)
+                .execute(prof_descs)
+                .execute(tags);
         });
+    }
+
+    fn delete(&mut self, to_delete: &ProfileUuid) {
+        self.execute(Self::deleted_query(to_delete));
     }
 }
 
@@ -266,7 +324,7 @@ fn profile_from_model(
         datetime,
         other_data,
         width,
-        default_tags: _default_tags,
+        default_tags,
         origin,
         state,
         datetime_created,
@@ -275,12 +333,14 @@ fn profile_from_model(
     entities::profile::Model,
     Vec<entities::content_description::Model>,
     Vec<entities::profile_content_descriptions::Model>,
+    Vec<entities::profile_tags::Model>,
 ) {
     // ToDo: move serialization from this function to
     // here and serialize the whole hashmap instead of
     // just the single wrapper
     let (other_data, descs, profile_descs) =
         parsable_wrappers_from_model(uuid, other_data);
+    let profile_tags = profile_tags_from_models(default_tags, &uuid);
 
     (
         entities::profile::Model {
@@ -299,6 +359,7 @@ fn profile_from_model(
         },
         descs,
         profile_descs,
+        profile_tags,
     )
 }
 
@@ -371,10 +432,7 @@ fn parsable_wrapper_from_model(
         }
         _ => None,
     };
-    (
-        ParsableWrapper::from(model),
-        container,
-    )
+    (ParsableWrapper::from(model), container)
 }
 
 fn description_from_model(

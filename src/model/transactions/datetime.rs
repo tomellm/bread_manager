@@ -2,9 +2,9 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveTime};
 
-use crate::{db::InitUuid, uuid_impls};
+use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 
-use super::{group::GroupUuid, properties::OriginType};
+use super::properties::OriginType;
 
 pub(crate) type ModelDatetime = Datetime;
 

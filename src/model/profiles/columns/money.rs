@@ -4,10 +4,10 @@ use num_traits::Float;
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
+    group::GroupUuid,
     profiles::error::ProfileError,
     transactions::{
-        group::GroupUuid, movement::ModelMovement,
-        properties::TransactionProperties,
+        movement::ModelMovement, properties::TransactionProperties,
     },
 };
 

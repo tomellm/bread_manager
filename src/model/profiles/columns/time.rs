@@ -2,10 +2,10 @@ use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
+    group::GroupUuid,
     profiles::error::ProfileError,
     transactions::{
-        datetime::ModelDatetime, group::GroupUuid,
-        properties::TransactionProperties,
+        datetime::ModelDatetime, properties::TransactionProperties,
     },
 };
 

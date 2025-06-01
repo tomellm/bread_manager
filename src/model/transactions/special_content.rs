@@ -1,10 +1,10 @@
 use sea_orm::{DeriveActiveEnum, EnumIter};
 use serde::{Deserialize, Serialize};
 
-use crate::{db::InitUuid, uuid_impls};
+use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 use sea_orm::entity::prelude::*;
 
-use super::{content_description::ContentDescription, group::GroupUuid};
+use super::content_description::ContentDescription;
 
 pub(crate) type ModelSpecialContent = SpecialContent;
 

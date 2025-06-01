@@ -8,6 +8,7 @@ use hermes::{
     factory::Factory,
 };
 use tokio::sync::mpsc;
+use tracing::info;
 
 use crate::{db::query::profile_query::ProfileQuery, model::profiles::Profile};
 
@@ -24,9 +25,12 @@ impl App for Profiles {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().show(ui, |ui| {
-                ui.heading("Profiles");
+                ui.horizontal(|ui| {
+                    ui.heading("Profiles");
+                    ui.label(self.profiles.data().len().to_string());
+                });
 
-                //let delete_action = self.profiles.action();
+                let mut to_delete = None;
                 let profiles = self.profiles.data();
 
                 if profiles.is_empty() {
@@ -59,15 +63,19 @@ impl App for Profiles {
                                     self.create_profile.edit(profile);
                                 }
                                 if ui.button("delete").clicked() {
-                                    //delete_action(ProfileQuery::deleted_query(
-                                    //    &profile.uuid,
-                                    //));
+                                    let _ = to_delete.insert(profile.uuid);
                                 }
                             });
                             ui.end_row();
                         }
                     });
                 }
+
+                if let Some(to_delete_uuid) = to_delete.take() {
+                    info!("deleting uuid : {to_delete_uuid:?}");
+                    self.profiles.delete(&to_delete_uuid);
+                }
+
                 ui.separator();
                 self.create_profile.ui_update(ui);
             });
@@ -82,8 +90,8 @@ impl Profiles {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut profiles =
-                factory.builder().name("profiles_profiles").manual();
-            profiles.stored_query(ProfileQuery::all);
+                factory.builder().file(file!()).manual();
+            profiles.stored_query(ProfileQuery::all_active);
             Self {
                 create_profile: CreateProfile::new(reciver, factory),
                 profiles,

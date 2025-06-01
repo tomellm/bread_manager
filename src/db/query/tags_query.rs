@@ -1,6 +1,9 @@
 use crate::{
     db::entities::{self, prelude::*},
-    model::tags::{ModelTag, Tag, TagUuid},
+    model::{
+        profiles::ProfileUuid,
+        tags::{ModelTag, Tag, TagUuid},
+    },
 };
 use hermes::{
     carrier::{
@@ -11,8 +14,7 @@ use hermes::{
     ContainsTables, TablesCollector,
 };
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, FromQueryResult,
-    IntoActiveModel, QuerySelect, QueryTrait,
+    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, FromQueryResult, IntoActiveModel, QuerySelect, QueryTrait
 };
 use uuid::Uuid;
 
@@ -94,7 +96,7 @@ pub(super) async fn all_profile_tags(
         .column(tags::Column::Uuid)
         .column(tags::Column::Tag)
         .column(tags::Column::Description)
-        .right_join(Profile)
+        .right_join(ProfileTags)
         .and_find_tables(collector)
         .into_model()
         .all(db)
@@ -111,11 +113,24 @@ pub(super) async fn all_transaction_tags(
         .column(tags::Column::Uuid)
         .column(tags::Column::Tag)
         .column(tags::Column::Description)
-        .right_join(Transaction)
+        .right_join(TransactionTags)
         .and_find_tables(collector)
         .into_model()
         .all(db)
         .await
+}
+
+pub(super) fn profile_tags_from_models(
+    default_tags: Vec<ModelTag>,
+    profile_uuid: &ProfileUuid,
+) -> Vec<entities::profile_tags::Model> {
+    default_tags
+        .into_iter()
+        .map(|t| entities::profile_tags::Model {
+            profile_uuid: *profile_uuid,
+            tag_uuid: t.uuid,
+        })
+        .collect()
 }
 
 impl From<RelatedTag> for ModelTag {

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::{
     db::InitUuid,
-    model::{origins::Origin, tags::Tag, transactions::group::GroupUuid},
+    model::{group::GroupUuid, origins::Origin, tags::Tag},
 };
 
 use super::{
@@ -235,7 +235,7 @@ impl IntermediateProfileState {
             other_cols: profile
                 .other_data
                 .iter()
-                .map(|(a, b)| (*a, b.clone()))
+                .map(|(a, b)| (*a, ParsableWrapper::init_from(b)))
                 .collect(),
             default_tags: profile.default_tags.clone(),
             origin: Some(profile.origin.clone()),
