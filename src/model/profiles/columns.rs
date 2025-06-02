@@ -100,7 +100,7 @@ impl ExpenseColumn {
                 let mut item_1 = value_getter(*pos1);
                 let mut item_2 = value_getter(*pos2);
                 let amount = income.parse_str(&item_1.content)?
-                    - expense.parse_str(&item_2.content)?;
+                    + expense.parse_str(&item_2.content)?;
 
                 let movement = ModelMovement::init(amount, group_uuid);
                 item_1.set_movement_ref(movement.uuid);
@@ -116,7 +116,7 @@ impl ExpenseColumn {
             }
             ExpenseColumn::OnlyExpense(pos, pos_expense) => {
                 let mut item = value_getter(*pos);
-                let amount = -1i32 * pos_expense.parse_str(&item.content)?;
+                let amount = pos_expense.parse_str(&item.content)?;
                 let movement = ModelMovement::init(amount, group_uuid);
                 item.set_movement_ref(movement.uuid);
                 Ok((movement, vec![item]))
