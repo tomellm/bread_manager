@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 use crate::{components::table::TableColumn, model::transactions::Transaction};
 
-pub(crate) struct RecordsTable {
+pub(crate) struct TransactsTable {
     datetime_created: TableColumn<Transaction, DateTime<Local>>,
     uuid: TableColumn<Transaction, Uuid>,
     amount: TableColumn<Transaction, i32>,
@@ -15,7 +15,7 @@ pub(crate) struct RecordsTable {
     //origin: TableColumn<Transaction, String>,
 }
 
-impl RecordsTable {
+impl TransactsTable {
     pub(crate) fn toggles(&mut self, ui: &mut Ui) {
         ui.horizontal(|ui| {
             self.datetime_created.toggle(ui);
@@ -95,7 +95,7 @@ impl RecordsTable {
     }
 }
 
-impl Default for RecordsTable {
+impl Default for TransactsTable {
     fn default() -> Self {
         Self {
             datetime_created: TableColumn::inactive(

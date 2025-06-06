@@ -6,7 +6,7 @@ use crate::{
         datetime_to_str,
         entities::{self, prelude::*},
         query::transaction_query::EntityTrait,
-        VecIntoActiveModel,
+        IntoInsertQueries, VecIntoActiveModel,
     },
     model::transactions::{
         datetime::ModelDatetime,
@@ -48,56 +48,37 @@ impl TransactionEntityContainer {
         builder: &'builder mut TransactionBuilder<'executor>,
     ) -> &'builder mut TransactionBuilder<'executor> {
         builder
-            .execute(
-                Transaction::insert_many(
-                    self.transactions.into_active_model_vec(),
-                )
-                .do_nothing(),
+            .execute_many(self.transactions.into_insert_queries(|a| {
+                Transaction::insert_many(a).do_nothing()
+            }))
+            .execute_many(
+                self.movements.into_insert_queries(|a| {
+                    Movement::insert_many(a).do_nothing()
+                }),
             )
-            .execute(
-                Movement::insert_many(self.movements.into_active_model_vec())
-                    .do_nothing(),
+            .execute_many(self.transaction_movements.into_insert_queries(|a| {
+                TransactionMovement::insert_many(a).do_nothing()
+            }))
+            .execute_many(
+                self.datetimes.into_insert_queries(|a| {
+                    Datetime::insert_many(a).do_nothing()
+                }),
             )
-            .execute(
-                TransactionMovement::insert_many(
-                    self.transaction_movements.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
-            .execute(
-                Datetime::insert_many(self.datetimes.into_active_model_vec())
-                    .do_nothing(),
-            )
-            .execute(
-                TransactionDatetime::insert_many(
-                    self.transaction_datetimes.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
-            .execute(
-                TextContent::insert_many(
-                    self.text_content.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
-            .execute(
-                TransactionText::insert_many(
-                    self.transaction_text.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
-            .execute(
-                SpecialContent::insert_many(
-                    self.special_content.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
-            .execute(
-                TransactionSpecial::insert_many(
-                    self.transaction_special.into_active_model_vec(),
-                )
-                .do_nothing(),
-            )
+            .execute_many(self.transaction_datetimes.into_insert_queries(|a| {
+                TransactionDatetime::insert_many(a).do_nothing()
+            }))
+            .execute_many(self.text_content.into_insert_queries(|a| {
+                TextContent::insert_many(a).do_nothing()
+            }))
+            .execute_many(self.transaction_text.into_insert_queries(|a| {
+                TransactionText::insert_many(a).do_nothing()
+            }))
+            .execute_many(self.special_content.into_insert_queries(|a| {
+                SpecialContent::insert_many(a).do_nothing()
+            }))
+            .execute_many(self.transaction_special.into_insert_queries(|a| {
+                TransactionSpecial::insert_many(a).do_nothing()
+            }))
     }
 
     pub fn insert_everything(self, exec: &mut impl ImplExecuteCarrier) {

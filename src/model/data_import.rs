@@ -46,4 +46,11 @@ impl DataImport {
             rows: vec![],
         }
     }
+
+    pub fn sort_by_index(&mut self) {
+        self.rows.sort_by_key(|r| r.row_index);
+        self.rows
+            .iter_mut()
+            .for_each(|r| r.items.sort_by_key(|i| i.item_index));
+    }
 }

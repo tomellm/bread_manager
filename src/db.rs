@@ -1,8 +1,9 @@
 use std::{collections::HashMap, hash::Hash};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
-use itertools::Itertools;
-use sea_orm::{ActiveModelTrait, IntoActiveModel};
+use itertools::{Chunk, Itertools};
+use sea_orm::{ActiveModelTrait, Insert, IntoActiveModel, QueryTrait};
+use sea_query::IdenList;
 use uuid::Uuid;
 
 pub mod builders;
@@ -62,6 +63,33 @@ where
 {
     fn into_active_model_vec(self) -> impl Iterator<Item = A> {
         self.into_iter().map(IntoActiveModel::into_active_model)
+    }
+}
+
+pub trait IntoInsertQueries<T, A>
+where
+    T: IntoActiveModel<A>,
+    A: ActiveModelTrait,
+{
+    fn into_insert_queries<Q>(self, insert_fn: impl Fn(Vec<A>) -> Q) -> Vec<Q>
+    where
+        Q: QueryTrait + Send + 'static;
+}
+
+impl<T, A> IntoInsertQueries<T, A> for Vec<T>
+where
+    T: IntoActiveModel<A>,
+    A: ActiveModelTrait,
+{
+    fn into_insert_queries<Q>(self, insert_fn: impl Fn(Vec<A>) -> Q) -> Vec<Q>
+    where
+        Q: QueryTrait + Send + 'static,
+    {
+        self.into_active_model_vec()
+            .chunks(100)
+            .into_iter()
+            .map(|chunk| insert_fn(chunk.collect_vec()))
+            .collect_vec()
     }
 }
 

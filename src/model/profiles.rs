@@ -95,19 +95,14 @@ impl Profile {
 
     pub fn parse_file(
         &self,
-        mut import: DataImport,
+        mut rows: Vec<ImportRow>,
     ) -> Result<ParseResult, ProfileError> {
-        assert!(!import.rows.is_empty());
-        assert!(!import.rows.first().unwrap().row_content.is_empty());
+        assert!(!rows.is_empty());
+        assert!(!rows.first().unwrap().row_content.is_empty());
 
-        let num_rows = import.rows.len();
-        let (transactions, mut profile_errors) = import
-            .rows
+        let (transactions, mut profile_errors) = rows
             .iter_mut()
             .enumerate()
-            .filter(|(index, _)| {
-                *index >= self.margins.0 && *index < (num_rows - self.margins.1)
-            })
             .fold((vec![], vec![]), |(mut trxs, mut errs), (_, row)| {
                 //TODO: dont forget to check that this is correct
                 match self.parse_row(row) {
@@ -120,7 +115,7 @@ impl Profile {
         if !profile_errors.is_empty() {
             Err(profile_errors.remove(0))
         } else {
-            Ok(ParseResult::new(transactions, import))
+            Ok(ParseResult::new(transactions, rows))
         }
     }
 
@@ -189,16 +184,30 @@ impl Profile {
 
         Ok((transac_builder.build(), group))
     }
+
+    pub fn is_margin(&self, index: usize, total_len: usize) -> bool {
+        self.is_top_margin(index) || self.is_bottom_margin(index, total_len)
+    }
+
+    pub fn is_top_margin(&self, index: usize) -> bool {
+        index < self.margins.0
+    }
+    pub fn is_bottom_margin(&self, index: usize, total_len: usize) -> bool {
+        index >= (total_len - self.margins.1)
+    }
 }
 
 pub struct ParseResult {
     pub(crate) rows: Vec<Transaction>,
     pub(crate) groups: Vec<Group>,
-    pub(crate) import: DataImport,
+    pub(crate) parsed_rows: Vec<ImportRow>,
 }
 
 impl ParseResult {
-    pub fn new(parses: Vec<(Transaction, Group)>, import: DataImport) -> Self {
+    pub fn new(
+        parses: Vec<(Transaction, Group)>,
+        parsed_rows: Vec<ImportRow>,
+    ) -> Self {
         let (rows, groups) = parses.into_iter().fold(
             (vec![], vec![]),
             |(mut t, mut g), touple| {
@@ -209,8 +218,8 @@ impl ParseResult {
         );
         Self {
             rows,
-            import,
             groups,
+            parsed_rows,
         }
     }
 }

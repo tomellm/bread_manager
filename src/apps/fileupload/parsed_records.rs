@@ -1,30 +1,33 @@
+mod find_overlaps;
+mod import_parsing_state;
+mod results_with_overlaps;
+
 use crate::{
-    components::expense_records::table::RecordsTable,
+    apps::fileupload::parsed_records::{
+        find_overlaps::find_overlaps, results_with_overlaps::ImportOverlap,
+    },
+    components::expense_records::table::TransactsTable,
     db::query::{
         data_import_query::DataImportQuery, group_query::GroupsQuery,
         transaction_query::TransactionQuery,
     },
     model::{
         data_import::{row::ImportRow, DataImport},
-        group::{Group, ModelGroup},
-        profiles::{ParseResult, Profile},
+        group::ModelGroup,
         transactions::Transaction,
     },
-    utils::PromiseUtilities,
 };
 use egui::{Grid, ScrollArea, Spinner, Ui};
-use egui_light_states::UiStates;
 use hermes::{
-    carrier::execute::ImplExecuteCarrier,
-    container::{data::ImplData, manual},
-    factory::Factory,
+    carrier::execute::ImplExecuteCarrier, container::manual, factory::Factory,
 };
-use itertools::Itertools;
-use lazy_async_promise::ImmediateValuePromise;
-use std::{fs, mem, sync::Arc};
-use tracing::info;
+use import_parsing_state::ImportParsingState;
+use results_with_overlaps::{
+    overlap_control_buttons, ImportResultWithOverlap, RowSelectionStatus,
+};
+use std::mem;
 
-use super::{files_to_parse::FileToParse, ParsingFileState};
+use super::ParsingFileState;
 
 pub(super) struct ParsedRecords {
     transactions: manual::Container<Transaction>,
@@ -32,12 +35,7 @@ pub(super) struct ParsedRecords {
 
     import_state: ImportParsingState,
     selected_overlay: usize,
-
-    //linker: Linker,
-    //columns_info: RecordsTable,
-    //
-    //ui: UiStates,
-    //table: RecordsTable,
+    transacts_table: TransactsTable,
 }
 
 impl ParsedRecords {
@@ -52,12 +50,9 @@ impl ParsedRecords {
             Self {
                 transactions,
                 imports,
-                //linker: Linker::init(factory).await,
                 import_state: ImportParsingState::None,
                 selected_overlay: 0,
-                //columns_info: RecordsTable::default(),
-                //ui: UiStates::default(),
-                //table: RecordsTable::default(),
+                transacts_table: TransactsTable::default(),
             }
         }
     }
@@ -71,13 +66,13 @@ impl ParsedRecords {
 
         self.transactions.state_update(false);
         self.imports.state_update(true);
-        //self.linker.state_update();
 
         if parsing_file.has_new_file() && self.import_state.ready_for_new() {
             let file_to_parse = parsing_file.start_parsing();
-            self.find_overlaps(file_to_parse);
+            find_overlaps(self, file_to_parse);
         }
-
+        let mut clear_parse = false;
+        let mut save_parse = false;
         ui.vertical_centered(|ui| match &mut self.import_state {
             ImportParsingState::None => {
                 ui.label(PARSED_RECORDS_EMPTY_TEXT);
@@ -91,124 +86,13 @@ impl ParsedRecords {
                     ui.vertical(|ui| {
                         ui.label("There are no overlaps to resolve");
                         if ui.button("parse file").clicked() {
-                            self.start_parse();
+                            self.import_state.start_parse();
                             parsing_file.finished_parsing();
                         }
                     });
                 } else {
-                    ui.horizontal(|ui| {
-                        ui.add_enabled_ui(self.selected_overlay > 0, |ui| {
-                            if ui.button("<").clicked() {
-                                self.selected_overlay -= 1;
-                            }
-                        });
-                        ui.label(format!(
-                            "There are a total of {} overlaps!",
-                            overlaps.overlaps.len()
-                        ));
-                        ui.add_enabled_ui(
-                            self.selected_overlay < overlaps.overlaps.len() - 1,
-                            |ui| {
-                                if ui.button(">").clicked() {
-                                    self.selected_overlay += 1;
-                                }
-                            },
-                        );
-                    });
-
-                    let mut remove_this_overlap = false;
-                    let mut there_was_overlap = false;
-                    let mut check_overlapping = false;
-                    let mut uncheck_all = false;
-
-                    if !overlaps.is_overlap_cleared() {
-                        Self::overlap_control_buttons(
-                            &mut check_overlapping,
-                            &mut uncheck_all,
-                            &mut remove_this_overlap,
-                            overlaps,
-                            ui,
-                        );
-                    }
-
-                    match overlaps.overlaps.get(self.selected_overlay) {
-                        Some(overlap) => {
-                            let max_len =
-                                overlap.import.rows.len() + overlaps.rows.len();
-
-                            ScrollArea::new(true).show(ui, |ui| {
-                                Grid::new("overlap_grid").show(ui, |ui| {
-                                    for index in 0..max_len {
-                                        let overlap_record = (index
-                                            >= overlap.first_match)
-                                            .then(|| {
-                                                overlap.import.rows.get(
-                                                    index - overlap.first_match,
-                                                )
-                                            })
-                                            .flatten();
-                                        ui.label(
-                                            overlap_record
-                                                .map(|row| {
-                                                    clamp_str(
-                                                        row.row_content
-                                                            .as_str(),
-                                                    )
-                                                })
-                                                .unwrap_or_default(),
-                                        );
-
-                                        let mut import_record =
-                                            overlaps.rows.get_mut(index);
-                                        match import_record.as_mut() {
-                                            Some(rec) => {
-                                                if overlap_record.is_some()
-                                                    && check_overlapping
-                                                {
-                                                    rec.0 = true;
-                                                }
-                                                if uncheck_all {
-                                                    rec.0 = false;
-                                                }
-                                                ui.checkbox(&mut rec.0, "")
-                                            }
-                                            None => ui.label(""),
-                                        };
-                                        ui.label(
-                                            import_record
-                                                .as_ref()
-                                                .map(|row| {
-                                                    clamp_str(
-                                                        row.1
-                                                            .row_content
-                                                            .as_str(),
-                                                    )
-                                                })
-                                                .unwrap_or_default(),
-                                        );
-                                        ui.end_row();
-
-                                        if overlap_record.is_none()
-                                            && import_record.is_none()
-                                        {
-                                            return;
-                                        } else if overlap_record.is_some()
-                                            && import_record.is_some()
-                                        {
-                                            there_was_overlap = true;
-                                        }
-                                    }
-                                });
-                            });
-                        }
-                        None => {
-                            self.selected_overlay = 0;
-                            ui.label("... one moment, loading new overlap ...");
-                        }
-                    }
-                    if !there_was_overlap || remove_this_overlap {
-                        overlaps.remove_overlap(self.selected_overlay);
-                    }
+                    clear_parse =
+                        show_overlaps(overlaps, &mut self.selected_overlay, ui);
                 }
             }
             ImportParsingState::Finished(transactions, data_import, groups) => {
@@ -223,109 +107,14 @@ impl ParsedRecords {
                 ));
                 ui.label(format!("Number of Groups: {}", groups.len()));
                 if ui.button("save").clicked() {
-                    self.save_parse();
+                    save_parse = true;
                 }
+                self.transacts_table.show(transactions, ui);
             }
         });
-    }
-
-    fn find_overlaps(&mut self, file: FileToParse) {
-        let FileToParse {
-            file,
-            profile: Some(profile),
-            ..
-        } = file
-        else {
-            unreachable!(
-                "Please select a profile for the file [{}] since no profile was selected.",
-                file.file.name
-            );
-        };
-
-        let all_imports = Arc::clone(self.imports.data());
-
-        let future = ImmediateValuePromise::new(async move {
-            let file = file.path.unwrap();
-
-            let file_str = fs::read_to_string(&file).unwrap();
-            let import_rows = file_str
-                .lines()
-                .enumerate()
-                .map(|(index, line)| ImportRow::init(line.to_string(), index))
-                .collect_vec();
-
-            let new_import = DataImport::init(profile.uuid, &file_str, file);
-
-            let overlaps = all_imports
-                .iter()
-                .filter_map(|import| {
-                    let mut first_match = None;
-                    let sorted_counts = import
-                        .rows
-                        .iter()
-                        .sorted_by_key(|row| row.row_index)
-                        .counts_by(|row| {
-                            for (index, new_row) in
-                                new_import.rows.iter().enumerate()
-                            {
-                                if row.row_content.eq(&new_row.row_content) {
-                                    if first_match.is_none() {
-                                        first_match = Some(index);
-                                    }
-                                    return true;
-                                }
-                            }
-                            false
-                        });
-
-                    let match_count = sorted_counts.get(&true).unwrap_or(&0);
-                    match match_count {
-                        0 => None,
-                        _ => Some(ImportOverlap::new(
-                            import.clone(),
-                            *match_count,
-                            first_match.unwrap(),
-                        )),
-                    }
-                })
-                .collect_vec();
-
-            Ok(ImportResultWithOverlap::new(
-                new_import,
-                import_rows,
-                profile,
-                overlaps,
-            ))
-        });
-        self.import_state.set_overlaps(future);
-    }
-
-    fn start_parse(&mut self) {
-        let ImportParsingState::OverlapsFound(overlaps) =
-            mem::replace(&mut self.import_state, ImportParsingState::None)
-        else {
-            unreachable!()
-        };
-        self.import_state.set_parsing(
-            async move {
-                let ImportResultWithOverlap {
-                    mut import,
-                    profile,
-                    rows,
-                    ..
-                } = overlaps;
-
-                // ToDo: ignore the columns that are clicked to ignore
-                import.rows = rows.into_iter().map(|t| t.1).collect();
-                let ParseResult {
-                    rows,
-                    groups,
-                    import,
-                } = profile.parse_file(import).unwrap();
-                (rows, import, groups)
-            }
-            .into(),
-        );
+        if save_parse {
+            self.save_parse();
+        }
     }
 
     fn save_parse(&mut self) {
@@ -345,147 +134,190 @@ impl ParsedRecords {
                 manual::Container::<ModelGroup>::insert_many_query(groups),
             );
             tr_q.add_all_to_transaction(transac)
-                .execute(diq_1)
-                .execute(diq_2)
-                .execute(diq_3);
+                .execute_many(diq_1)
+                .execute_many(diq_2)
+                .execute_many(diq_3);
         });
     }
+}
 
-    fn overlap_control_buttons(
-        check_overlapping: &mut bool,
-        uncheck_all: &mut bool,
-        remove_this_overlap: &mut bool,
-        overlaps: &mut ImportResultWithOverlap,
-        ui: &mut Ui,
-    ) {
-        ui.horizontal(|ui| {
-            *check_overlapping = ui.button("check all overlapping").clicked();
-            *uncheck_all = ui.button("uncheck all").clicked();
-            *remove_this_overlap = ui.button("remove this overlap").clicked();
-            if ui.button("remove all checked").clicked() {
-                overlaps.rows =
-                    overlaps.rows.drain(..).filter(|row| !row.0).collect_vec()
+fn show_overlaps(
+    overlaps: &mut ImportResultWithOverlap,
+    selected_overlay: &mut usize,
+    ui: &mut Ui,
+) -> bool {
+    selected_overlay_controls(selected_overlay, overlaps.overlaps.len(), ui);
+
+    let mut clear_parse = false;
+    let mut remove_this_overlap = false;
+    let mut there_was_overlap = false;
+    let mut check_overlapping = false;
+    let mut uncheck_all = false;
+
+    if !overlaps.is_overlap_cleared() {
+        clear_parse = overlap_control_buttons(
+            &mut check_overlapping,
+            &mut uncheck_all,
+            &mut remove_this_overlap,
+            ui,
+        );
+    }
+
+    match overlaps.overlaps.get_mut(*selected_overlay) {
+        Some(overlap) => {
+            let max_len = overlap.import.rows.len() + overlaps.rows.len();
+
+            ScrollArea::both().show(ui, |ui| {
+                Grid::new("overlap_grid").show(ui, |ui| {
+                    header_row(ui);
+
+                    for index in 0..max_len {
+                        let existing_is_some = existing_row(index, overlap, ui);
+
+                        let mut import_record = overlaps.rows.get_mut(index);
+                        checkbox(
+                            existing_is_some,
+                            &mut import_record,
+                            &mut check_overlapping,
+                            &mut uncheck_all,
+                            ui,
+                        );
+                        new_row(&mut import_record, ui);
+
+                        ui.end_row();
+
+                        if !existing_is_some && import_record.is_none() {
+                            return;
+                        } else if existing_is_some && import_record.is_some() {
+                            there_was_overlap = true;
+                        }
+                    }
+                });
+            });
+        }
+        None => {
+            *selected_overlay = 0;
+            ui.label("... one moment, loading new overlap ...");
+        }
+    }
+    if !there_was_overlap || remove_this_overlap {
+        overlaps.remove_overlap(*selected_overlay);
+    }
+    clear_parse
+}
+
+fn header_row(ui: &mut Ui) {
+    ui.label("");
+    ui.label("Existing Records: ");
+    ui.label("|");
+    ui.label("");
+    ui.label("New Records:");
+    ui.end_row();
+}
+
+fn selected_overlay_controls(
+    selected_overlay: &mut usize,
+    overlays_len: usize,
+    ui: &mut Ui,
+) {
+    ui.horizontal(|ui| {
+        ui.add_enabled_ui(*selected_overlay > 0, |ui| {
+            if ui.button("<").clicked() {
+                *selected_overlay -= 1;
             }
         });
-    }
-}
-
-pub enum ImportParsingState {
-    None,
-    FindingOverlaps(ImmediateValuePromise<ImportResultWithOverlap>),
-    OverlapsFound(ImportResultWithOverlap),
-    Parsing(ImmediateValuePromise<(Vec<Transaction>, DataImport, Vec<Group>)>),
-    Finished(Vec<Transaction>, DataImport, Vec<Group>),
-}
-
-impl ImportParsingState {
-    fn ready_for_new(&self) -> bool {
-        matches!(self, ImportParsingState::None)
-    }
-    fn set_overlaps(
-        &mut self,
-        future: ImmediateValuePromise<ImportResultWithOverlap>,
-    ) {
-        assert!(matches!(self, Self::None));
-        let _ = mem::replace(self, ImportParsingState::FindingOverlaps(future));
-    }
-
-    fn set_parsing(
-        &mut self,
-        future: ImmediateValuePromise<(
-            Vec<Transaction>,
-            DataImport,
-            Vec<Group>,
-        )>,
-    ) {
-        let _ = mem::replace(self, ImportParsingState::Parsing(future));
-    }
-    fn try_resolve(&mut self) {
-        if let Self::FindingOverlaps(finding) = self {
-            finding
-                .poll_and_check_finished()
-                .then(|| finding.take_expect())
-        } else {
-            None
-        }
-        .map(|value| mem::replace(self, Self::OverlapsFound(value)));
-
-        if let Self::Parsing(parsing) = self {
-            parsing
-                .poll_and_check_finished()
-                .then(|| parsing.take_expect())
-        } else {
-            None
-        }
-        .map(|value| {
-            mem::replace(self, Self::Finished(value.0, value.1, value.2))
+        ui.label(format!("There are a total of {overlays_len} overlaps!"));
+        ui.add_enabled_ui(*selected_overlay < overlays_len - 1, |ui| {
+            if ui.button(">").clicked() {
+                *selected_overlay += 1;
+            }
         });
-    }
-    fn clear(&mut self) {
-        let _ = mem::replace(self, ImportParsingState::None);
-    }
+    });
 }
 
-pub struct ImportResultWithOverlap {
-    import: DataImport,
-    rows: Vec<(bool, ImportRow)>,
-    profile: Profile,
-    overlaps: Vec<ImportOverlap>,
+fn existing_row(index: usize, overlap: &ImportOverlap, ui: &mut Ui) -> bool {
+    let overlap_import_row = (index >= overlap.first_match)
+        .then(|| overlap.import.rows.get(index - overlap.first_match))
+        .flatten();
+    ui.label(
+        overlap_import_row
+            .map(|r| r.row_index.to_string())
+            .unwrap_or_default(),
+    );
+    ui.label(
+        overlap_import_row
+            .map(|row| clamp_str(row.row_content.as_str()))
+            .unwrap_or_default(),
+    );
+    overlap_import_row.is_some()
 }
 
-impl ImportResultWithOverlap {
-    pub fn new(
-        import: DataImport,
-        rows: Vec<ImportRow>,
-        profile: Profile,
-        overlaps: Vec<ImportOverlap>,
-    ) -> Self {
-        Self {
-            import,
-            rows: rows.into_iter().map(|rec| (false, rec)).collect(),
-            profile,
-            overlaps,
+fn checkbox(
+    existing_row_is_some: bool,
+    import_record: &mut Option<&mut (RowSelectionStatus, ImportRow)>,
+    check_overlapping: &mut bool,
+    uncheck_all: &mut bool,
+    ui: &mut Ui,
+) {
+    match import_record {
+        Some(rec) => {
+            if existing_row_is_some && *check_overlapping {
+                rec.0.set(true);
+            }
+            if *uncheck_all {
+                rec.0.set(false);
+            }
+            ui.add_enabled_ui(rec.0.include.is_some(), |ui| {
+                ui.checkbox(rec.0.as_mut().unwrap_or(&mut false), "");
+            })
+            .response
+            .on_hover_text(OVERLAP_CECKBOX_TEXT)
+            .on_disabled_hover_text(OVERLAP_CHECKBOX_DISABLED_TEXT);
         }
-    }
-
-    pub fn remove_overlap(&mut self, index: usize) {
-        info!("this ran");
-        self.overlaps.remove(index);
-    }
-
-    pub fn is_overlap_cleared(&self) -> bool {
-        self.overlaps.is_empty()
-    }
-}
-
-pub struct ImportOverlap {
-    import: DataImport,
-    match_count: usize,
-    first_match: usize,
-}
-
-impl ImportOverlap {
-    pub fn new(
-        import: DataImport,
-        match_count: usize,
-        first_match: usize,
-    ) -> Self {
-        Self {
-            import,
-            match_count,
-            first_match,
+        None => {
+            ui.label("");
         }
-    }
+    };
+}
+
+fn new_row(
+    import_record: &mut Option<&mut (RowSelectionStatus, ImportRow)>,
+    ui: &mut Ui,
+) {
+    ui.label(
+        import_record
+            .as_ref()
+            .map(|r| r.1.row_index.to_string())
+            .unwrap_or_default(),
+    );
+    ui.label(
+        import_record
+            .as_ref()
+            .map(|row| clamp_str(row.1.row_content.as_str()))
+            .unwrap_or_default(),
+    );
 }
 
 fn clamp_str(str: &str) -> &str {
-    match str.len() <= 30 {
+    const WIDTH: usize = 100;
+
+    match str.len() <= WIDTH {
         true => str,
-        false => &str[0..30],
+        false => &str[0..WIDTH],
     }
 }
 
 const PARSED_RECORDS_EMPTY_TEXT: &str = r#"
 Drop in some files, select a profile and then click on 'Parse Files' to preview the parsed records
 before clicking on 'Save parsed Data' to save them.
+"#;
+
+const OVERLAP_CECKBOX_TEXT: &str = r#"
+With this checkbox you can decide if this row will be parsed or not. Check it
+to include it in the parse, Uncheck it to exclude it.
+"#;
+
+const OVERLAP_CHECKBOX_DISABLED_TEXT: &str = r#"
+This Checkbox is disabled as is it is part of the Margins mentioned in the 
+Profile settings. These rows are only visible for completions sake
 "#;

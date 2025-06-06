@@ -24,7 +24,7 @@ use crate::{
     db::{
         combine_types,
         entities::{self, prelude::*},
-        parse_datetime_str, VecIntoActiveModel,
+        parse_datetime_str, IntoInsertQueries,
     },
     model::data_import::{row::ModelImportRow, ModelDataImport},
 };
@@ -37,20 +37,21 @@ pub trait DataImportQuery {
     fn insert_queries(
         import: Vec<ModelDataImport>,
     ) -> (
-        impl QueryTrait + Send + 'static,
-        impl QueryTrait + Send + 'static,
-        impl QueryTrait + Send + 'static,
+        Vec<impl QueryTrait + Send + 'static>,
+        Vec<impl QueryTrait + Send + 'static>,
+        Vec<impl QueryTrait + Send + 'static>,
     ) {
         let to_insert = EntitiesToInsert::from(import);
         (
-            DataImport::insert_many(to_insert.imports.into_active_model_vec())
-                .do_nothing(),
-            DataImportRow::insert_many(to_insert.rows.into_active_model_vec())
-                .do_nothing(),
-            DataImportRowItem::insert_many(
-                to_insert.items.into_active_model_vec(),
-            )
-            .do_nothing(),
+            to_insert.imports.into_insert_queries(|a| {
+                DataImport::insert_many(a).do_nothing()
+            }),
+            to_insert.rows.into_insert_queries(|a| {
+                DataImportRow::insert_many(a).do_nothing()
+            }),
+            to_insert.items.into_insert_queries(|a| {
+                DataImportRowItem::insert_many(a).do_nothing()
+            }),
         )
     }
 }
@@ -66,7 +67,7 @@ impl DataImportQuery for manual::Container<ModelDataImport> {
     fn insert(&mut self, import: ModelDataImport) {
         let (imports, rows, items) = Self::insert_queries(vec![import]);
         self.execute_many(|builder| {
-            builder.execute(imports).execute(rows).execute(items);
+            builder.execute_many(imports).execute_many(rows).execute_many(items);
         });
     }
 }

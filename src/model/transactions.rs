@@ -33,7 +33,7 @@ impl Transaction {
     }
 
     pub fn amount(&self) -> f64 {
-        self.movement.amount as f64 * 100f64
+        self.movement.amount as f64 / 100f64
     }
 
     pub fn sorting_fn() -> impl FnMut(&Self, &Self) -> Ordering {

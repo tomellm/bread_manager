@@ -95,7 +95,7 @@ pub fn special_from_model(
     entities::special_content::Model,
     entities::transaction_special::Model,
 ) {
-    dbg!((
+    (
         entities::special_content::Model {
             uuid,
             description_uuid,
@@ -107,5 +107,5 @@ pub fn special_from_model(
             transaction_uuid,
             special_uuid: uuid,
         },
-    ))
+    )
 }

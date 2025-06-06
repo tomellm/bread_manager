@@ -13,13 +13,13 @@ use hermes::{
 };
 
 use crate::{
-    components::expense_records::table::RecordsTable,
+    components::expense_records::table::TransactsTable,
     model::transactions::Transaction,
 };
 
 pub struct TableView {
     transacts: manual::Container<Transaction>,
-    columns_info: RecordsTable,
+    columns_info: TransactsTable,
 
     filter_state: FilterState,
     hide_filters: bool,
@@ -136,7 +136,7 @@ impl TableView {
             Self {
                 action_state: ActionState::new(records.actor()),
                 transacts: records,
-                columns_info: RecordsTable::default(),
+                columns_info: TransactsTable::default(),
                 filter_state: FilterState::default(),
                 hide_filters: true,
                 side_panel_state: SidePanelState::default(),
