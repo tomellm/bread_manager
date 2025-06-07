@@ -1,16 +1,20 @@
 use chrono::{DateTime, Local};
 use egui::Ui;
 use hermes::container::data::ImplData;
+use itertools::Itertools;
 use uuid::Uuid;
 
-use crate::{components::table::TableColumn, model::transactions::Transaction};
+use crate::{
+    components::table::TableColumn,
+    model::{tags::Tag, transactions::Transaction},
+};
 
 pub(crate) struct TransactsTable {
     datetime_created: TableColumn<Transaction, DateTime<Local>>,
     uuid: TableColumn<Transaction, Uuid>,
     amount: TableColumn<Transaction, i32>,
     //description: TableColumn<Transaction, String>,
-    //tags: TableColumn<Transaction, Vec<String>>,
+    tags: TableColumn<Transaction, Vec<Tag>>,
     datetime: TableColumn<Transaction, DateTime<Local>>,
     //origin: TableColumn<Transaction, String>,
 }
@@ -23,7 +27,7 @@ impl TransactsTable {
             self.uuid.toggle(ui);
             self.amount.toggle(ui);
             //self.description.toggle(ui);
-            //self.tags.toggle(ui);
+            self.tags.toggle(ui);
             //self.origin.toggle(ui);
         });
     }
@@ -33,7 +37,7 @@ impl TransactsTable {
         self.uuid.header(ui);
         self.amount.header(ui);
         //self.description.header(ui);
-        //self.tags.header(ui);
+        self.tags.header(ui);
         //self.origin.header(ui);
     }
     pub(crate) fn sorting_header(
@@ -46,7 +50,7 @@ impl TransactsTable {
         self.uuid.sorting_header(records, ui);
         self.amount.sorting_header(records, ui);
         //self.description.sorting_header(records, ui);
-        //self.tags.sorting_header(records, ui);
+        self.tags.sorting_header(records, ui);
         //self.origin.sorting_header(records, ui);
     }
     pub(crate) fn row(&self, record: &Transaction, ui: &mut Ui) {
@@ -55,7 +59,7 @@ impl TransactsTable {
         self.uuid.display_value(record, ui);
         self.amount.display_value(record, ui);
         //self.description.display_value(record, ui);
-        //self.tags.display_value(record, ui);
+        self.tags.display_value(record, ui);
         //self.origin.display_value(record, ui);
     }
     pub(crate) fn show(&self, records: &Vec<Transaction>, ui: &mut Ui) {
@@ -105,7 +109,7 @@ impl Default for TransactsTable {
             uuid: TableColumn::active("uuid", d_uuid).extract_fn(uuid),
             amount: TableColumn::active("amount", d_amount).extract_fn(amount),
             //description: TableColumn::active("description", d_description),
-            //tags: TableColumn::active("tags", d_tags),
+            tags: TableColumn::active("tags", d_tags),
             datetime: TableColumn::active("datetime", d_datetime)
                 .extract_fn(datetime),
             //origin: TableColumn::active("origin", d_origin).extract_fn(origin),
@@ -149,9 +153,9 @@ fn d_amount(record: &Transaction, ui: &mut Ui) {
 //    );
 //}
 //
-//fn d_tags(record: &Transaction, ui: &mut Ui) {
-//    ui.label(format!("{:?}", record.tags()));
-//}
+fn d_tags(trx: &Transaction, ui: &mut Ui) {
+    ui.label(trx.tags.iter().map(|t| &t.tag).join(", ").to_string());
+}
 //
 //fn origin(record: &Transaction) -> &String {
 //    record.origin()

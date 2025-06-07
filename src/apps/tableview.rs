@@ -13,8 +13,7 @@ use hermes::{
 };
 
 use crate::{
-    components::expense_records::table::TransactsTable,
-    model::transactions::Transaction,
+    components::expense_records::table::TransactsTable, db::query::transaction_query::TransactionQuery, model::transactions::Transaction
 };
 
 pub struct TableView {
@@ -59,13 +58,9 @@ impl App for TableView {
 
                 ui.horizontal(|ui| {
                     ui.label("table view");
-                    if ui.button("delete all").clicked() {
-                        //self.records.execute(DbRecord::delete_many());
-                        //self.records.execute(DbDataImport::delete_many());
-                    }
 
                     ui.label(format!(
-                        "Curretly {} records.",
+                        "Curretly {} transactions.",
                         self.transacts.data().len()
                     ));
 
@@ -131,11 +126,11 @@ impl TableView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let records = factory.builder().file(file!()).manual();
-            //records.stored_query(DbRecord::find_all_active());
+            let mut transacts = factory.builder().file(file!()).manual();
+            transacts.stored_query(TransactionQuery::all);
             Self {
-                action_state: ActionState::new(records.actor()),
-                transacts: records,
+                action_state: ActionState::new(transacts.actor()),
+                transacts,
                 columns_info: TransactsTable::default(),
                 filter_state: FilterState::default(),
                 hide_filters: true,
@@ -144,14 +139,6 @@ impl TableView {
             }
         }
     }
-    pub fn show_file_viewer() -> bool {
-        false
-    }
-
-    //pub fn delete_all(&mut self) -> ImmediateValuePromise<ChangeResult> {
-    //    let keys = self.records.data.keys_cloned();
-    //    ImmediateValuePromise::new(self.records.delete_many(keys))
-    //}
 }
 
 const NO_RECORDS_EMPTY_TEXT: &str = r#"

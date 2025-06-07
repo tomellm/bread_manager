@@ -1,20 +1,25 @@
 use hermes::carrier::execute::{ImplExecuteCarrier, TransactionBuilder};
-use tracing::info;
 
 use crate::{
     db::{
         datetime_to_str,
         entities::{self, prelude::*},
-        query::transaction_query::EntityTrait,
-        IntoInsertQueries, VecIntoActiveModel,
+        query::{
+            tags_query::transaction_tag_from_models,
+            transaction_query::EntityTrait,
+        },
+        IntoInsertQueries,
     },
-    model::transactions::{
-        datetime::ModelDatetime,
-        movement::ModelMovement,
-        properties::{TransactionProperties, TransactionRelType},
-        special_content::ModelSpecialContent,
-        text_content::ModelTextContent,
-        ModelTransaction, TransactionUuid,
+    model::{
+        tags::ModelTag,
+        transactions::{
+            datetime::ModelDatetime,
+            movement::ModelMovement,
+            properties::{TransactionProperties, TransactionRelType},
+            special_content::ModelSpecialContent,
+            text_content::ModelTextContent,
+            ModelTransaction, TransactionUuid,
+        },
     },
 };
 
@@ -40,6 +45,8 @@ pub struct TransactionEntityContainer {
 
     pub special_content: Vec<entities::special_content::Model>,
     pub transaction_special: Vec<entities::transaction_special::Model>,
+
+    pub transaction_tags: Vec<entities::transaction_tags::Model>,
 }
 
 impl TransactionEntityContainer {
@@ -79,6 +86,9 @@ impl TransactionEntityContainer {
             .execute_many(self.transaction_special.into_insert_queries(|a| {
                 TransactionSpecial::insert_many(a).do_nothing()
             }))
+            .execute_many(self.transaction_tags.into_insert_queries(|a| {
+                TransactionTags::insert_many(a).do_nothing()
+            }))
     }
 
     pub fn insert_everything(self, exec: &mut impl ImplExecuteCarrier) {
@@ -96,6 +106,7 @@ impl TransactionEntityContainer {
             properties,
             state,
             datetime_created,
+            tags,
         }: ModelTransaction,
     ) {
         self.transactions.push(entities::transaction::Model {
@@ -106,6 +117,7 @@ impl TransactionEntityContainer {
         self.add_movement(uuid, TransactionRelType::Primary, movement);
         self.add_datetime(uuid, TransactionRelType::Primary, datetime);
         self.add_properties(uuid, properties);
+        self.add_tags(uuid, tags);
     }
     fn add_properties(
         &mut self,
@@ -183,5 +195,10 @@ impl TransactionEntityContainer {
         let models = special_from_model(transac_uuid, special_content);
         self.special_content.push(models.0);
         self.transaction_special.push(models.1);
+    }
+
+    fn add_tags(&mut self, uuid: TransactionUuid, tags: Vec<ModelTag>) {
+        let models = transaction_tag_from_models(tags, uuid);
+        self.transaction_tags.extend(models);
     }
 }

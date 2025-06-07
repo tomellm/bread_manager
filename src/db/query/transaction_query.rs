@@ -1,8 +1,8 @@
 pub(crate) mod transaction_datetime_query;
 pub(crate) mod transaction_movement_query;
 pub(crate) mod transaction_properties;
+pub(crate) mod transaction_special_query;
 pub(crate) mod transaction_text_query;
-pub mod transaction_special_query;
 
 use hermes::{
     carrier::{manual_query::ImplManualQueryCarrier, query::ExecutedQuery},
@@ -15,11 +15,14 @@ use transaction_datetime_query::all_datetimes;
 use transaction_movement_query::all_movements;
 use transaction_properties::TransactionEntityContainer;
 
-use crate::model::transactions::ModelTransaction;
+use crate::{db::combine_types, model::{tags::Tag, transactions::ModelTransaction}};
 
-use super::super::{
-    builders::transaction_builder::{ToTransacHashMap, TransactionBuilder},
-    entities::prelude::*,
+use super::{
+    super::{
+        builders::transaction_builder::{ToTransacHashMap, TransactionBuilder},
+        entities::prelude::*,
+    },
+    tags_query::all_transaction_tags,
 };
 
 pub trait TransactionQuery {
@@ -85,7 +88,18 @@ pub(super) async fn all_transactions(
     let mut transaction_movements =
         all_movements(db, collector).await?.to_hashmap();
 
+    let mut tags = all_transaction_tags(db, collector).await?;
+
+    let transactions = combine_types(
+        transactions.collect_vec(),
+        tags,
+        |trx| trx.uuid,
+        |t| t.rel_uuid,
+        |trx, tags| trx.feed_tags(tags.into_iter().map(Tag::from)),
+    );
+
     Ok(transactions
+        .into_iter()
         .map(|builder| builder.feed_datetimes(&mut transaction_datetimes))
         .map(|builder| builder.feed_movements(&mut transaction_movements))
         .map(TransactionBuilder::build)

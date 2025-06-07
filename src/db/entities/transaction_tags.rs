@@ -2,13 +2,15 @@
 
 use sea_orm::entity::prelude::*;
 
+use crate::model::{tags::TagUuid, transactions::TransactionUuid};
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "transaction_tags")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, unique)]
-    pub transaction_uuid: String,
+    pub transaction_uuid: TransactionUuid,
     #[sea_orm(primary_key, auto_increment = false)]
-    pub tag_uuid: String,
+    pub tag_uuid: TagUuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

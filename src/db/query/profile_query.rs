@@ -340,7 +340,7 @@ fn profile_from_model(
     // just the single wrapper
     let (other_data, descs, profile_descs) =
         parsable_wrappers_from_model(uuid, other_data);
-    let profile_tags = profile_tags_from_models(default_tags, &uuid);
+    let profile_tags = profile_tags_from_models(default_tags, uuid);
 
     (
         entities::profile::Model {

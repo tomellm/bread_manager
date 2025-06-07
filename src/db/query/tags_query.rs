@@ -3,6 +3,7 @@ use crate::{
     model::{
         profiles::ProfileUuid,
         tags::{ModelTag, Tag, TagUuid},
+        transactions::TransactionUuid,
     },
 };
 use hermes::{
@@ -14,15 +15,20 @@ use hermes::{
     ContainsTables, TablesCollector,
 };
 use sea_orm::{
-    DatabaseConnection, DbErr, EntityOrSelect, EntityTrait, FromQueryResult, IntoActiveModel, QuerySelect, QueryTrait
+    ColumnAsExpr, DatabaseConnection, DbErr, EntityOrSelect, EntityTrait,
+    FromQueryResult, IntoActiveModel, QuerySelect, QueryTrait, Related,
+    TryGetable,
 };
 use uuid::Uuid;
 
 use super::super::entities::{profile_tags, tags, transaction_tags};
 
 #[derive(FromQueryResult)]
-pub(super) struct RelatedTag {
-    pub rel_uuid: Uuid,
+pub(in crate::db) struct RelatedTag<RelId>
+where
+    RelId: TryGetable,
+{
+    pub rel_uuid: RelId,
     pub uuid: Uuid,
     pub tag: String,
     pub description: String,
@@ -89,31 +95,47 @@ pub(super) async fn all_tags(
 pub(super) async fn all_profile_tags(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
-) -> Result<Vec<RelatedTag>, DbErr> {
-    Tags::find()
-        .select_only()
-        .column_as(profile_tags::Column::ProfileUuid, "rel_uuid")
-        .column(tags::Column::Uuid)
-        .column(tags::Column::Tag)
-        .column(tags::Column::Description)
-        .right_join(ProfileTags)
-        .and_find_tables(collector)
-        .into_model()
-        .all(db)
-        .await
+) -> Result<Vec<RelatedTag<ProfileUuid>>, DbErr> {
+    query_related_tags(
+        db,
+        collector,
+        profile_tags::Column::ProfileUuid,
+        ProfileTags,
+    )
+    .await
 }
 
 pub(super) async fn all_transaction_tags(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
-) -> Result<Vec<RelatedTag>, DbErr> {
-    Tags::find()
+) -> Result<Vec<RelatedTag<TransactionUuid>>, DbErr> {
+    query_related_tags(
+        db,
+        collector,
+        transaction_tags::Column::TransactionUuid,
+        TransactionTags,
+    )
+    .await
+}
+
+async fn query_related_tags<C, R, RelId>(
+    db: &DatabaseConnection,
+    collector: &mut TablesCollector,
+    c: C,
+    _: R,
+) -> Result<Vec<RelatedTag<RelId>>, DbErr>
+where
+    C: ColumnAsExpr,
+    R: EntityTrait + Related<Tags>,
+    RelId: TryGetable,
+{
+    R::find()
         .select_only()
-        .column_as(transaction_tags::Column::TransactionUuid, "rel_uuid")
+        .column_as(c, "rel_uuid")
         .column(tags::Column::Uuid)
         .column(tags::Column::Tag)
         .column(tags::Column::Description)
-        .right_join(TransactionTags)
+        .right_join(Tags)
         .and_find_tables(collector)
         .into_model()
         .all(db)
@@ -122,19 +144,34 @@ pub(super) async fn all_transaction_tags(
 
 pub(super) fn profile_tags_from_models(
     default_tags: Vec<ModelTag>,
-    profile_uuid: &ProfileUuid,
+    profile_uuid: ProfileUuid,
 ) -> Vec<entities::profile_tags::Model> {
     default_tags
         .into_iter()
         .map(|t| entities::profile_tags::Model {
-            profile_uuid: *profile_uuid,
+            profile_uuid,
             tag_uuid: t.uuid,
         })
         .collect()
 }
 
-impl From<RelatedTag> for ModelTag {
-    fn from(value: RelatedTag) -> Self {
+pub(super) fn transaction_tag_from_models(
+    tags: Vec<ModelTag>,
+    transaction_uuid: TransactionUuid,
+) -> Vec<entities::transaction_tags::Model> {
+    tags.into_iter()
+        .map(|t| entities::transaction_tags::Model {
+            transaction_uuid,
+            tag_uuid: t.uuid,
+        })
+        .collect()
+}
+
+impl<RelId> From<RelatedTag<RelId>> for ModelTag
+where
+    RelId: TryGetable,
+{
+    fn from(value: RelatedTag<RelId>) -> Self {
         ModelTag::new(value.uuid.into(), value.tag, value.description)
     }
 }

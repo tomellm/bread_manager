@@ -15,6 +15,8 @@ use sea_orm::entity::prelude::*;
 
 use crate::uuid_impls;
 
+use super::tags::Tag;
+
 pub(crate) type ModelTransaction = Transaction;
 
 #[derive(Debug, Clone)]
@@ -25,6 +27,7 @@ pub struct Transaction {
     pub properties: Vec<TransactionProperties>,
     pub state: State,
     pub datetime_created: DateTime<Local>,
+    pub tags: Vec<Tag>,
 }
 
 impl Transaction {

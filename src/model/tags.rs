@@ -6,7 +6,16 @@ use crate::{db::InitUuid, uuid_impls};
 pub type ModelTag = Tag;
 
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, FromQueryResult,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    FromQueryResult,
+    PartialOrd,
+    Ord,
 )]
 pub struct Tag {
     pub uuid: TagUuid,

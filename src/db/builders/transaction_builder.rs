@@ -8,9 +8,12 @@ use uuid::Uuid;
 use crate::{
     db::{
         entities, parse_datetime_str,
-        query::transaction_query::{
-            transaction_datetime_query::DatetimeOfTransaction,
-            transaction_movement_query::MovementOfTransaction,
+        query::{
+            tags_query::RelatedTag,
+            transaction_query::{
+                transaction_datetime_query::DatetimeOfTransaction,
+                transaction_movement_query::MovementOfTransaction,
+            },
         },
     },
     model::{
@@ -120,8 +123,8 @@ impl TransactionBuilder {
         }
     }
 
-    pub fn feed_tags(&mut self, default_tags: impl IntoIterator<Item = Tag>) {
-        self.tags.extend(default_tags);
+    pub fn feed_tags(&mut self, tags: impl IntoIterator<Item = Tag>) {
+        self.tags.extend(tags);
     }
 
     pub fn build(self) -> ModelTransaction {
@@ -132,6 +135,7 @@ impl TransactionBuilder {
             properties: self.properties,
             state: self.state,
             datetime_created: self.datetime_created,
+            tags: self.tags,
         }
     }
 }
@@ -172,5 +176,11 @@ impl IsTransacRelated for DatetimeOfTransaction {
 impl IsTransacRelated for MovementOfTransaction {
     fn key(&self) -> (TransactionUuid, TransactionRelType) {
         (self.transaction_uuid, self.rel_type)
+    }
+}
+
+impl IsTransacRelated for RelatedTag<TransactionUuid> {
+    fn key(&self) -> (TransactionUuid, TransactionRelType) {
+        todo!()
     }
 }
