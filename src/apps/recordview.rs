@@ -3,24 +3,21 @@ use std::{mem, sync::Arc};
 use eframe::App;
 use egui::{CentralPanel, Ui};
 use hermes::{
-    carrier::query::ImplQueryCarrier,
-    container::{data::ImplData, projecting::ProjectingContainer},
+    container::{data::ImplData, manual},
     factory::Factory,
 };
 use itertools::Itertools;
 use lazy_async_promise::{DirectCacheAccess, ImmediateValuePromise};
-use sea_orm::{EntityOrSelect, EntityTrait};
 use uuid::Uuid;
 
 use crate::{
-    components::expense_records::full_view::ExpenseRecordFullView,
-    db::records::DbRecord,
-    model::records::{ExpenseRecord, ExpenseRecordUuid},
+    components::expense_records::full_view::TransactionFullView,
+    model::transactions::{Transaction, TransactionUuid},
     utils::PromiseUtilities,
 };
 
 pub struct RecordView {
-    records: ProjectingContainer<ExpenseRecord, DbRecord>,
+    transact: manual::Container<Transaction>,
     search_context: SearchContext,
     current_screen: RecordScreen,
 }
@@ -30,11 +27,11 @@ impl RecordView {
         factory: Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
-            let mut records =
-                factory.builder().name("record_view_records").projector();
-            records.stored_query(DbRecord::find().select());
+            let transact =
+                factory.builder().file(file!()).manual();
+            //records.stored_query(DbRecord::find().select());
             Self {
-                records,
+                transact,
                 search_context: SearchContext::default(),
                 current_screen: RecordScreen::default(),
             }
@@ -42,13 +39,13 @@ impl RecordView {
     }
 
     fn state_update(&mut self) {
-        self.records.state_update(true);
+        self.transact.state_update(true);
         self.search_context.state_update();
 
         if let Some(result) = self.search_context.result.take() {
             match result {
                 SearchResult {
-                    record: Some(record),
+                    transac: Some(record),
                     ..
                 } => self.current_screen.record(record),
                 SearchResult {
@@ -81,13 +78,13 @@ impl App for RecordView {
         self.state_update();
 
         CentralPanel::default().show(ctx, |ui| {
-            ui.label(format!("{}", self.records.data().len()));
+            ui.label(format!("{}", self.transact.data().len()));
             ui.horizontal(|ui| {
                 ui.text_edit_singleline(
                     &mut self.search_context.parameters.uuid_search,
                 );
                 if ui.button("search").clicked() {
-                    self.search_context.find_first(&self.records);
+                    self.search_context.find_first(&self.transact);
                 }
             });
             self.screen_ui(ui);
@@ -99,15 +96,15 @@ impl App for RecordView {
 pub enum RecordScreen {
     #[default]
     Empty,
-    RecordView(Box<ExpenseRecordFullView>),
+    RecordView(Box<TransactionFullView>),
     Error(String),
 }
 
 impl RecordScreen {
-    pub fn record(&mut self, record: ExpenseRecord) {
+    pub fn record(&mut self, transact: Transaction) {
         let _ = mem::replace(
             self,
-            Self::RecordView(Box::new(ExpenseRecordFullView::new(record))),
+            Self::RecordView(Box::new(TransactionFullView::new(transact))),
         );
     }
     pub fn error(&mut self, error: String) {
@@ -136,19 +133,19 @@ impl SearchContext {
         }
     }
 
-    pub fn find_first(&mut self, data: &impl ImplData<ExpenseRecord>) {
+    pub fn find_first(&mut self, data: &impl ImplData<Transaction>) {
         let data = Arc::clone(data.data());
         let parameters = self.parameters.clone();
 
         let future = async move {
             let Ok(uuid) = Uuid::parse_str(parameters.uuid_search())
-                .map(ExpenseRecordUuid::from)
+                .map(TransactionUuid::from)
             else {
                 return SearchResult::error("text is not uuid");
             };
             let remaining = data
                 .iter()
-                .filter(|record| uuid.eq(record.uuid()))
+                .filter(|transac| uuid.eq(&transac.uuid))
                 .collect_vec();
 
             match remaining.len() {
@@ -162,7 +159,7 @@ impl SearchContext {
         let _ = self.search_future.insert(future.into());
     }
 
-    pub fn set_result(&mut self, record: ExpenseRecord) {
+    pub fn set_result(&mut self, record: Transaction) {
         let _ = self.result.insert(SearchResult::new(record));
     }
 
@@ -170,10 +167,10 @@ impl SearchContext {
         let _ = self.search_future.insert(future);
     }
 
-    pub fn result(&self) -> Option<&ExpenseRecord> {
+    pub fn result(&self) -> Option<&Transaction> {
         self.result
             .as_ref()
-            .and_then(|result| result.record.as_ref())
+            .and_then(|result| result.transac.as_ref())
     }
 }
 
@@ -190,21 +187,21 @@ impl SearchParameters {
 
 #[derive(Default)]
 struct SearchResult {
-    record: Option<ExpenseRecord>,
+    transac: Option<Transaction>,
     search_error: Option<String>,
 }
 
 impl SearchResult {
-    fn new(record: ExpenseRecord) -> Self {
+    fn new(transac: Transaction) -> Self {
         Self {
-            record: Some(record),
+            transac: Some(transac),
             search_error: None,
         }
     }
 
     fn error(error: impl Into<String>) -> Self {
         Self {
-            record: None,
+            transac: None,
             search_error: Some(error.into()),
         }
     }

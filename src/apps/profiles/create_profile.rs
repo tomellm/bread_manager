@@ -4,27 +4,29 @@ mod other_columns;
 
 use std::sync::Arc;
 
-use basics::{
-    default_tags, delimiter, margin_btm, margin_top, name, origin_name,
-};
+use basics::{default_tags, delimiter, margin_btm, margin_top, name, origin};
 use egui::Ui;
-use egui_light_states::UiStates;
-use hermes::{
-    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
-    container::projecting::ProjectingContainer,
-    factory::Factory,
-    ToActiveModel,
-};
+use hermes::{container::manual, factory::Factory};
 use main_columns::{datetime_col, expense_col};
 use other_columns::other_cols;
-use sea_orm::EntityTrait;
 use tokio::sync::mpsc;
 
 use crate::{
-    db::profiles::DbProfile,
-    model::profiles::{
-        builder::{IntermediateProfileState, ProfileBuilder},
-        Profile,
+    components::{
+        origins::origins_dialog::SelectOriginState,
+        tags::tags_dialog::SelectTagsState,
+    },
+    db::query::{
+        origins_query::OriginsQuery, profile_query::ProfileQuery,
+        tags_query::TagsQuery,
+    },
+    model::{
+        origins::Origin,
+        profiles::{
+            builder::{CreateProfileBuilder, IntermediateProfileState},
+            Profile,
+        },
+        tags::Tag,
     },
 };
 
@@ -32,10 +34,13 @@ use super::parser::ProfilePreview;
 
 pub struct CreateProfile {
     preview: ProfilePreview,
-    profile_builder: Arc<ProfileBuilder>,
+    profile_builder: Arc<CreateProfileBuilder>,
     intermediate_profile_state: IntermediateProfileState,
-    profiles: ProjectingContainer<Profile, DbProfile>,
-    ui_states: UiStates,
+    profiles: manual::Container<Profile>,
+    origins: manual::Container<Origin>,
+    tags: manual::Container<Tag>,
+    select_origins_state: SelectOriginState,
+    select_tags_state: SelectTagsState,
 }
 
 impl CreateProfile {
@@ -43,22 +48,32 @@ impl CreateProfile {
         reciver: mpsc::Receiver<egui::DroppedFile>,
         factory: Factory,
     ) -> Self {
-        let mut profiles = factory
-            .builder()
-            .name("create_profile_profiles")
-            .projector();
-        profiles.stored_query(DbProfile::find_all_active());
+        let mut profiles = factory.builder().file(file!()).manual();
+        profiles.stored_query(ProfileQuery::all);
+
+        let mut origins = factory.builder().file(file!()).manual();
+        origins.stored_query(OriginsQuery::all);
+
+        let mut tags = factory.builder().file(file!()).manual();
+        tags.stored_query(TagsQuery::all);
 
         Self {
             preview: ProfilePreview::new(reciver),
-            profile_builder: Arc::new(ProfileBuilder::default()),
+            profile_builder: Arc::new(CreateProfileBuilder::default()),
             intermediate_profile_state: IntermediateProfileState::default(),
             profiles,
-            ui_states: UiStates::default(),
+            select_origins_state: SelectOriginState::default(),
+            select_tags_state: SelectTagsState::default(),
+            origins,
+            tags,
         }
     }
 
     pub fn ui_update(&mut self, ui: &mut Ui) {
+        self.profiles.state_update(true);
+        self.origins.state_update(true);
+        self.tags.state_update(true);
+
         ui.horizontal(|ui| {
             ui.heading("Create Profiles:");
             if ui.button("reset").clicked() {
@@ -85,7 +100,7 @@ impl CreateProfile {
             ui.vertical_centered_justified(|ui| match self.parse_profile() {
                 Ok(profile) => {
                     if ui.button("save profile").clicked() {
-                        self.profiles.execute(DbProfile::insert(profile.dml()));
+                        self.profiles.insert(profile);
                     };
                 }
                 Err(()) => {
@@ -104,7 +119,7 @@ impl CreateProfile {
 
     fn reset(&mut self) {
         self.preview.reset();
-        self.profile_builder = Arc::new(ProfileBuilder::default());
+        self.profile_builder = Arc::new(CreateProfileBuilder::default());
         self.intermediate_profile_state = IntermediateProfileState::default();
     }
 
@@ -113,14 +128,27 @@ impl CreateProfile {
             intermediate_profile_state: state,
             ..
         } = self;
-        name(ui, state);
+        ui.horizontal(|ui| {
+            name(ui, state);
+            origin(
+                ui,
+                &mut self.select_origins_state,
+                &mut state.origin,
+                &mut self.origins,
+            );
+        });
         ui.horizontal(|ui| {
             delimiter(ui, state);
             margin_top(ui, state);
             margin_btm(ui, state);
         });
         ui.vertical_centered(|ui| {
-            default_tags(ui, state);
+            default_tags(
+                ui,
+                &mut self.select_tags_state,
+                &mut state.default_tags,
+                &mut self.tags,
+            );
         });
         ui.add_space(10.);
         ui.separator();
@@ -128,7 +156,6 @@ impl CreateProfile {
         ui.horizontal(|ui| {
             expense_col(ui, state);
             datetime_col(ui, state);
-            origin_name(ui, state)
         });
         ui.add_space(10.);
         ui.separator();
@@ -140,8 +167,9 @@ impl CreateProfile {
     }
 
     fn update_builder(&mut self) {
-        let profile =
-            ProfileBuilder::from_inter_state(&self.intermediate_profile_state);
+        let profile = CreateProfileBuilder::from_inter_state(
+            &self.intermediate_profile_state,
+        );
         if let Ok(profile) = profile {
             self.profile_builder = Arc::new(profile);
         }

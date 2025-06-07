@@ -1,15 +1,41 @@
 use egui::Ui;
+use hermes::container::manual;
 
 use crate::{
     apps::utils::{drag_int, single_char, text},
-    model::profiles::builder::IntermediateProfileState,
+    components::{
+        origins::origins_dialog::{SelectOriginDialog, SelectOriginState},
+        tags::tags_dialog::{SelectTagsDialog, SelectTagsState},
+    },
+    model::{
+        origins::Origin, profiles::builder::IntermediateProfileState, tags::Tag,
+    },
 };
 
 pub(super) fn name(
     ui: &mut Ui,
     IntermediateProfileState { name, .. }: &mut IntermediateProfileState,
 ) {
-    text(ui, name);
+    ui.horizontal(|ui| {
+        ui.label("Name: ");
+        text(ui, name);
+    });
+}
+
+pub(super) fn origin(
+    ui: &mut Ui,
+    origins_state: &mut SelectOriginState,
+    state: &mut Option<Origin>,
+    origins: &mut manual::Container<Origin>,
+) {
+    ui.horizontal(|ui| {
+        ui.label("Origin: ");
+        match state {
+            Some(origin) => ui.label(&origin.name),
+            None => ui.label("use dialog to select an origin"),
+        };
+        ui.select_origin_dialog(origins_state, state, origins);
+    });
 }
 
 pub(super) fn delimiter(
@@ -50,35 +76,22 @@ pub(super) fn margin_btm(
 
 pub(super) fn default_tags(
     ui: &mut Ui,
-    IntermediateProfileState { default_tags, .. }: &mut IntermediateProfileState,
+    tags_state: &mut SelectTagsState,
+    state: &mut Vec<Tag>,
+    tags: &mut manual::Container<Tag>,
 ) {
     ui.horizontal(|ui| {
-        if ui.button("add default tag").clicked() {
-            default_tags.push(String::new());
-        }
-    });
-    ui.add_space(10.);
-    ui.horizontal_wrapped(|ui| {
-        default_tags.retain_mut(|tag| {
-            let mut delete: bool = true;
-            ui.add_sized([100., 25.], |ui: &mut Ui| {
-                let res = ui.add(egui::TextEdit::singleline(tag));
-                if ui.button("remove").clicked() {
-                    delete = false;
-                }
-                res
-            });
-            delete
-        });
-    });
-}
-
-pub(super) fn origin_name(
-    ui: &mut Ui,
-    IntermediateProfileState { origin_name, .. }: &mut IntermediateProfileState,
-) {
-    ui.group(|ui| {
-        ui.label("origin name");
-        ui.add(egui::TextEdit::singleline(origin_name));
+        ui.label("Tags: ");
+        match &state.is_empty() {
+            false => {
+                state.iter().for_each(|tag| {
+                    ui.label(&tag.tag);
+                });
+            }
+            true => {
+                ui.label("use dialog to add tags");
+            }
+        };
+        ui.select_tags_dialog(tags_state, state, tags);
     });
 }

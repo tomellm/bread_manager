@@ -2,18 +2,34 @@ pub mod money;
 pub mod other;
 pub mod time;
 
+use std::mem;
+
 use money::{Expense, Income, Movement, NumberFormat, PosExpense};
-use other::{Description, Other};
+use other::{Description, Special};
 use serde::{Deserialize, Serialize};
 use time::{ExpenseDate, ExpenseDateTime, ExpenseTime};
+use tracing::info;
 
-use crate::model::records::ExpenseData;
+use crate::model::{
+    data_import::row_item::ImportRowItem,
+    group::GroupUuid,
+    transactions::{
+        content_description::ContentDescription,
+        datetime::{Datetime, ModelDatetime},
+        movement::ModelMovement,
+        properties::TransactionProperties,
+    },
+};
 
 use super::error::ProfileError;
 
 pub trait Parser<T> {
     fn parse_str(&self, str: &str) -> Result<T, ProfileError>;
-    fn to_expense_data(&self, str: &str) -> Result<ExpenseData, ProfileError>;
+    fn to_property(
+        &self,
+        group_uuid: GroupUuid,
+        str: &str,
+    ) -> Result<TransactionProperties, ProfileError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +86,40 @@ impl ExpenseColumn {
             ],
             ExpenseColumn::OnlyExpense(pos, val) => {
                 vec![(pos, ParsableWrapper::PosExpense(val))]
+            }
+        }
+    }
+
+    pub fn parse_str(
+        &self,
+        group_uuid: GroupUuid,
+        value_getter: &mut impl FnMut(usize) -> ImportRowItem,
+    ) -> Result<(ModelMovement, Vec<ImportRowItem>), ProfileError> {
+        match self {
+            ExpenseColumn::Split((pos1, income), (pos2, expense)) => {
+                let mut item_1 = value_getter(*pos1);
+                let mut item_2 = value_getter(*pos2);
+                let amount = income.parse_str(&item_1.content)?
+                    + expense.parse_str(&item_2.content)?;
+
+                let movement = ModelMovement::init(amount, group_uuid);
+                item_1.set_movement_ref(movement.uuid);
+                item_2.set_movement_ref(movement.uuid);
+                Ok((movement, vec![item_1, item_2]))
+            }
+            ExpenseColumn::Combined(pos, movement) => {
+                let mut item = value_getter(*pos);
+                let amount = movement.parse_str(&item.content)?;
+                let movement = ModelMovement::init(amount, group_uuid);
+                item.set_movement_ref(movement.uuid);
+                Ok((movement, vec![item]))
+            }
+            ExpenseColumn::OnlyExpense(pos, pos_expense) => {
+                let mut item = value_getter(*pos);
+                let amount = pos_expense.parse_str(&item.content)?;
+                let movement = ModelMovement::init(amount, group_uuid);
+                item.set_movement_ref(movement.uuid);
+                Ok((movement, vec![item]))
             }
         }
     }
@@ -152,6 +202,48 @@ impl DateTimeColumn {
             ],
         }
     }
+
+    pub fn parse_str(
+        &self,
+        group_uuid: GroupUuid,
+        value_getter: &mut impl FnMut(usize) -> ImportRowItem,
+    ) -> Result<(ModelDatetime, Vec<ImportRowItem>), ProfileError> {
+        match self {
+            DateTimeColumn::DateTime(pos, el) => {
+                let mut item = value_getter(*pos);
+                let datetime = Datetime::init_datetime(
+                    el.parse_str(&item.content)?,
+                    group_uuid,
+                );
+                item.set_datetime_ref(datetime.uuid);
+                Ok((datetime, vec![item]))
+            }
+            DateTimeColumn::Date(pos, el) => {
+                let mut item = value_getter(*pos);
+                let datetime = Datetime::init(
+                    el.parse_str(&item.content)?,
+                    None,
+                    0,
+                    group_uuid,
+                );
+                item.set_datetime_ref(datetime.uuid);
+                Ok((datetime, vec![item]))
+            }
+            DateTimeColumn::DateAndTime((pos_1, el_1), (pos_2, el_2)) => {
+                let mut item_1 = value_getter(*pos_1);
+                let mut item_2 = value_getter(*pos_2);
+                let datetime = Datetime::init(
+                    el_1.parse_str(&item_1.content)?,
+                    Some(el_2.parse_str(&item_2.content)?),
+                    0,
+                    group_uuid,
+                );
+                item_1.set_datetime_ref(datetime.uuid);
+                item_2.set_datetime_ref(datetime.uuid);
+                Ok((datetime, vec![item_1, item_2]))
+            }
+        }
+    }
 }
 
 impl std::fmt::Display for DateTimeColumn {
@@ -164,7 +256,9 @@ impl std::fmt::Display for DateTimeColumn {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub type ModelParsableWrapper = ParsableWrapper;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsableWrapper {
     Income(Income),
     Expense(Expense),
@@ -174,24 +268,58 @@ pub enum ParsableWrapper {
     ExpenseDate(ExpenseDate),
     ExpenseTime(ExpenseTime),
     Description(Description),
-    Other(Other),
+    Special(Special),
 }
 
 impl ParsableWrapper {
-    pub fn to_expense_data(
+    pub fn init_from(value: &Self) -> Self {
+        let mut new_val = value.clone();
+        match &mut new_val {
+            Self::Description(Description(desc))
+            | Self::Special(Special(_, desc)) => {
+                let new_desc =
+                    ContentDescription::init(desc.description.clone());
+                let _ = mem::replace(desc, new_desc);
+            }
+            _ => (),
+        }
+
+        new_val
+    }
+
+    pub fn to_property(
         &self,
+        group_uuid: GroupUuid,
         str: &str,
-    ) -> Result<ExpenseData, ProfileError> {
-        match &self {
-            ParsableWrapper::Income(e) => e.to_expense_data(str),
-            ParsableWrapper::Expense(e) => e.to_expense_data(str),
-            ParsableWrapper::PosExpense(e) => e.to_expense_data(str),
-            ParsableWrapper::Movement(e) => e.to_expense_data(str),
-            ParsableWrapper::ExpenseDateTime(e) => e.to_expense_data(str),
-            ParsableWrapper::ExpenseDate(e) => e.to_expense_data(str),
-            ParsableWrapper::ExpenseTime(e) => e.to_expense_data(str),
-            ParsableWrapper::Description(e) => e.to_expense_data(str),
-            ParsableWrapper::Other(e) => e.to_expense_data(str),
+    ) -> Result<TransactionProperties, ProfileError> {
+        match self {
+            ParsableWrapper::Income(income) => {
+                income.to_property(group_uuid, str)
+            }
+            ParsableWrapper::Expense(expense) => {
+                expense.to_property(group_uuid, str)
+            }
+            ParsableWrapper::PosExpense(pos_expense) => {
+                pos_expense.to_property(group_uuid, str)
+            }
+            ParsableWrapper::Movement(movement) => {
+                movement.to_property(group_uuid, str)
+            }
+            ParsableWrapper::ExpenseDateTime(expense_date_time) => {
+                expense_date_time.to_property(group_uuid, str)
+            }
+            ParsableWrapper::ExpenseDate(expense_date) => {
+                expense_date.to_property(group_uuid, str)
+            }
+            ParsableWrapper::ExpenseTime(expense_time) => {
+                expense_time.to_property(group_uuid, str)
+            }
+            ParsableWrapper::Description(description) => {
+                description.to_property(group_uuid, str)
+            }
+            ParsableWrapper::Special(special) => {
+                special.to_property(group_uuid, str)
+            }
         }
     }
     pub fn income() -> Self {
@@ -216,10 +344,29 @@ impl ParsableWrapper {
         Self::ExpenseTime(ExpenseTime::default())
     }
     pub fn description() -> Self {
-        Self::Description(Description::default())
+        Self::Description(Description::default_init())
     }
     pub fn other() -> Self {
-        Self::Other(Other::default())
+        Self::Special(Special::default_init())
+    }
+
+    fn is_datetime_type(&self) -> bool {
+        matches!(
+            self,
+            Self::ExpenseDate(_)
+                | Self::ExpenseDateTime(_)
+                | Self::ExpenseTime(_)
+        )
+    }
+
+    fn is_money_type(&self) -> bool {
+        matches!(
+            self,
+            Self::Movement(_)
+                | Self::Expense(_)
+                | Self::PosExpense(_)
+                | Self::Income(_)
+        )
     }
 }
 
@@ -234,7 +381,7 @@ impl std::fmt::Display for ParsableWrapper {
             ParsableWrapper::ExpenseDate(_) => write!(f, "ExpenseDate"),
             ParsableWrapper::ExpenseTime(_) => write!(f, "ExpenseTime"),
             ParsableWrapper::Description(_) => write!(f, "Description"),
-            ParsableWrapper::Other(_) => write!(f, "Other"),
+            ParsableWrapper::Special(_) => write!(f, "Other"),
         }
     }
 }

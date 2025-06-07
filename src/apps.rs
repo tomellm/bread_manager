@@ -1,18 +1,18 @@
 mod fileupload;
 mod linking;
 mod profiles;
+mod recordview;
 mod tableview;
 pub(crate) mod utils;
 mod visualizations;
-mod recordview;
 
-use std::{env, time::Instant};
+use std::{env, str::FromStr, time::Instant};
 
 use eframe::{egui, App};
 use egui::global_theme_preference_switch;
 use hermes::messenger::Messenger;
 use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
-use linking::Linking;
+//use linking::Linking;
 use recordview::RecordView;
 use sea_orm::{ConnectOptions, Database};
 use tokio::sync::mpsc;
@@ -36,7 +36,7 @@ pub struct State {
     visualizations: LoadingScreen<Visualizations>,
     table_view: LoadingScreen<TableView>,
     record_view: LoadingScreen<RecordView>,
-    linking: LoadingScreen<Linking>,
+    //linking: LoadingScreen<Linking>,
     file_upload: LoadingScreen<FileUpload>,
     profiles: LoadingScreen<Profiles>,
     selected_anchor: Anchor,
@@ -96,11 +96,11 @@ impl BreadApp {
                 Anchor::RecordView,
                 &mut self.state.record_view as &mut dyn eframe::App,
             ),
-            (
-                "Linking",
-                Anchor::Linking,
-                &mut self.state.linking as &mut dyn eframe::App,
-            ),
+            //(
+            //    "Linking",
+            //    Anchor::Linking,
+            //    &mut self.state.linking as &mut dyn eframe::App,
+            //),
             (
                 "File Upload",
                 Anchor::FileUpload,
@@ -281,7 +281,20 @@ impl State {
             let database_url =
                 env::var("DATABASE_URL").expect("DATABASE_URL must be set");
             let mut connection_options = ConnectOptions::new(database_url);
-            connection_options.sqlx_logging(false);
+            //.connect_timeout(Duration::MAX)
+            //.idle_timeout(Duration::MAX)
+            //.acquire_timeout(Duration::MAX);
+
+            if let Ok(var) = env::var("SQLX_LOGGING") {
+                if let Ok(level) = log::LevelFilter::from_str(var.as_str()) {
+                    connection_options
+                        .sqlx_logging(true)
+                        .sqlx_logging_level(level);
+                } else {
+                    connection_options.sqlx_logging(false);
+                }
+            }
+
             let db = Database::connect(connection_options).await.unwrap();
 
             let messenger = Messenger::new(db).await;
@@ -291,7 +304,7 @@ impl State {
                 visualizations: Visualizations::init(&factory).into(),
                 table_view: TableView::init(messenger.factory()).into(),
                 record_view: RecordView::init(messenger.factory()).into(),
-                linking: Linking::init(messenger.factory()).into(),
+                //linking: Linking::init(messenger.factory()).into(),
                 file_upload: FileUpload::init(rx_f, messenger.factory()).into(),
                 profiles: Profiles::init(rx_p, factory).into(),
                 selected_anchor: Anchor::Visualizations,

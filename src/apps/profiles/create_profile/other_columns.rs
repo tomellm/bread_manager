@@ -2,12 +2,18 @@ use egui::{Layout, Ui};
 
 use crate::{
     apps::utils::{drag_int, text},
-    model::profiles::{
-        builder::IntermediateProfileState,
-        columns::{
-            other::{Description, Other},
-            time::{ExpenseDate, ExpenseDateTime, ExpenseTime},
-            ParsableWrapper,
+    model::{
+        profiles::{
+            builder::IntermediateProfileState,
+            columns::{
+                other::{Description, Special},
+                time::{ExpenseDate, ExpenseDateTime, ExpenseTime},
+                ParsableWrapper,
+            },
+        },
+        transactions::{
+            content_description::ContentDescription,
+            special_content::SpecialType,
         },
     },
 };
@@ -82,31 +88,7 @@ pub(super) fn other_cols(
                             );
                         });
                         ui.separator();
-                        ui.add_sized([160., 100.], |ui: &mut Ui| {
-                            ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    ui.label("Pos:");
-                                    drag_int(ui, col_pos);
-                                });
-                                match col_type {
-                                    ParsableWrapper::Description(
-                                        Description(s),
-                                    )
-                                    | ParsableWrapper::Other(Other(s))
-                                    | ParsableWrapper::ExpenseDateTime(
-                                        ExpenseDateTime(s),
-                                    )
-                                    | ParsableWrapper::ExpenseDate(
-                                        ExpenseDate(s),
-                                    )
-                                    | ParsableWrapper::ExpenseTime(
-                                        ExpenseTime(s),
-                                    ) => text(ui, s),
-                                    _ => (),
-                                }
-                            })
-                            .response
-                        });
+                        other_col_editor(ui, col_pos, col_type);
                         ui.separator();
                         ui.with_layout(
                             Layout::right_to_left(egui::Align::Min),
@@ -122,5 +104,47 @@ pub(super) fn other_cols(
             });
             retain
         });
+    });
+}
+
+fn other_col_editor(
+    ui: &mut Ui,
+    col_pos: &mut usize,
+    col_type: &mut ParsableWrapper,
+) {
+    ui.add_sized([160., 100.], |ui: &mut Ui| {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label("Pos:");
+                drag_int(ui, col_pos);
+            });
+            match col_type {
+                ParsableWrapper::Description(Description(
+                    ContentDescription { description: s, .. },
+                ))
+                | ParsableWrapper::ExpenseDateTime(ExpenseDateTime(s))
+                | ParsableWrapper::ExpenseDate(ExpenseDate(s))
+                | ParsableWrapper::ExpenseTime(ExpenseTime(s)) => text(ui, s),
+                ParsableWrapper::Special(Special(
+                    special_type,
+                    special_desc,
+                )) => {
+                    egui::ComboBox::from_id_salt(special_desc.uuid)
+                        .selected_text(format!("{special_type:?}"))
+                        .show_ui(ui, |ui| {
+                            for val in SpecialType::values() {
+                                ui.selectable_value(
+                                    special_type,
+                                    val,
+                                    format!("{val:?}"),
+                                );
+                            }
+                        });
+                    text(ui, &mut special_desc.description);
+                }
+                _ => (),
+            }
+        })
+        .response
     });
 }

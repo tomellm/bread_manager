@@ -4,13 +4,9 @@ use egui::ahash::{HashSet, HashSetExt};
 use hermes::{carrier::execute::ImplExecuteCarrier, container::data::ImplData};
 use itertools::Itertools;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use sea_query::Expr;
 use tracing::warn;
 
-use crate::{
-    db::possible_links::{self, DbPossibleLink},
-    model::records::{ExpenseRecord, ExpenseRecordUuid},
-};
+use crate::model::records::{ExpenseRecord, ExpenseRecordUuid};
 
 use super::{Link, LinkType, PossibleLink};
 
@@ -70,7 +66,7 @@ pub fn calculate_probability(
         })
         .collect::<HashMap<_, _>>();
     let links = possible_links.data().clone();
-    let mut actor = exec_carr.actor();
+    let _actor = exec_carr.actor();
     async move {
         let probs = links
             .iter()
@@ -90,7 +86,7 @@ pub fn calculate_probability(
             })
             .collect::<HashMap<_, _>>();
 
-        let uuid_and_vals = links
+        let _uuid_and_vals = links
             .iter()
             .map(|link| {
                 let uuid = link.uuid;
@@ -105,38 +101,33 @@ pub fn calculate_probability(
             })
             .collect_vec();
 
-        actor.execute_many(|builder| {
-            uuid_and_vals.into_iter().for_each(|(uuid, new_val)| {
-                builder.execute(
-                    DbPossibleLink::update_many()
-                        .col_expr(
-                            possible_links::Column::Probability,
-                            Expr::value(new_val),
-                        )
-                        .filter(possible_links::Column::Uuid.eq(uuid)),
-                );
-            });
-        });
+        //actor.execute_many(|builder| {
+        //    uuid_and_vals.into_iter().for_each(|(uuid, new_val)| {
+        //        builder.execute(
+        //            DbPossibleLink::update_many()
+        //                .col_expr(
+        //                    possible_links::Column::Probability,
+        //                    Expr::value(new_val),
+        //                )
+        //                .filter(possible_links::Column::Uuid.eq(uuid)),
+        //        );
+        //    });
+        //});
     }
 }
 
 pub fn merge_to_link_identities(
     all_links: &[Link],
-    all_poss_links: &[PossibleLink]
-) -> HashSet<LinkIdentity> { 
-    let link_uuids = all_links.iter().fold(
-        HashSet::new(),
-        |mut acc, link| {
-            acc.insert(link.into());
-            acc
-        },
-    );
-    all_poss_links
-        .iter()
-        .fold(link_uuids, |mut acc, link| {
-            acc.insert(link.into());
-            acc
-        })
+    all_poss_links: &[PossibleLink],
+) -> HashSet<LinkIdentity> {
+    let link_uuids = all_links.iter().fold(HashSet::new(), |mut acc, link| {
+        acc.insert(link.into());
+        acc
+    });
+    all_poss_links.iter().fold(link_uuids, |mut acc, link| {
+        acc.insert(link.into());
+        acc
+    })
 }
 
 /// Clean up the links depending on the exising links

@@ -3,27 +3,20 @@ mod parser;
 
 use eframe::App;
 use egui::{Grid, ScrollArea};
-use egui_light_states::UiStates;
 use hermes::{
-    carrier::{execute::ImplExecuteCarrier, query::ImplQueryCarrier},
-    container::{data::ImplData, projecting::ProjectingContainer},
+    container::{data::ImplData, manual},
     factory::Factory,
 };
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
-use sea_query::Expr;
 use tokio::sync::mpsc;
+use tracing::info;
 
-use crate::{
-    db::{self, profiles::DbProfile},
-    model::profiles::Profile,
-};
+use crate::{db::query::profile_query::ProfileQuery, model::profiles::Profile};
 
 use self::create_profile::CreateProfile;
 
 pub struct Profiles {
     create_profile: CreateProfile,
-    profiles: ProjectingContainer<Profile, DbProfile>,
-    ui_states: UiStates,
+    profiles: manual::Container<Profile>,
 }
 
 impl App for Profiles {
@@ -32,9 +25,12 @@ impl App for Profiles {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ScrollArea::both().show(ui, |ui| {
-                ui.heading("Profiles");
+                ui.horizontal(|ui| {
+                    ui.heading("Profiles");
+                    ui.label(self.profiles.data().len().to_string());
+                });
 
-                let delete_action = self.profiles.action();
+                let mut to_delete = None;
                 let profiles = self.profiles.data();
 
                 if profiles.is_empty() {
@@ -59,7 +55,7 @@ impl App for Profiles {
                             ui.label(format!("{}", profile.width));
                             ui.group(|ui| {
                                 for default_tag in &profile.default_tags {
-                                    ui.label(default_tag);
+                                    ui.label(default_tag.tag.as_str());
                                 }
                             });
                             ui.group(|ui| {
@@ -67,32 +63,19 @@ impl App for Profiles {
                                     self.create_profile.edit(profile);
                                 }
                                 if ui.button("delete").clicked() {
-                                    delete_action(
-                                        DbProfile::update_many()
-                                            .filter(
-                                                db::profiles::Column::Uuid
-                                                    .eq(profile.uuid),
-                                            )
-                                            .col_expr(
-                                                db::profiles::Column::Deleted,
-                                                Expr::value(true),
-                                            ),
-                                    );
-                                    //set_promise(delete_action(*key).into());
+                                    let _ = to_delete.insert(profile.uuid);
                                 }
-                                //self.ui_states
-                                //    .default_promise_await(format!(
-                                //        "delete_action_{}",
-                                //        profile.uuid
-                                //    ))
-                                //    .init_ui(|ui, set_promise| {
-                                //    })
-                                //    .show(ui);
                             });
                             ui.end_row();
                         }
                     });
                 }
+
+                if let Some(to_delete_uuid) = to_delete.take() {
+                    info!("deleting uuid : {to_delete_uuid:?}");
+                    self.profiles.delete(&to_delete_uuid);
+                }
+
                 ui.separator();
                 self.create_profile.ui_update(ui);
             });
@@ -107,12 +90,11 @@ impl Profiles {
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
         async move {
             let mut profiles =
-                factory.builder().name("profiles_profiles").projector();
-            profiles.stored_query(DbProfile::find_all_active());
+                factory.builder().file(file!()).manual();
+            profiles.stored_query(ProfileQuery::all_active);
             Self {
                 create_profile: CreateProfile::new(reciver, factory),
                 profiles,
-                ui_states: UiStates::default(),
             }
         }
     }

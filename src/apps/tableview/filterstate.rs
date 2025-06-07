@@ -9,16 +9,16 @@ use std::sync::Arc;
 
 use amount::AmountFilter;
 use date::DateFilter;
-use description::DescriptionFilter;
+//use description::DescriptionFilter;
 use egui::Ui;
-use origin::OriginFilter;
-use tags::TagsFilter;
+//use origin::OriginFilter;
+//use tags::TagsFilter;
 use uuid::UuidFilter;
 
-use crate::model::records::ExpenseRecord;
+use crate::model::transactions::Transaction;
 
 pub(super) struct FilterState {
-    filter: Arc<dyn Fn(&ExpenseRecord) -> bool + Send + Sync>,
+    filter: Arc<dyn Fn(&Transaction) -> bool + Send + Sync>,
     filters: Vec<Box<dyn TableFilter + Send + 'static>>,
 }
 
@@ -30,16 +30,16 @@ impl Default for FilterState {
                 UuidFilter::default().into(),
                 AmountFilter::default().into(),
                 DateFilter::default().into(),
-                DescriptionFilter::default().into(),
-                TagsFilter::default().into(),
-                OriginFilter::default().into(),
+                //DescriptionFilter::default().into(),
+                //TagsFilter::default().into(),
+                //OriginFilter::default().into(),
             ],
         }
     }
 }
 
 impl FilterState {
-    pub(super) fn filter(&self, record: &ExpenseRecord) -> bool {
+    pub(super) fn filter(&self, record: &Transaction) -> bool {
         (self.filter)(record)
     }
 
@@ -71,12 +71,12 @@ impl FilterState {
 }
 
 fn box_dyn(
-    func: impl Fn(&ExpenseRecord) -> bool + Send + Sync + 'static,
+    func: impl Fn(&Transaction) -> bool + Send + Sync + 'static,
 ) -> DataFilter {
     Box::new(func) as DataFilter
 }
 
-type DataFilter = Box<dyn Fn(&ExpenseRecord) -> bool + Send + Sync + 'static>;
+type DataFilter = Box<dyn Fn(&Transaction) -> bool + Send + Sync + 'static>;
 
 impl<T> From<T> for Box<dyn TableFilter + Send + 'static>
 where
