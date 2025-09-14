@@ -12,8 +12,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
-    db::builders::transaction_builder::TransactionBuilder,
-    model::{data_import::DataImport, group::Group},
+    db::builders::transaction_builder::TransactionBuilder, model::group::Group,
     uuid_impls,
 };
 

@@ -8,7 +8,6 @@ use money::{Expense, Income, Movement, NumberFormat, PosExpense};
 use other::{Description, Special};
 use serde::{Deserialize, Serialize};
 use time::{ExpenseDate, ExpenseDateTime, ExpenseTime};
-use tracing::info;
 
 use crate::model::{
     data_import::row_item::ImportRowItem,

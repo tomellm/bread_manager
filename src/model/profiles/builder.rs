@@ -25,6 +25,7 @@ pub struct CreateProfileBuilder {
 }
 
 impl CreateProfileBuilder {
+    #[allow(dead_code)]
     pub fn from_marg_del(top: usize, btm: usize, del: char) -> Self {
         Self {
             margins: Some((top, btm)),

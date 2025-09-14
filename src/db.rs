@@ -1,9 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
 use chrono::{DateTime, Local, NaiveDate, NaiveTime};
-use itertools::{Chunk, Itertools};
-use sea_orm::{ActiveModelTrait, Insert, IntoActiveModel, QueryTrait};
-use sea_query::IdenList;
+use itertools::Itertools;
+use sea_orm::{ActiveModelTrait, IntoActiveModel, QueryTrait};
 use uuid::Uuid;
 
 pub mod builders;
@@ -105,8 +104,6 @@ where
         Uuid::new_v4().into()
     }
 }
-
-pub type DbUuid = sea_orm::entity::prelude::Uuid;
 
 #[macro_export]
 macro_rules! uuid_impls {

@@ -88,7 +88,7 @@ pub(super) async fn all_transactions(
     let mut transaction_movements =
         all_movements(db, collector).await?.to_hashmap();
 
-    let mut tags = all_transaction_tags(db, collector).await?;
+    let tags = all_transaction_tags(db, collector).await?;
 
     let transactions = combine_types(
         transactions.collect_vec(),

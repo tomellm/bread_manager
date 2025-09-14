@@ -5,10 +5,7 @@ use sea_orm::{
 };
 
 use crate::{
-    db::{
-        datetime_to_str,
-        entities::{self, content_description, prelude::*, text_content},
-    },
+    db::entities::{self, content_description, prelude::*, text_content},
     model::{
         group::GroupUuid,
         transactions::{

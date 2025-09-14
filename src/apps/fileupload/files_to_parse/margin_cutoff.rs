@@ -101,7 +101,7 @@ pub fn margin_cutoff(file: &FileToParse, ui: &mut Ui) {
 #[derive(Clone, Debug, Default)]
 pub struct CutOffMargins {
     pub top: Option<Vec<Vec<String>>>,
-    pub bottom: Option<Vec<Vec<String>>>,
+    bottom: Option<Vec<Vec<String>>>,
 }
 
 impl CutOffMargins {
