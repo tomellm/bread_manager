@@ -1,4 +1,5 @@
 mod bar_chart;
+mod code;
 
 use bar_chart::BarChartVis;
 use eframe::App;
@@ -22,7 +23,7 @@ impl App for Visualizations {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Visualizations");
             match self.selected_anchor {
-                Anchor::BarChart => self.bars.view(ui),
+                Anchor::BarChart => self.bars.update(ui),
             }
         });
     }

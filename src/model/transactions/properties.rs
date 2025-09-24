@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use super::{
     datetime::Datetime, movement::Movement, special_content::SpecialContent,
@@ -16,7 +17,7 @@ pub enum TransactionRelType {
     Additional,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionProperties {
     Datetime(Datetime),
     Movement(Movement),
@@ -25,7 +26,16 @@ pub enum TransactionProperties {
 }
 
 #[derive(
-    Copy, Clone, Debug, PartialEq, Eq, DeriveActiveEnum, EnumIter, Hash,
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    DeriveActiveEnum,
+    EnumIter,
+    Hash,
+    Serialize,
+    Deserialize,
 )]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(255))")]
 pub enum OriginType {

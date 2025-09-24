@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 
 use super::content_description::ContentDescription;
 
 pub(crate) type ModelTextContent = TextContent;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TextContent {
     pub uuid: TextContentUuid,
     pub content: String,
