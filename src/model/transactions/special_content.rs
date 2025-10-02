@@ -8,7 +8,7 @@ use super::content_description::ContentDescription;
 
 pub(crate) type ModelSpecialContent = SpecialContent;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpecialContent {
     pub uuid: SpecialContentUuid,
     pub content: String,

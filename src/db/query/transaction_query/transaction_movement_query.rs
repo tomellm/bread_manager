@@ -20,7 +20,7 @@ use crate::{
 use crate::db::entities::{movement, transaction_movement};
 
 #[derive(FromQueryResult)]
-pub(in crate::db) struct MovementOfTransaction {
+pub struct MovementOfTransaction {
     pub uuid: MovementUuid,
     pub transaction_uuid: TransactionUuid,
     pub rel_type: TransactionRelType,

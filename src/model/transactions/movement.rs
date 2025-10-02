@@ -1,10 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 
 use super::properties::OriginType;
 
 pub type ModelMovement = Movement;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Movement {
     pub uuid: MovementUuid,
     pub origin_type: OriginType,

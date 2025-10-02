@@ -1,6 +1,7 @@
 use std::cmp::Ordering;
 
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveTime};
+use serde::{Deserialize, Serialize};
 
 use crate::{db::InitUuid, model::group::GroupUuid, uuid_impls};
 
@@ -8,7 +9,7 @@ use super::properties::OriginType;
 
 pub(crate) type ModelDatetime = Datetime;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Datetime {
     pub uuid: DatetimeUuid,
     pub origin_type: OriginType,

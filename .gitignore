@@ -1,6 +1,6 @@
 /target
 /actions-runner
-.data/*.log
+/data/*
 **/.DS_Store
 **/.vscode
 **/node_modules

@@ -3,6 +3,7 @@ use uuid::Uuid;
 
 use super::columns::money::NumberFormat;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum ProfileError {
     NumberParsing(String),
@@ -27,6 +28,8 @@ impl ProfileError {
             "The profile expects a minimum width of {expected} but got a width of {actual}"
         ))
     }
+
+    #[allow(dead_code)]
     pub fn build(
         amount: Option<isize>,
         date: Option<DateTime<Local>>,

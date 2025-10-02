@@ -12,6 +12,7 @@ use datetime::Datetime;
 use movement::Movement;
 use properties::TransactionProperties;
 use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::uuid_impls;
 
@@ -19,7 +20,7 @@ use super::tags::Tag;
 
 pub(crate) type ModelTransaction = Transaction;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub uuid: TransactionUuid,
     pub datetime: Datetime,
@@ -48,7 +49,17 @@ impl Transaction {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, DeriveActiveEnum, EnumIter)]
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    PartialEq,
+    Eq,
+    DeriveActiveEnum,
+    EnumIter,
+    Serialize,
+    Deserialize,
+)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::N(255))")]
 pub enum State {
     #[sea_orm(string_value = "Active")]

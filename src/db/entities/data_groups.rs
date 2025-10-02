@@ -2,7 +2,7 @@
 
 use sea_orm::entity::prelude::*;
 
-use crate::{db::DbUuid, model::group::GroupUuid};
+use crate::model::group::GroupUuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
 #[sea_orm(table_name = "data_groups")]

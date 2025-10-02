@@ -103,12 +103,14 @@ pub(super) async fn all_profiles_filtered(
     all_profiles_core(db, collector, Some(Box::new(filters))).await
 }
 
+type OptionalFilter = Option<
+        Box<dyn Fn(Select<Profile>) -> Select<Profile> + Send + 'static>,
+    >;
+
 async fn all_profiles_core(
     db: &DatabaseConnection,
     collector: &mut TablesCollector,
-    filters: Option<
-        Box<dyn Fn(Select<Profile>) -> Select<Profile> + Send + 'static>,
-    >,
+    filters: OptionalFilter,
 ) -> Result<Vec<ModelProfile>, DbErr> {
     let base_query = Profile::find()
         .select_only()
@@ -164,7 +166,7 @@ async fn all_profiles_core(
         builders,
         profile_tags,
         |p| p.uuid,
-        |t| ProfileUuid::from(t.rel_uuid),
+        |t| t.rel_uuid,
         |builder, tags| {
             let tags = tags.into_iter().map(ModelTag::from);
             builder.default_tags.extend(tags);
@@ -235,7 +237,7 @@ pub struct ProfileBuilder {
 }
 
 impl ProfileBuilder {
-    pub fn new(profile: ProfileWithOrigin) -> Self {
+    fn new(profile: ProfileWithOrigin) -> Self {
         let origin = ModelOrigin::new(
             profile.origin_uuid,
             profile.origin_name,
@@ -272,7 +274,7 @@ impl ProfileBuilder {
         &mut self,
         desc_containers: Vec<ModelContentDescription>,
     ) {
-        self.desc_containers.insert(desc_containers);
+        let _ = self.desc_containers.insert(desc_containers);
     }
 
     pub fn build(self) -> ModelProfile {

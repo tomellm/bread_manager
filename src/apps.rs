@@ -6,8 +6,9 @@ mod tableview;
 pub(crate) mod utils;
 mod visualizations;
 
-use std::{env, str::FromStr, time::Instant};
+use std::{env, path::Path, str::FromStr, time::Instant};
 
+use chrono::Local;
 use eframe::{egui, App};
 use egui::global_theme_preference_switch;
 use hermes::messenger::Messenger;
@@ -15,7 +16,7 @@ use lazy_async_promise::{ImmediateValuePromise, ImmediateValueState};
 //use linking::Linking;
 use recordview::RecordView;
 use sea_orm::{ConnectOptions, Database};
-use tokio::sync::mpsc;
+use tokio::{fs, sync::mpsc};
 use tracing::{info, warn};
 
 use crate::utils::{LoadingScreen, PromiseUtilities};
@@ -135,6 +136,37 @@ impl BreadApp {
             }
         }
         self.state.selected_anchor = selected_anchor;
+    }
+
+    fn global_actions(&mut self, ui: &mut egui::Ui) {
+        if ui.button("create backup db").clicked() {
+            let now = Local::now().format("%d-%m-%Y_%H-%M");
+            tokio::spawn(async move {
+                let path = env::var("DATABASE_URL")
+                    .unwrap()
+                    .chars()
+                    .skip("sqlite://".len())
+                    .collect::<String>();
+
+                let path = Path::new(&path);
+                let backup_path = format!("{}/backup", path.parent().unwrap().to_string_lossy());
+
+                if !fs::try_exists(&backup_path).await.unwrap() {
+                    fs::create_dir(&backup_path).await.unwrap();
+                }
+
+                fs::copy(
+                    path,
+                    format!(
+                        "{}/{}_{now}.bak",
+                        backup_path,
+                        path.file_name().unwrap().to_string_lossy()
+                    ),
+                )
+                .await
+                .unwrap();
+            });
+        }
     }
 
     fn show_selected_app(
@@ -261,10 +293,16 @@ impl App for BreadApp {
         self.update_callback_ctx = Some(ctx.clone());
         self.state.messenger.state_update();
 
-        egui::TopBottomPanel::top("wrap_app_top_bar").show(ctx, |ui| {
+        egui::TopBottomPanel::top("top_item_tray_all_apps").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.visuals_mut().button_frame = false;
                 self.bar_contents(ui, frame);
+            });
+        });
+        egui::TopBottomPanel::top("global_actions_try").show(ctx, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.visuals_mut().button_frame = false;
+                self.global_actions(ui);
             });
         });
         self.show_selected_app(ctx, frame);

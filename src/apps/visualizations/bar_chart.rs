@@ -4,14 +4,17 @@ use std::{
 };
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
-use egui::Ui;
+use egui::{CentralPanel, SidePanel, Ui};
 use egui_plot::{Bar, BarChart, Plot};
 use hermes::{
     container::{data::ImplData, manual},
     factory::Factory,
 };
+use itertools::Itertools;
+use tracing::warn;
 
 use crate::{
+    apps::visualizations::code::{CodeBlock, err::CodeExecError, filter::CodeFilter},
     db::query::transaction_query::TransactionQuery,
     model::transactions::Transaction,
 };
@@ -28,41 +31,89 @@ pub(super) struct BarChartVis {
     transactions: manual::Container<Transaction>,
     weekly: Vec<Bar>,
     monthly: Vec<Bar>,
+    code: CodeBlock,
 }
 
 impl BarChartVis {
     pub fn new(
         factory: &Factory,
     ) -> impl std::future::Future<Output = Self> + Send + 'static {
-        let mut transactions =
-            factory.builder().file(file!()).manual();
+        let mut transactions = factory.builder().file(file!()).manual();
         async move {
             transactions.stored_query(TransactionQuery::all);
-            let (weekly, monthly) = Self::update_graphs(&[]);
+
             Self {
                 selected: Charts::default(),
                 transactions,
-                weekly,
-                monthly,
+                weekly: vec![],
+                monthly: vec![],
+                code: Default::default(),
             }
         }
     }
 
-    pub fn update(&mut self) {
+    pub fn try_update_state(&mut self) {
         self.transactions.state_update(true);
         if self.transactions.has_changed() {
-            let (weekly, monthly) = Self::update_graphs(
-                self.transactions.set_viewed().data().deref(),
-            );
-            self.weekly = weekly;
-            self.monthly = monthly;
+            self.transactions.set_viewed();
+
+            self.update_graphs_with_code();
         }
     }
 
-    fn update_graphs(transactions: &[Transaction]) -> (Vec<Bar>, Vec<Bar>) {
-        if transactions.is_empty() {
-            return (vec![], vec![]);
+    fn update_graphs_with_code(&mut self) {
+        let filter = match self.code.apply_code {
+            true => Some(self.code.create_filter()),
+            false => None,
+        };
+        self.update_graphs(filter)
+    }
+
+    fn update_graphs(&mut self, opt_filter: Option<CodeFilter>) {
+        let transactions = {
+            match opt_filter {
+                Some(filter) => {
+                    let (filtered_trxn, errors): (Vec<_>, Vec<_>) = self
+                        .transactions
+                        .data()
+                        .deref()
+                        .iter()
+                        .map(|v| {
+                            filter
+                                .call(v)
+                                .map(|ok_val| match ok_val {
+                                    true => Some(v),
+                                    false => None,
+                                })
+                                .map_err(|err| CodeExecError::new(v, err))
+                        })
+                        .partition_result();
+
+                    match errors.is_empty() {
+                        true => Ok(filtered_trxn
+                            .into_iter()
+                            .flatten()
+                            .collect_vec()),
+                        false => Err(errors),
+                    }
+                }
+                None => {
+                    Ok(self.transactions.data().deref().iter().collect_vec())
+                }
+            }
+        };
+
+        if transactions.is_err() || transactions.as_ref().unwrap().is_empty() {
+            if let Err(errors) = transactions {
+                warn!("a total of {} errors where created while executing the lua code", errors.len());
+                self.code.set_errors(errors);
+            }
+            self.weekly = vec![];
+            self.monthly = vec![];
+            return;
         }
+        let transactions = transactions.unwrap();
+        self.code.reset_example_shape(self.transactions.data());
 
         let min = transactions
             .iter()
@@ -113,7 +164,7 @@ impl BarChartVis {
             }
         }
 
-        let week_bars = weekly_amounts
+        self.weekly = weekly_amounts
             .into_iter()
             .map(|(week_index_as_days, amount)| {
                 let date = min
@@ -125,7 +176,7 @@ impl BarChartVis {
                     .name(bar_name)
             })
             .collect::<Vec<_>>();
-        let month_bars = monthly_amounts
+        self.monthly = monthly_amounts
             .into_iter()
             .enumerate()
             .map(|(index, (month, amount))| {
@@ -134,12 +185,10 @@ impl BarChartVis {
                 Bar::new(index as f64, amount).name(bar_name)
             })
             .collect::<Vec<_>>();
-
-        (week_bars, month_bars)
     }
 
-    pub fn view(&mut self, ui: &mut Ui) {
-        self.update();
+    pub fn update(&mut self, ui: &mut Ui) {
+        self.try_update_state();
 
         ui.horizontal(|ui| {
             if ui.button("weekly").clicked() {
@@ -148,13 +197,30 @@ impl BarChartVis {
             if ui.button("monthly").clicked() {
                 self.selected = Charts::Monthly;
             }
+            ui.separator();
+            ui.label("filter");
+            if ui.button("create").clicked() {
+                self.code.toggle_show();
+            }
+            if ui
+                .checkbox(&mut self.code.apply_code, "apply code")
+                .clicked()
+            {
+                self.update_graphs_with_code();
+            }
+            ui.add_enabled_ui(self.code.apply_code, |ui| {
+                if ui.button("reapply").clicked() {
+                    let filter = self.code.create_filter();
+                    self.update_graphs(Some(filter));
+                }
+            });
         });
 
         ui.label(format!(
             "Curretly {} records.",
             self.transactions.data().len()
         ));
-        match self.selected {
+        CentralPanel::default().show_inside(ui, |ui| match self.selected {
             Charts::Weekly => {
                 Plot::new("weekly_plot")
                     .view_aspect(2.0)
@@ -176,6 +242,15 @@ impl BarChartVis {
                     },
                 );
             }
+        });
+
+        if self.code.show() {
+            SidePanel::right("code_filter").resizable(true).show_inside(
+                ui,
+                |ui| {
+                    self.code.update(ui);
+                },
+            );
         }
     }
 }

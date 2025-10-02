@@ -1,10 +1,11 @@
 use chrono::{DateTime, Local};
+use serde::{Deserialize, Serialize};
 
 use crate::{db::InitUuid, uuid_impls};
 
 pub(crate) type ModelContentDescription = ContentDescription;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentDescription {
     pub uuid: ContentDescriptionUuid,
     pub description: String,

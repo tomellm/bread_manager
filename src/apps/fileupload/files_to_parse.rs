@@ -2,13 +2,12 @@ mod margin_cutoff;
 
 use std::fs;
 
-use egui::{ComboBox, DroppedFile, Grid, Ui};
+use egui::{ComboBox, DroppedFile, Ui};
 use hermes::{
     container::{data::ImplData, manual},
     factory::Factory,
 };
 use margin_cutoff::{margin_cutoff, CutOffMargins};
-use num_traits::Zero;
 use tokio::sync::mpsc;
 use tracing::info;
 use uuid::Uuid;

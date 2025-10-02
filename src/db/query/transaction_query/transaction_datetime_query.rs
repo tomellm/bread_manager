@@ -26,7 +26,7 @@ use crate::db::{
 };
 
 #[derive(FromQueryResult)]
-pub(in crate::db) struct DatetimeOfTransaction {
+pub struct DatetimeOfTransaction {
     pub uuid: DatetimeUuid,
     pub transaction_uuid: TransactionUuid,
     pub rel_type: TransactionRelType,

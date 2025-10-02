@@ -69,6 +69,7 @@ where
 
 pub struct OptionDisplayBuilder<'a, T> {
     option: &'a Option<T>,
+    #[allow(clippy::type_complexity)]
     present_ui: Box<dyn FnOnce(&mut Ui, &T) + 'a>,
     missing_ui: Box<dyn FnOnce(&mut Ui) + 'a>,
 }
