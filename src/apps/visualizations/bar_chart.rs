@@ -4,22 +4,19 @@ use std::{
 };
 
 use chrono::{DateTime, Datelike, Days, Local, Months};
-use egui::{
-    CentralPanel, Popup, PopupCloseBehavior, PopupKind, RectAlign, SidePanel,
-    TextBuffer, Ui,
-};
+use egui::{CentralPanel, SidePanel, Ui};
 use egui_plot::{Bar, BarChart, Plot};
 use hermes::{
     container::{data::ImplData, manual},
     factory::Factory,
 };
 use itertools::Itertools;
-use tracing::{info, warn};
+use tracing::warn;
 
 use crate::{
-    apps::visualizations::code::{CodeBlock, CodeExecError, CodeFilter},
+    apps::visualizations::code::{CodeBlock, err::CodeExecError, filter::CodeFilter},
     db::query::transaction_query::TransactionQuery,
-    model::transactions::{self, Transaction},
+    model::transactions::Transaction,
 };
 
 #[derive(Default)]
@@ -61,7 +58,6 @@ impl BarChartVis {
             self.transactions.set_viewed();
 
             self.update_graphs_with_code();
-            self.code.reset_example_shape(self.transactions.data());
         }
     }
 
@@ -82,21 +78,28 @@ impl BarChartVis {
                         .data()
                         .deref()
                         .iter()
-                        .map(|v| filter.call(v)
-                            .map(|ok_val| match ok_val {
-                                true => Some(v),
-                                false => None,
-                            })
-                            .map_err(|err| CodeExecError::new(v, err))
-                        )
+                        .map(|v| {
+                            filter
+                                .call(v)
+                                .map(|ok_val| match ok_val {
+                                    true => Some(v),
+                                    false => None,
+                                })
+                                .map_err(|err| CodeExecError::new(v, err))
+                        })
                         .partition_result();
 
                     match errors.is_empty() {
-                        true => Ok(filtered_trxn.into_iter().flatten().collect_vec()),
+                        true => Ok(filtered_trxn
+                            .into_iter()
+                            .flatten()
+                            .collect_vec()),
                         false => Err(errors),
                     }
-                },
-                None => Ok(self.transactions.data().deref().iter().collect_vec()),
+                }
+                None => {
+                    Ok(self.transactions.data().deref().iter().collect_vec())
+                }
             }
         };
 
@@ -110,6 +113,7 @@ impl BarChartVis {
             return;
         }
         let transactions = transactions.unwrap();
+        self.code.reset_example_shape(self.transactions.data());
 
         let min = transactions
             .iter()
@@ -181,7 +185,6 @@ impl BarChartVis {
                 Bar::new(index as f64, amount).name(bar_name)
             })
             .collect::<Vec<_>>();
-
     }
 
     pub fn update(&mut self, ui: &mut Ui) {
@@ -199,7 +202,10 @@ impl BarChartVis {
             if ui.button("create").clicked() {
                 self.code.toggle_show();
             }
-            if ui.checkbox(&mut self.code.apply_code, "apply code").clicked() {
+            if ui
+                .checkbox(&mut self.code.apply_code, "apply code")
+                .clicked()
+            {
                 self.update_graphs_with_code();
             }
             ui.add_enabled_ui(self.code.apply_code, |ui| {

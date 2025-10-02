@@ -9,7 +9,6 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Local};
 use datetime::Datetime;
-use mlua::{IntoLua, LuaSerdeExt};
 use movement::Movement;
 use properties::TransactionProperties;
 use sea_orm::entity::prelude::*;

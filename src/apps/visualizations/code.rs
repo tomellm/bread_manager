@@ -1,10 +1,16 @@
+pub(super) mod err;
+pub(super) mod filter;
+pub(super) mod json;
+
 use egui::{Grid, Ui};
 use egui_code_editor::{CodeEditor, Syntax};
-use egui_extras::syntax_highlighting;
-use mlua::{Function, Lua, LuaSerdeExt};
-use tracing::info;
 
-use crate::model::transactions::Transaction;
+use crate::{
+    apps::visualizations::code::{
+        err::CodeExecError, filter::CodeFilter, json::JsonExample,
+    },
+    model::transactions::Transaction,
+};
 
 /*
 Example code
@@ -32,7 +38,7 @@ pub struct CodeBlock {
     code: String,
 
     show_example: bool,
-    example_shape: String,
+    example: Option<JsonExample>,
 
     errors: Vec<CodeExecError>,
 }
@@ -52,11 +58,16 @@ impl CodeBlock {
 
     pub fn reset_example_shape(&mut self, trxns: &[Transaction]) {
         if trxns.is_empty() {
+            let _ = self.example.take();
             return;
         }
 
-        self.example_shape =
-            serde_json::to_string_pretty(trxns.first().unwrap()).unwrap();
+        match self.example.as_mut() {
+            Some(example) => example.reset_trxns(trxns),
+            None => {
+                self.example = Some(JsonExample::from_trxn(trxns));
+            }
+        }
     }
 
     pub fn set_errors(&mut self, errors: Vec<CodeExecError>) {
@@ -79,19 +90,16 @@ impl CodeBlock {
 
         if self.show_example {
             egui::Window::new("Example Shape")
+                .max_height(ui.available_height())
+                .scroll([true, true])
                 .open(&mut self.show_example)
                 .show(ui.ctx(), |ui| {
-                    let language = "json";
-                    let theme = syntax_highlighting::CodeTheme::from_memory(
-                        ui.ctx(),
-                        ui.style(),
-                    );
-                    syntax_highlighting::code_view_ui(
-                        ui,
-                        &theme,
-                        &self.example_shape,
-                        language,
-                    );
+                    match self.example.as_mut() {
+                        Some(value) => value.show_json(ui),
+                        None => {
+                            ui.label("no transactions...");
+                        }
+                    };
                 });
         }
 
@@ -102,11 +110,7 @@ impl CodeBlock {
                 .open(&mut open)
                 .show(ui.ctx(), |ui| {
                     Grid::new("code errors grid").show(ui, |ui| {
-                        self.errors.iter().for_each(|err| {
-                            ui.label(err.err.to_string());
-                            ui.label(err.trxn.uuid.to_string());
-                            ui.end_row();
-                        });
+                        self.errors.iter().for_each(|err| err.as_row(ui));
                     });
                 });
 
@@ -124,49 +128,8 @@ impl Default for CodeBlock {
             show_code: false,
             code: CODE_FUNC.to_string(),
             show_example: false,
-            example_shape: String::default(),
+            example: None,
             errors: vec![],
-        }
-    }
-}
-
-pub struct CodeFilter {
-    lua: Lua,
-    func: Function,
-}
-
-impl CodeFilter {
-    pub fn from_code(code: &str) -> Self {
-        let lua = Lua::new();
-        let func: Function = lua
-            .load(code)
-            .eval()
-            .map_err(|err| {
-                tracing::error!(
-                    "error while loading the filter function: {err:?}"
-                );
-            })
-            .unwrap();
-        Self { lua, func }
-    }
-
-    pub fn call(&self, trxn: &Transaction) -> Result<bool, mlua::Error> {
-        let val_trxn = self.lua.to_value(trxn).unwrap();
-        self.func.call::<bool>(val_trxn)
-    }
-}
-
-#[derive(Debug)]
-pub struct CodeExecError {
-    trxn: Transaction,
-    err: String,
-}
-
-impl CodeExecError {
-    pub fn new(trxn: &Transaction, err: mlua::Error) -> Self {
-        Self {
-            trxn: trxn.clone(),
-            err: err.to_string(),
         }
     }
 }
