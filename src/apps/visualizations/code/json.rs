@@ -1,11 +1,8 @@
 mod merge;
 
-use egui::{Color32, Ui};
-use egui_json_tree::{
-    DefaultExpand, JsonTree, JsonTreeStyle, JsonTreeVisuals, ToggleButtonsState,
-};
-use itertools::Itertools;
-use serde_json::{Map, Value};
+use egui::Ui;
+use egui_json_tree::{DefaultExpand, JsonTree, JsonTreeStyle};
+use serde_json::Value;
 
 use crate::{
     apps::visualizations::code::json::merge::merge_all_maps,
@@ -42,15 +39,7 @@ impl JsonExample {
             .default_expand(DefaultExpand::SearchResultsOrAll(
                 &self.search_string,
             ))
-            .style(
-                JsonTreeStyle::new()
-                    .abbreviate_root(true) // Show {...} when the root object is collapsed.
-                    //.toggle_buttons_state(ToggleButtonsState::VisibleDisabled)
-                    .visuals(JsonTreeVisuals {
-                        bool_color: Color32::YELLOW,
-                        ..Default::default()
-                    }),
-            )
+            .style(JsonTreeStyle::new().abbreviate_root(true))
             .show(ui);
 
         // By default, the tree will expand/collapse all arrays/objects
